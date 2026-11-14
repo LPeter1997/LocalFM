@@ -6,6 +6,7 @@
         x:DataType="vm:NowPlayingViewModel"
         Title="LocalFM" Width="400" Height="124" CanResize="False" Topmost="True"
         WindowStartupLocation="CenterScreen" Background="{StaticResource Bg}">
+  <!-- No system title bar: drag anywhere to move, double-click (or the expand button) for the full window -->
   <Border x:Name="Root" Background="{StaticResource Bg}" Padding="12">
   <Grid ColumnDefinitions="Auto,*" RowDefinitions="*,Auto">
     <Border Grid.RowSpan="2" Width="88" Height="88" CornerRadius="8" ClipToBounds="True" Background="{StaticResource Surface3}"

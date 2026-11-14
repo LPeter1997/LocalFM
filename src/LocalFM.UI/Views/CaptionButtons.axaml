@@ -1,0 +1,47 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="LocalFM.UI.Views.CaptionButtons">
+  <!-- Minimize, maximize/restore and close for our own borderless windows, drawn like the app's flat icon buttons -->
+  <StackPanel Orientation="Horizontal" Spacing="2" VerticalAlignment="Center">
+    <Button x:Name="MinimizeButton" Classes="caption" ToolTip.Tip="Minimize">
+      <Path Classes="icon" Data="M7 12h10" />
+    </Button>
+    <Button x:Name="MaximizeButton" Classes="caption" ToolTip.Tip="Maximize">
+      <Panel>
+        <Path x:Name="MaximizeIcon" Classes="icon" Data="M7 7h10v10H7z" />
+        <Path x:Name="RestoreIcon" Classes="icon" Data="M7 9h8v8H7zM9 9V7h8v8h-2" IsVisible="False" />
+      </Panel>
+    </Button>
+    <Button x:Name="CloseButton" Classes="caption close" ToolTip.Tip="Close">
+      <Path Classes="icon" Data="M7.5 7.5l9 9M16.5 7.5l-9 9" />
+    </Button>
+  </StackPanel>
+  <UserControl.Styles>
+    <Style Selector="Button.caption">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="Foreground" Value="{StaticResource Muted}" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="Width" Value="38" />
+      <Setter Property="Height" Value="30" />
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="CornerRadius" Value="8" />
+      <Setter Property="HorizontalContentAlignment" Value="Center" />
+      <Setter Property="VerticalContentAlignment" Value="Center" />
+    </Style>
+    <!-- Drawn at the 24 px grid's own scale (no stretching), so all three glyphs are the same 10 px size -->
+    <Style Selector="Button.caption Path.icon">
+      <Setter Property="Stretch" Value="None" /><Setter Property="Width" Value="24" /><Setter Property="Height" Value="24" />
+      <Setter Property="StrokeThickness" Value="1.5" />
+    </Style>
+    <Style Selector="Button.caption:pointerover"><Setter Property="Foreground" Value="{StaticResource Text}" /></Style>
+    <Style Selector="Button.caption:pointerover /template/ ContentPresenter">
+      <Setter Property="Background" Value="{StaticResource Surface3}" />
+      <Setter Property="Foreground" Value="{StaticResource Text}" />
+    </Style>
+    <Style Selector="Button.caption.close:pointerover /template/ ContentPresenter">
+      <Setter Property="Background" Value="#C42B1C" />
+      <Setter Property="Foreground" Value="White" />
+    </Style>
+    <Style Selector="Button.caption.close:pointerover"><Setter Property="Foreground" Value="White" /></Style>
+  </UserControl.Styles>
+</UserControl>

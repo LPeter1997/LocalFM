@@ -12,11 +12,10 @@ public partial class MiniPlayerWindow : Window
     {
         InitializeComponent();
         ExpandButton.Click += (_, _) => Expand?.Invoke();
-        // Drag anywhere that is not a button to move the window.
-        Root.PointerPressed += (_, e) =>
-        {
-            if (e.GetCurrentPoint(this).Properties.IsLeftButtonPressed) BeginMoveDrag(e);
-        };
+        // Drag anywhere that is not a button to move the window; double-click goes back to the full window.
+        WindowChrome.MakeBorderless(this);
+        WindowChrome.Outline(this, Root);
+        WindowChrome.TitleBar(this, Root, doubleClick: () => Expand?.Invoke());
         // Scroll anywhere on the miniplayer to change the volume.
         PointerWheelChanged += (_, e) =>
         {

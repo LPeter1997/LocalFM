@@ -16,6 +16,10 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
+        WindowChrome.MakeBorderless(this);
+        WindowChrome.TitleBar(this, TitleBar);
+        WindowChrome.ResizeGrips(this, RootPanel);
+        WindowChrome.Outline(this, Frame);
         // The slider follows playback until the user grabs it; the seek happens on release.
         SeekSlider.AddHandler(PointerPressedEvent, (_, _) => { if (Vm is { } vm) vm.NowPlaying.IsSeeking = true; }, RoutingStrategies.Tunnel, handledEventsToo: true);
         SeekSlider.AddHandler(PointerReleasedEvent, (_, _) => CommitSeek(), RoutingStrategies.Tunnel, handledEventsToo: true);
