@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <ProjectReference Include="..\LocalFM.Core\LocalFM.Core.csproj" />
+  </ItemGroup>
+
+  <!-- localfm_native is built with CMake (native/CMakeLists.txt). On Linux it is built automatically when
+       missing; on Windows/macOS run CMake once with -DFFMPEG_ROOT=... (see README). -->
+  <PropertyGroup>
+    <NativeLinuxLib>$(NativeOutDir)linux-x64/liblocalfm_native.so</NativeLinuxLib>
+  </PropertyGroup>
+
+  <Target Name="BuildNativeIfMissing" BeforeTargets="AssignTargetPaths"
+          Condition="$([MSBuild]::IsOSPlatform('Linux')) And !Exists('$(NativeLinuxLib)')">
+    <Exec Command="&quot;$(RepoRoot)native/build-linux.sh&quot;" />
+  </Target>
+
+  <!-- Items are added inside a target so a library built moments ago is picked up. -->
+  <Target Name="IncludeNativeLibs" AfterTargets="BuildNativeIfMissing" BeforeTargets="AssignTargetPaths">
+    <ItemGroup>
+      <None Include="$(NativeLinuxLib)" Condition="Exists('$(NativeLinuxLib)')" Link="liblocalfm_native.so" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+      <None Include="$(NativeOutDir)win-x64/localfm_native.dll" Condition="Exists('$(NativeOutDir)win-x64/localfm_native.dll')" Link="localfm_native.dll" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+      <None Include="$(NativeOutDir)osx/liblocalfm_native.dylib" Condition="Exists('$(NativeOutDir)osx/liblocalfm_native.dylib')" Link="liblocalfm_native.dylib" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    </ItemGroup>
+  </Target>
+</Project>

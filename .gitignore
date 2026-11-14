@@ -1,0 +1,8 @@
+bin/
+obj/
+native/out/
+*.user
+.vs/
+.idea/
+TestResults/
+native/build/
