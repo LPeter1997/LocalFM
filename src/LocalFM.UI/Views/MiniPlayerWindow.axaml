@@ -4,7 +4,7 @@
         xmlns:c="using:LocalFM.UI.Controls"
         x:Class="LocalFM.UI.Views.MiniPlayerWindow"
         x:DataType="vm:NowPlayingViewModel"
-        Title="LocalFM" Width="400" Height="124" CanResize="False" Topmost="True"
+        Title="LocalFM" Width="460" Height="124" CanResize="False" Topmost="True"
         WindowStartupLocation="CenterScreen" Background="{StaticResource Bg}">
   <!-- No system title bar: drag anywhere to move, double-click (or the expand button) for the full window -->
   <Border x:Name="Root" Background="{StaticResource Bg}" Padding="12">
@@ -26,7 +26,8 @@
               VerticalAlignment="Top" Margin="6,-4,-4,0">
         <c:Icon Classes="icon" Data="{StaticResource IcoExpand}" />
       </Button>
-      <StackPanel Grid.Row="2" Grid.ColumnSpan="2" Orientation="Horizontal" Spacing="8" VerticalAlignment="Bottom">
+      <Grid Grid.Row="2" Grid.ColumnSpan="2" ColumnDefinitions="Auto,*" VerticalAlignment="Bottom">
+      <StackPanel Orientation="Horizontal" Spacing="8">
         <Button Classes="flat" Command="{Binding PreviousCommand}" ToolTip.Tip="Previous">
           <c:Icon Classes="icon fill" Data="{StaticResource IcoPrev}" />
         </Button>
@@ -43,6 +44,17 @@
           <Run Text="{Binding PositionText}" /><Run Text=" / " /><Run Text="{Binding DurationText}" />
         </TextBlock>
       </StackPanel>
+      <!-- Volume: same mute button and slider as the player bar; scrolling anywhere also changes it -->
+      <Grid Grid.Column="1" ColumnDefinitions="Auto,*" Margin="8,0,0,0" VerticalAlignment="Center">
+        <Button Classes="flat" Command="{Binding ToggleMuteCommand}" ToolTip.Tip="Mute (scroll to change volume)">
+          <Panel>
+            <c:Icon Classes="icon" Data="{StaticResource IcoVolume}" IsVisible="{Binding !Muted}" />
+            <c:Icon Classes="icon" Data="{StaticResource IcoVolumeMute}" IsVisible="{Binding Muted}" />
+          </Panel>
+        </Button>
+        <Slider Grid.Column="1" Minimum="0" Maximum="100" Value="{Binding Volume}" Classes="seek" VerticalAlignment="Center" />
+      </Grid>
+      </Grid>
     </Grid>
     <ProgressBar Grid.Row="1" Grid.Column="1" Margin="12,6,0,0" Height="3" MinHeight="3" Minimum="0"
                  Maximum="{Binding Duration}" Value="{Binding Position}" Foreground="{StaticResource Accent}"
