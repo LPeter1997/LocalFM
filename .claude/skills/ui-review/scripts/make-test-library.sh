@@ -5,7 +5,7 @@
 #   - "Visual Test/Signal Bloom": 60 s of layered tones + pink noise (moves every visualizer mode) with a cover
 #   - "Karaoke Test/Neon Words": 40 s with word-synced (enhanced LRC) lyrics in its tags
 #   - "Estimate Test/Line Timed": 40 s with line-synced lyrics only (exercises the word-timing estimate)
-#   - "Messy Names/...": YouTube-rip style names (Tidy up suggestions, long titles, " - Topic" artists)
+#   - "Messy Names/...": YouTube-rip style names (Tidy up suggestions, long titles, " - Topic" artists, a fan upload)
 #   - "Copy Test": two copies of one album (1987 and 1998), for the merge hint and the move panel
 # Then scans it into <dir>/home (LOCALFM_HOME) with the Debug build.
 set -euo pipefail
@@ -53,6 +53,11 @@ if [ ! -f "music/messy/m1.mp3" ]; then
     -metadata artist="Example Band - Topic" -metadata album="An Album Name Long Enough To Need Trimming In Narrow Places" music/messy/m1.mp3
   ffmpeg -loglevel error -y -f lavfi -i "sine=f=550:d=8" -metadata title="Second+Song+Here" \
     -metadata artist="ExampleBandVEVO" -metadata album="An Album Name Long Enough To Need Trimming In Narrow Places" music/messy/m2.mp3
+fi
+if [ ! -f "music/messy/m3.mp3" ]; then
+  # A fan upload: the real artist in the title, the uploader's channel as artist.
+  ffmpeg -loglevel error -y -f lavfi -i "sine=f=700:d=8" -metadata title="Test Band - Uploaded Song" \
+    -metadata artist="fanchannel123" -metadata album="Test Band - Uploaded Song" music/messy/m3.mp3
 fi
 
 # Two copies of one album (songs ripped one at a time, different years): the album page offers to merge them.

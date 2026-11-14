@@ -33,7 +33,7 @@ public sealed class MetadataApplier(ImageStore images)
             """, r => new LocalTrack(r.Id(0), r.Id(1), r.GetInt32(2), r.GetInt32(3), r.GetString(4), r.Id(5), r.Long(6)), release);
         var local = LocalTracks(releaseId);
         var remote = d.Media.SelectMany(m => m.Tracks.Select(t => (Medium: m, Track: t))).ToList();
-        var assigned = MatchTracks(local, remote, fileTitles);
+        var assigned = MatchTracks(local, remote, fileTitles, d.Credit);
         int matched = assigned.Count(a => a is not null);
         if (matched == 0 && local.Count > 0)
             return new ApplyResult(0, local.Count, false, false, Applied: false);
@@ -47,7 +47,7 @@ public sealed class MetadataApplier(ImageStore images)
             releaseId = twin;
             mergedInto = twin;
             local = LocalTracks(releaseId);
-            assigned = MatchTracks(local, remote, fileTitles);
+            assigned = MatchTracks(local, remote, fileTitles, d.Credit);
             matched = assigned.Count(a => a is not null);
         }
 
@@ -145,13 +145,20 @@ public sealed class MetadataApplier(ImageStore images)
     /// same order, and finally a unique length. Lengths veto: a 5-minute song never becomes a 30-minute interview.
     /// </summary>
     private static LocalTrack?[] MatchTracks(List<LocalTrack> local, List<(MediumData Medium, TrackData Track)> remote,
-        IReadOnlyDictionary<Ulid, string>? fileTitles)
+        IReadOnlyDictionary<Ulid, string>? fileTitles, IReadOnlyList<CreditPart> releaseCredit)
     {
         var assigned = new LocalTrack?[remote.Count];
         var taken = new HashSet<Ulid>();
         static long? Len(TrackData t) => t.LengthMs ?? t.Recording.LengthMs;
+        // A fan upload's title carries the artist ("Guns N' Roses - Civil War"): fine when it is this release's artist.
+        var artistKeys = releaseCredit.SelectMany(c => new[] { c.CreditedName, c.Artist.Name })
+            .Append(ReleaseData.CreditText(releaseCredit)).Select(Normalize.Key).Where(k => k.Length > 0).ToHashSet();
+        bool Same(string local, TrackData t) =>
+            SimilarTitle(local, t.Title) ||
+            (Edit.Cleanup.SplitArtistTitle(local, null, name => artistKeys.Contains(Normalize.Key(name)) ? name : null) is { } split
+             && SimilarTitle(split.Title, t.Title));
         bool Titled(LocalTrack l, TrackData t) =>
-            SimilarTitle(l.Title, t.Title) || (fileTitles?.TryGetValue(l.Id, out var ft) == true && SimilarTitle(ft, t.Title));
+            Same(l.Title, t) || (fileTitles?.TryGetValue(l.Id, out var ft) == true && Same(ft, t));
 
         void Pass(Func<LocalTrack, int, bool> fits)
         {

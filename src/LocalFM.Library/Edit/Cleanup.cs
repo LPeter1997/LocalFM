@@ -60,6 +60,27 @@ public static partial class Cleanup
         return s == title.Trim() || s.Length == 0 ? null : new Result(s, reasons);
     }
 
+    /// <summary>
+    /// "Guns N' Roses - Civil War" credited to someone else (typically the channel that uploaded the video): the part
+    /// before the dash is the real artist when <paramref name="knownArtist"/> recognises it (it returns the library's
+    /// spelling, or null). With <paramref name="knownArtist"/> null any "X - Y" splits, for search suggestions only.
+    /// </summary>
+    public static (string Artist, string Title)? SplitArtistTitle(string title, string? currentArtist, Func<string, string?>? knownArtist)
+    {
+        string s = CleanTitle(title, null, remasterNotes: false)?.Text ?? title.Trim();
+        if (ArtistPrefix().Match(s) is not { Success: true } m || m.Groups[2].Value.Length == 0) return null;
+        string prefix = m.Groups[1].Value.Trim();
+        string key = Normalize.Key(prefix);
+        if (currentArtist is not null &&
+            (key == Normalize.Key(currentArtist) || key == Normalize.Key(CleanArtist(currentArtist)?.Text))) return null;
+        string? artist = knownArtist is null ? prefix : knownArtist(prefix);
+        if (artist is null) return null;
+        string rest = m.Groups[2].Value.Trim();
+        return (artist, CleanTitle(rest, artist)?.Text ?? rest);
+    }
+
+    private const string UploaderReason = "artist in title, uploader credited";
+
     private static string Common(string s, List<string> reasons)
     {
         string t = s.Trim();
@@ -98,12 +119,21 @@ public static partial class Cleanup
             list.Add(new CleanupSuggestion("Artist", name, fixedName.Text, string.Join(", ", fixedName.Reasons), ctx, users));
         }
 
+        var artistNames = new Dictionary<string, string>();
+        foreach (var n in c.Query("SELECT name FROM artist ORDER BY name", r => r.GetString(0))) artistNames.TryAdd(Normalize.Key(n), n);
+        string? Known(string name) => artistNames.GetValueOrDefault(Normalize.Key(name));
+        bool ArtistLocked(string type, Ulid id) =>
+            c.Scalar<long>("SELECT COUNT(*) FROM field_provenance WHERE entity_type = $1 AND entity_id = $2 AND field = 'artist_credit_id' AND locked = 1", type, id) > 0;
+
         var albums = c.Query("""
             SELECT r.id, r.title, ac.display_name FROM release r LEFT JOIN artist_credit ac ON ac.id = r.artist_credit_id
             WHERE NOT EXISTS (SELECT 1 FROM field_provenance p WHERE p.entity_type='release' AND p.entity_id=r.id AND p.field='title' AND p.locked=1)
             """, r => (Id: r.Id(0), Title: r.GetString(1), Artist: r.Str(2)));
         foreach (var a in albums)
-            if (CleanTitle(a.Title, a.Artist) is { } fixedTitle)
+            if (SplitArtistTitle(a.Title, a.Artist, Known) is { } split && !ArtistLocked("release", a.Id))
+                list.Add(new CleanupSuggestion("Album", a.Title, $"{split.Title}  ·  by {split.Artist}", UploaderReason, a.Artist ?? "",
+                    [new FieldChange("release", a.Id, "title", split.Title), new FieldChange("release", a.Id, "artist", split.Artist)]));
+            else if (CleanTitle(a.Title, a.Artist) is { } fixedTitle)
                 list.Add(new CleanupSuggestion("Album", a.Title, fixedTitle.Text, string.Join(", ", fixedTitle.Reasons), a.Artist ?? "",
                     [new FieldChange("release", a.Id, "title", fixedTitle.Text)]));
 
@@ -115,7 +145,11 @@ public static partial class Cleanup
             ORDER BY rel.title, m.position, t.position
             """, r => (Id: r.Id(0), Title: r.GetString(1), Artist: r.Str(2), Album: r.GetString(3)));
         foreach (var t in tracksRows)
-            if (CleanTitle(t.Title, t.Artist) is { } fixedTitle)
+            if (SplitArtistTitle(t.Title, t.Artist, Known) is { } split && !ArtistLocked("track", t.Id))
+                list.Add(new CleanupSuggestion("Track", t.Title, $"{split.Title}  ·  by {split.Artist}", UploaderReason,
+                    t.Artist is null ? t.Album : $"{t.Artist} · {t.Album}",
+                    [new FieldChange("track", t.Id, "title", split.Title), new FieldChange("track", t.Id, "artist", split.Artist)]));
+            else if (CleanTitle(t.Title, t.Artist) is { } fixedTitle)
                 list.Add(new CleanupSuggestion("Track", t.Title, fixedTitle.Text, string.Join(", ", fixedTitle.Reasons),
                     t.Artist is null ? t.Album : $"{t.Artist} · {t.Album}", [new FieldChange("track", t.Id, "title", fixedTitle.Text)]));
         return list;

@@ -28,6 +28,41 @@ public class EditorTests
     public void Cleans_titles(string input, string artist, string? expected) =>
         Assert.Equal(expected, Cleanup.CleanTitle(input, artist)?.Text);
 
+    [Theory]
+    [InlineData("Guns N' Roses - Civil War", "anbj0991", "Guns N’ Roses", "Civil War")]
+    [InlineData("Guns N' Roses - Civil War (Official Video) [PAYmGCYhVAo]", "someone", "Guns N’ Roses", "Civil War")]
+    [InlineData("Guns N' Roses - Civil War", "Guns N' Roses", null, null)]        // the artist-repeated rule handles this
+    [InlineData("Live - Wire", "AC/DC", null, null)]                            // "Live" is not an artist we know
+    [InlineData("Civil War", "anbj0991", null, null)]
+    public void Splits_artist_out_of_uploaded_titles(string title, string artist, string? expectArtist, string? expectTitle)
+    {
+        string? Known(string n) => Normalize.Key(n) == "guns n roses" ? "Guns N’ Roses" : null;
+        var split = Cleanup.SplitArtistTitle(title, artist, Known);
+        Assert.Equal(expectArtist, split?.Artist);
+        Assert.Equal(expectTitle, split?.Title);
+    }
+
+    [SkippableFact]
+    public async Task Tidy_up_moves_the_artist_out_of_an_uploaded_title()
+    {
+        Skip.IfNot(TempLibrary.HaveFfmpeg);
+        using var lib = new TempLibrary();
+        lib.MakeTrack("a/1.mp3", new() { ["title"] = "Welcome to the Jungle", ["artist"] = "Guns N' Roses", ["album"] = "Appetite for Destruction", ["track"] = "1" }, seconds: 0.3);
+        lib.MakeTrack("yt/cw.mp3", new() { ["title"] = "Guns N' Roses - Civil War", ["artist"] = "anbj0991", ["album"] = "Guns N' Roses - Civil War" }, seconds: 0.3);
+        await lib.ScanAsync();
+
+        var found = Cleanup.Find(lib.Db).Where(x => x.Reason.Contains("uploader")).ToList();
+        Assert.Equal(["Album", "Track"], found.Select(x => x.Kind).Order());
+        await lib.Db.Writer.Run((c, t) => MetadataEditor.Apply(new Tx(c, t), found.SelectMany(x => x.Changes), MetadataEditor.CleanupSource, lockFields: false));
+
+        var cw = lib.Queries.Tracks("Civil War").Single();
+        Assert.Equal("Civil War", cw.Title);
+        Assert.Equal("Guns N' Roses", cw.Artist);
+        Assert.Equal("Civil War", cw.Album);
+        Assert.Equal("Guns N' Roses", cw.AlbumArtist);
+        Assert.DoesNotContain(lib.Queries.Artists(), a => a.Name == "anbj0991");
+    }
+
     [Fact]
     public void Splits_credits_only_on_known_artists_for_ambiguous_joins()
     {

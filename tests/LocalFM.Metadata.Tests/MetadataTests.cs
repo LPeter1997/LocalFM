@@ -202,6 +202,26 @@ public class MetadataTests
     }
 
     [SkippableFact]
+    public async Task Fan_upload_with_the_artist_in_its_title_fits_the_album()
+    {
+        Skip.IfNot(TempLibrary.HaveFfmpeg);
+        using var lib = new TempLibrary();
+        lib.MakeTrack("yt/kp.mp3", new() { ["title"] = "Radiohead - Karma Police", ["artist"] = "some uploader", ["album"] = "Radiohead - Karma Police" }, seconds: 0.3);
+        await lib.ScanAsync();
+        var album = lib.Queries.Albums().Single();
+        await SetFileLengths(lib, album.ReleaseId, [261626 - 9000]);   // a video's intro/outro: not a tight length match
+        var (svc, _) = Service(lib);
+
+        var r = await svc.ApplyReleaseAsync(album.ReleaseId, "6a09041b-0f79-3278-88d9-0552dd28d37f", fetchCover: false);
+
+        Assert.True(r!.Applied);
+        var track = lib.Queries.AlbumTracks(album.ReleaseId).Single();
+        Assert.Equal("Karma Police", track.Title);
+        Assert.Equal(6, track.Position);
+        Assert.Equal("Radiohead", track.Artist);
+    }
+
+    [SkippableFact]
     public async Task Lone_songs_matched_one_by_one_end_up_on_one_album()
     {
         Skip.IfNot(TempLibrary.HaveFfmpeg);

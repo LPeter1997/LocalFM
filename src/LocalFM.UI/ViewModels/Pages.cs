@@ -127,7 +127,11 @@ public sealed partial class AlbumDetailViewModel : PageViewModel
     private void EnsureMatch()
     {
         if (Match is not null) return;
-        Match = new MatchViewModel(Host, Album.ReleaseId, Album.Title, Album.Artist, AfterMatch);
+        // "Guns N' Roses - Civil War" by an uploader's channel: search for the song by the artist we already know.
+        var known = Host.Queries.ArtistNames().GroupBy(Normalize.Key).ToDictionary(g => g.Key, g => g.First());
+        var (title, artist) = Library.Edit.Cleanup.SplitArtistTitle(Album.Title, Album.Artist, n => known.GetValueOrDefault(Normalize.Key(n)))
+            is { } split ? (split.Title, split.Artist) : (Album.Title, Album.Artist);
+        Match = new MatchViewModel(Host, Album.ReleaseId, title, artist, AfterMatch);
         Match.SearchCommand.Execute(null);
     }
 

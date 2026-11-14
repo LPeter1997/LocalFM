@@ -45,6 +45,12 @@ public sealed partial class MatchViewModel : ObservableObject
         {
             var q = await Task.Run(() => _host.Metadata.DescribeAlbum(_releaseId));
             var hits = await Task.Run(() => _host.Metadata.SearchAlbumAsync(q, Title, Artist));
+            // Nothing for "Artist - Song" credited to an uploader: search again as the song by that artist.
+            if (hits.Count == 0 && Library.Edit.Cleanup.SplitArtistTitle(Title, Artist, null) is { } split)
+            {
+                var retry = await Task.Run(() => _host.Metadata.SearchAlbumAsync(q, split.Title, split.Artist));
+                if (retry.Count > 0) { (Title, Artist, hits) = (split.Title, split.Artist, retry); }
+            }
             Candidates.Clear();
             foreach (var h in hits) Candidates.Add(h);
             Selected = Candidates.FirstOrDefault();
