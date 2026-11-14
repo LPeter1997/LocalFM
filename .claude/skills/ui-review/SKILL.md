@@ -19,6 +19,11 @@ position and visualizers move as in real use. Other options: `LOCALFM_SNAPSHOT_P
 `album`, `album:<title>`, `match`, `move`, `edit`, `mini`, `artist:<name>`), `_PLAY=1`, `_LYRICS=1`, `_NOWPLAYING=<mode>`, `_WAIT=<ms>`,
 `_WIDTH`/`_HEIGHT`, `_SCROLL=<px>`. Add an option there when a state you need can't be reached.
 
+Snapshots need a live desktop: while the session is locked (`loginctl show-session <id> -p LockedHint`),
+the compositor stops giving new windows frames, so only the first frame is captured and any shot that
+navigates comes out blank or stale. Check the lock before trusting a run where pages look empty.
+Icons are `c:Icon` (centred, uniform-scaled glyphs), not stretched `Path`s, which pin non-square glyphs top-left.
+
 Never point a review at the user's real library (`~/.local/share/LocalFM`). Use a test library in the
 scratchpad; it is private data and a review must not change it.
 
