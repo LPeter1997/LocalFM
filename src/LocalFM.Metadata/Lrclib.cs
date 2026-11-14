@@ -11,10 +11,20 @@ public sealed partial class Lrclib(CachedHttp http)
 {
     public const string Provider = "lrclib";
 
-    public sealed record Result(LyricsData? Synced, LyricsData? Plain, bool Instrumental);
+    public sealed record Result(LyricsData? Synced, LyricsData? Plain, bool Instrumental, long Id = 0);
 
-    public async Task<Result?> GetAsync(string artist, string title, string? album, TimeSpan? duration, CancellationToken ct = default)
+    /// <summary>The best entry: see <see cref="CandidatesAsync"/>.</summary>
+    public async Task<Result?> GetAsync(string artist, string title, string? album, TimeSpan? duration, CancellationToken ct = default) =>
+        (await CandidatesAsync(artist, title, album, duration, ct).ConfigureAwait(false)).FirstOrDefault();
+
+    /// <summary>
+    /// Every LRCLIB entry for the song whose length fits, best first. LRCLIB is crowd-sourced: entries for the same
+    /// recording sometimes carry another version's timing. So synced entries are ranked by how many of the others
+    /// agree with their timing; LRCLIB's own exact match only breaks ties.
+    /// </summary>
+    public async Task<List<Result>> CandidatesAsync(string artist, string title, string? album, TimeSpan? duration, CancellationToken ct = default)
     {
+        var found = new List<(Result R, bool Exact)>();
         string url = $"https://lrclib.net/api/get?artist_name={Uri.EscapeDataString(artist)}&track_name={Uri.EscapeDataString(title)}";
         if (!string.IsNullOrWhiteSpace(album)) url += $"&album_name={Uri.EscapeDataString(album)}";
         if (duration is { } d) url += $"&duration={(int)Math.Round(d.TotalSeconds)}";
@@ -22,22 +32,62 @@ public sealed partial class Lrclib(CachedHttp http)
         if (res.Ok)
         {
             using var doc = JsonDocument.Parse(res.Body);
-            return Parse(doc.RootElement);
+            found.Add((Parse(doc.RootElement), true));
         }
-        if (res.Status != 404) return null;
 
-        // Exact match failed (album/duration differ): search, and accept a close duration.
         string search = $"https://lrclib.net/api/search?artist_name={Uri.EscapeDataString(artist)}&track_name={Uri.EscapeDataString(title)}";
         var sres = await http.GetAsync(Provider, search, TimeSpan.FromDays(30), ct: ct).ConfigureAwait(false);
-        if (!sres.Ok) return null;
-        using var sdoc = JsonDocument.Parse(sres.Body);
-        if (sdoc.RootElement.ValueKind != JsonValueKind.Array) return null;
-        var candidates = sdoc.RootElement.EnumerateArray()
-            .Where(e => Normalize.Key(e.Str("trackName")) == Normalize.Key(title))
-            .Where(e => duration is null || e.Double("duration") is not { } ds || Math.Abs(ds - duration.Value.TotalSeconds) <= 3)
-            .OrderByDescending(e => e.Str("syncedLyrics") is not null)
+        if (sres.Ok)
+        {
+            using var sdoc = JsonDocument.Parse(sres.Body);
+            if (sdoc.RootElement.ValueKind == JsonValueKind.Array)
+                foreach (var e in sdoc.RootElement.EnumerateArray())
+                {
+                    if (Normalize.Key(e.Str("trackName")) != Normalize.Key(title)) continue;
+                    if (duration is { } dur && e.Double("duration") is { } ds && Math.Abs(ds - dur.TotalSeconds) > 3) continue;
+                    var r = Parse(e);
+                    if (!found.Any(f => f.R.Id == r.Id && r.Id != 0)) found.Add((r, false));
+                }
+        }
+        return Rank(found);
+    }
+
+    private static List<Result> Rank(List<(Result R, bool Exact)> found)
+    {
+        var timings = found.Select(f => f.R.Synced is { } s ? Lrc.Parse(s.Content, s.Format) : null).ToList();
+        var scored = found.Select((f, i) =>
+        {
+            double agreement = 0;
+            if (timings[i] is { } mine)
+                for (int j = 0; j < found.Count; j++)
+                    if (j != i && timings[j] is { } other) agreement += TimingAgreement(mine, other);
+            return (f.R, f.Exact, Agreement: agreement, Index: i);
+        });
+        return scored
+            .OrderByDescending(x => x.R.Synced is not null)
+            .ThenByDescending(x => Math.Round(x.Agreement, 1))
+            .ThenByDescending(x => x.Exact)
+            .ThenBy(x => x.Index)
+            .Select(x => x.R)
             .ToList();
-        return candidates.Count == 0 ? null : Parse(candidates[0]);
+    }
+
+    /// <summary>Fraction (0..1) of the lines two synced lyrics share whose timestamps are within a second.</summary>
+    public static double TimingAgreement(IReadOnlyList<LyricLine> a, IReadOnlyList<LyricLine> b)
+    {
+        var byText = new Dictionary<string, TimeSpan>();
+        foreach (var l in b)
+            if (l.Time is { } t && Normalize.Key(l.Text) is { Length: > 0 } k) byText.TryAdd(k, t);
+        int shared = 0, close = 0;
+        var seen = new HashSet<string>();
+        foreach (var l in a)
+        {
+            if (l.Time is not { } t || Normalize.Key(l.Text) is not { Length: > 0 } k || !seen.Add(k)) continue;
+            if (!byText.TryGetValue(k, out var u)) continue;
+            shared++;
+            if (Math.Abs((t - u).TotalSeconds) <= 1.0) close++;
+        }
+        return shared == 0 ? 0 : (double)close / shared;
     }
 
     private static Result Parse(JsonElement e)
@@ -48,7 +98,8 @@ public sealed partial class Lrclib(CachedHttp http)
         return new Result(
             synced is null ? null : new LyricsData(Provider, format, synced),
             plain is null ? null : new LyricsData(Provider, LyricsFormat.Plain, plain),
-            e.Bool("instrumental"));
+            e.Bool("instrumental"),
+            e.Long("id") ?? 0);
     }
 
     [GeneratedRegex(@"<\d{1,2}:\d{2}(\.\d{1,3})?>")]

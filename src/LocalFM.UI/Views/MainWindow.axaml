@@ -64,9 +64,11 @@
       <Border Grid.Column="2" Width="380" Background="{StaticResource Surface}" BorderBrush="{StaticResource Line}" BorderThickness="1,0,0,0"
               IsVisible="{Binding Lyrics.IsOpen}">
         <DockPanel DataContext="{Binding Lyrics}" x:DataType="vm:LyricsViewModel" Margin="0,14,0,0">
-          <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto" Margin="20,0,12,8">
+          <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto,Auto" Margin="20,0,12,8">
             <TextBlock Classes="h2" Text="Lyrics" VerticalAlignment="Center" />
-            <Button Grid.Column="1" Classes="flat" Command="{Binding RefetchCommand}" ToolTip.Tip="Look up again">
+            <Button Grid.Column="1" Classes="flat" Content="Timing off?" FontSize="12" IsVisible="{Binding Synced}"
+                    Command="{Binding OtherVersionCommand}" ToolTip.Tip="Try another synced version from LRCLIB" />
+            <Button Grid.Column="2" Classes="flat" Command="{Binding RefetchCommand}" ToolTip.Tip="Look up again">
               <Path Classes="icon" Data="{StaticResource IcoRefresh}" Width="16" Height="16" />
             </Button>
           </Grid>

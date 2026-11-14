@@ -189,27 +189,17 @@ public sealed class MetadataService
         return row is null ? null : new LyricsView(row, Lrc.Parse(row.Content, row.Format));
     }
 
-    /// <summary>Stored lyrics, or (when allowed) fetched from LRCLIB and stored. Never throws.</summary>
-    public async Task<LyricsView?> GetLyricsAsync(TrackInfo track, bool allowFetch, CancellationToken ct = default)
+    /// <summary>Stored lyrics, or (when allowed) fetched from LRCLIB and stored. <paramref name="force"/> looks up
+    /// again even when synced lyrics are stored. Never throws.</summary>
+    public async Task<LyricsView?> GetLyricsAsync(TrackInfo track, bool allowFetch, CancellationToken ct = default, bool force = false)
     {
         var stored = StoredLyrics(track.RecordingId);
-        if (stored is { Synced: true } || !allowFetch || !OnlineEnabled || track.Artist is null) return stored;
+        if ((stored is { Synced: true } && !force) || !allowFetch || !OnlineEnabled || track.Artist is null) return stored;
         try
         {
-            var res = await Lrclib.GetAsync(track.Artist, track.Title, track.Album,
-                track.DurationMs is { } ms ? TimeSpan.FromMilliseconds(ms) : null, ct).ConfigureAwait(false);
-            if (res is null || (res.Synced is null && res.Plain is null)) return stored;
-            await _db.Writer.Run((c, t) =>
-            {
-                var tx = new Tx(c, t);
-                tx.Exec("DELETE FROM lyrics WHERE recording_id = $1 AND source = $2", track.RecordingId, Lrclib.Provider);
-                foreach (var l in new[] { res.Synced, res.Plain })
-                {
-                    if (l is null) continue;
-                    tx.Exec("INSERT INTO lyrics(id, recording_id, format, content, source, updated_at) VALUES ($1,$2,$3,$4,$5,$6)",
-                        Ulid.NewUlid(), track.RecordingId, FormatName(l.Format), l.Content, l.Provider, Sql.Now());
-                }
-            }).ConfigureAwait(false);
+            var all = await LyricsCandidatesAsync(track, ct).ConfigureAwait(false);
+            if (all.Count == 0) return stored;
+            await StoreLrclib(track.RecordingId, all[0]).ConfigureAwait(false);
             return StoredLyrics(track.RecordingId);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
@@ -218,6 +208,42 @@ public sealed class MetadataService
             return stored;
         }
     }
+
+    /// <summary>Replaces the stored LRCLIB lyrics with the next synced version (for when the timing is off).
+    /// Returns the new lyrics, which version it is (1-based) and how many there are; null when there is no other.</summary>
+    public async Task<(LyricsView View, int Version, int Versions)?> NextLyricsVersionAsync(TrackInfo track, CancellationToken ct = default)
+    {
+        if (!OnlineEnabled || track.Artist is null) return null;
+        var synced = (await LyricsCandidatesAsync(track, ct).ConfigureAwait(false)).Where(r => r.Synced is not null).ToList();
+        if (synced.Count < 2) return null;
+        // Versions with identical text and timing are one version.
+        synced = synced.DistinctBy(r => r.Synced!.Content.Trim()).ToList();
+        if (synced.Count < 2) return null;
+        string? current = StoredLyrics(track.RecordingId)?.Data.Content.Trim();
+        int at = synced.FindIndex(r => r.Synced!.Content.Trim() == current);
+        int next = (at + 1) % synced.Count;
+        await StoreLrclib(track.RecordingId, synced[next]).ConfigureAwait(false);
+        return StoredLyrics(track.RecordingId) is { } view ? (view, next + 1, synced.Count) : null;
+    }
+
+    private async Task<List<Lrclib.Result>> LyricsCandidatesAsync(TrackInfo track, CancellationToken ct)
+    {
+        var all = await Lrclib.CandidatesAsync(track.Artist!, track.Title, track.Album,
+            track.DurationMs is { } ms ? TimeSpan.FromMilliseconds(ms) : null, ct).ConfigureAwait(false);
+        return all.Where(r => r.Synced is not null || r.Plain is not null).ToList();
+    }
+
+    private Task StoreLrclib(Ulid recordingId, Lrclib.Result res) => _db.Writer.Run((c, t) =>
+    {
+        var tx = new Tx(c, t);
+        tx.Exec("DELETE FROM lyrics WHERE recording_id = $1 AND source = $2", recordingId, Lrclib.Provider);
+        foreach (var l in new[] { res.Synced, res.Plain })
+        {
+            if (l is null) continue;
+            tx.Exec("INSERT INTO lyrics(id, recording_id, format, content, source, updated_at) VALUES ($1,$2,$3,$4,$5,$6)",
+                Ulid.NewUlid(), recordingId, FormatName(l.Format), l.Content, l.Provider, Sql.Now());
+        }
+    });
 
     public static string FormatName(LyricsFormat f) => f switch { LyricsFormat.Lrc => "lrc", LyricsFormat.EnhancedLrc => "elrc", _ => "plain" };
     public static LyricsFormat FormatOf(string s) => s switch { "lrc" => LyricsFormat.Lrc, "elrc" => LyricsFormat.EnhancedLrc, _ => LyricsFormat.Plain };

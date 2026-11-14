@@ -243,4 +243,37 @@ public class MetadataTests
     {
         Assert.Equal("2×CD + DVD-Video", MusicBrainz.FormatText(["CD", "CD", "DVD-Video"]));
     }
+    private static string LrclibEntry(long id, string album, double duration, int firstVerseSec) =>
+        System.Text.Json.JsonSerializer.Serialize(new Dictionary<string, object?>
+        {
+            ["id"] = id, ["trackName"] = "The Zoo", ["artistName"] = "Scorpions", ["albumName"] = album, ["duration"] = duration,
+            ["plainLyrics"] = "The job is done, I go out\nAnother boring day",
+            ["syncedLyrics"] = $"[{firstVerseSec / 60:00}:{firstVerseSec % 60:00}.10] The job is done, I go out\n[{(firstVerseSec + 5) / 60:00}:{(firstVerseSec + 5) % 60:00}.20] Another boring day",
+        }, LrclibTestJson.Default.DictionaryStringObject);
+
+    [Fact]
+    public async Task Lrclib_prefers_the_timing_most_entries_agree_on()
+    {
+        using var lib = new TempLibrary();
+        // The exact match carries another recording's timing (vocals at 1:02); three other entries agree on 0:42.
+        var fake = new FakeHandler()
+            .OnJson("lrclib.net/api/get", LrclibEntry(1, "Comeblack", 338, 62))
+            .OnJson("lrclib.net/api/search", "[" + string.Join(",",
+                LrclibEntry(1, "Comeblack", 338, 62), LrclibEntry(2, "Acoustica", 338, 42), LrclibEntry(3, "Comeblack (JP)", 338, 42),
+                LrclibEntry(4, "Comeblack/Acoustica", 337.5, 42), LrclibEntry(5, "Animal Magnetism", 331, 62)) + "]");
+        var http = new CachedHttp(lib.Db, new HttpClient(fake));
+        http.SetRateLimit(Lrclib.Provider, TimeSpan.Zero);
+
+        var all = await new Lrclib(http).CandidatesAsync("Scorpions", "The Zoo", "Comeblack", TimeSpan.FromSeconds(338.35));
+
+        Assert.Equal(4, all.Count); // the 331 s recording is out
+        Assert.Equal(42, (int)Lrc.Parse(all[0].Synced!.Content, all[0].Synced!.Format)[0].Time!.Value.TotalSeconds);
+        Assert.Equal(1, all[^1].Id);
+    }
 }
+
+[System.Text.Json.Serialization.JsonSerializable(typeof(Dictionary<string, object?>))]
+[System.Text.Json.Serialization.JsonSerializable(typeof(long))]
+[System.Text.Json.Serialization.JsonSerializable(typeof(double))]
+[System.Text.Json.Serialization.JsonSerializable(typeof(string))]
+internal partial class LrclibTestJson : System.Text.Json.Serialization.JsonSerializerContext;

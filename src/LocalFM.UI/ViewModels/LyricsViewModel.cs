@@ -68,10 +68,28 @@ public sealed partial class LyricsViewModel : ObservableObject
     [RelayCommand]
     private void Refetch()
     {
-        if (_host.Player.Current?.Track is { } t) _ = Load(t, allowFetch: true);
+        if (_host.Player.Current?.Track is { } t) _ = Load(t, allowFetch: true, force: true);
     }
 
-    private async Task Load(TrackInfo track, bool allowFetch)
+    /// <summary>LRCLIB often has several timings for one song; step to the next when this one is off.</summary>
+    [RelayCommand]
+    private async Task OtherVersion()
+    {
+        if (_host.Player.Current?.Track is not { } track) return;
+        IsLoading = true;
+        try
+        {
+            var next = await Task.Run(() => _host.Metadata.NextLyricsVersionAsync(track));
+            if (track.RecordingId != _recording) return;
+            if (next is not { } n) { Source = "No other synced version on LRCLIB."; return; }
+            Show(n.View);
+            Source = $"Lyrics from LRCLIB · version {n.Version} of {n.Versions}";
+        }
+        catch (Exception ex) { Source = $"Lookup failed: {ex.Message}"; }
+        finally { IsLoading = false; }
+    }
+
+    private async Task Load(TrackInfo track, bool allowFetch, bool force = false)
     {
         _cts?.Cancel();
         var cts = _cts = new CancellationTokenSource();
@@ -79,7 +97,7 @@ public sealed partial class LyricsViewModel : ObservableObject
         Status = null;
         try
         {
-            var view = await Task.Run(() => _host.Metadata.GetLyricsAsync(track, allowFetch, cts.Token));
+            var view = await Task.Run(() => _host.Metadata.GetLyricsAsync(track, allowFetch, cts.Token, force));
             if (cts.IsCancellationRequested || track.RecordingId != _recording) return;
             Lines.Clear();
             _current = -1;
@@ -89,13 +107,21 @@ public sealed partial class LyricsViewModel : ObservableObject
                     : allowFetch ? "No lyrics found." : "No lyrics stored.";
                 return;
             }
-            int i = 0;
-            foreach (var l in view.Lines) Lines.Add(new LyricLineViewModel(l, i++));
-            Synced = view.Synced;
-            Source = view.Data.Provider switch { "lrclib" => "Lyrics from LRCLIB", "tags" => "Lyrics from file tags", var p => $"Lyrics from {p}" };
+            Show(view);
         }
         catch (OperationCanceledException) { }
         finally { if (_cts == cts) IsLoading = false; }
+    }
+
+    private void Show(LyricsView view)
+    {
+        Lines.Clear();
+        _current = -1;
+        Status = null;
+        int i = 0;
+        foreach (var l in view.Lines) Lines.Add(new LyricLineViewModel(l, i++));
+        Synced = view.Synced;
+        Source = view.Data.Provider switch { "lrclib" => "Lyrics from LRCLIB", "tags" => "Lyrics from file tags", var p => $"Lyrics from {p}" };
     }
 
     public void SeekTo(LyricLineViewModel line)

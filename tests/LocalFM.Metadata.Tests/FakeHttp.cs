@@ -17,6 +17,13 @@ public sealed class FakeHandler : HttpMessageHandler
         return this;
     }
 
+    public FakeHandler OnJson(string urlContains, string json)
+    {
+        _routes.Add((u => u.Contains(urlContains, StringComparison.Ordinal),
+            () => new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(json) }));
+        return this;
+    }
+
     public FakeHandler OnStatus(string urlContains, params HttpStatusCode[] statuses)
     {
         int i = 0;
