@@ -160,6 +160,13 @@ public sealed class LibraryQueries(Database db, ImageStore images)
         return c.QuerySingle($"{TrackSelect} WHERE t.id = $1", MapTrack, trackId);
     }
 
+    /// <summary>All artist names, for autocomplete.</summary>
+    public List<string> ArtistNames()
+    {
+        using var c = db.Open();
+        return c.Query("SELECT DISTINCT name FROM artist ORDER BY name COLLATE NOCASE", r => r.GetString(0));
+    }
+
     public (int Tracks, int Albums, int Artists) Counts()
     {
         using var c = db.Open();

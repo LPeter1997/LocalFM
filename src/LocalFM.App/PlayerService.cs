@@ -171,6 +171,14 @@ public sealed class PlayerService : IDisposable
         }
     }
 
+    /// <summary>Re-reads the queued tracks' metadata from the library (titles, artists, covers after an edit).</summary>
+    public async Task RefreshMetadataAsync()
+    {
+        var ids = Snapshot(out _).Select(i => i.Track.TrackId).Distinct().ToList();
+        var fresh = await Task.Run(() => ids.Select(_queries.ByTrack).OfType<TrackInfo>().ToDictionary(t => t.TrackId)).ConfigureAwait(false);
+        lock (_gate) Queue.UpdateTracks(fresh);
+    }
+
     public RepeatMode Repeat
     {
         get => Queue.Repeat;

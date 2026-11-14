@@ -118,6 +118,7 @@ public sealed class MetadataApplier(ImageStore images)
             coverStored = true;
         }
 
+        Edit.MetadataEditor.PruneOrphans(tx);
         return new ApplyResult(matched, local.Count - matched, coverStored, merged);
     }
 

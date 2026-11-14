@@ -47,6 +47,24 @@ public sealed class PlayQueue
         Changed?.Invoke();
     }
 
+    /// <summary>Swaps in fresh metadata (after an edit) for queued tracks. Entries, order and files stay the same,
+    /// so playback is unaffected. Returns whether anything changed.</summary>
+    public bool UpdateTracks(IReadOnlyDictionary<Ulid, TrackInfo> fresh)
+    {
+        bool any = false;
+        for (int i = 0; i < _items.Count; i++)
+        {
+            var old = _items[i].Track;
+            if (!fresh.TryGetValue(old.TrackId, out var t)) continue;
+            t = t with { Path = old.Path, FileId = old.FileId };
+            if (t == old) continue;
+            _items[i] = _items[i] with { Track = t };
+            any = true;
+        }
+        if (any) Changed?.Invoke();
+        return any;
+    }
+
     /// <summary>Restores a saved queue exactly (no shuffling).</summary>
     public void Restore(IEnumerable<QueueItem> items, int currentIndex)
     {

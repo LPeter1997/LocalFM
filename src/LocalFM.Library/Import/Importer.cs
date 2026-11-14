@@ -46,6 +46,14 @@ public sealed class Importer(ImageStore images)
         {
             UpdateTechnical(tx, byPath.Id, f, now);
             if (byPath.Tags == f.TagsHash && byPath.Track is not null) return ImportOutcome.Unchanged;
+            // Once a track was matched online or edited by hand, the knowledge base is authoritative:
+            // retagging the file elsewhere must not move it off its curated track.
+            if (byPath.Track is { } curated &&
+                tx.Long("SELECT COUNT(*) FROM field_provenance WHERE entity_type = 'track' AND entity_id = $1", curated) > 0)
+            {
+                tx.Exec("UPDATE audio_file SET tags_hash = $2 WHERE id = $1", byPath.Id, f.TagsHash);
+                return ImportOutcome.Retagged;
+            }
             var recording = byPath.Track is { } t
                 ? tx.Single("SELECT recording_id FROM track WHERE id = $1", r => r.IdN(0), t) : null;
             var track = ResolveTrack(tx, f, recording, now);

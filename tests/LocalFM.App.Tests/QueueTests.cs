@@ -89,4 +89,24 @@ public class QueueTests
         q.ClearUpcoming();
         Assert.Equal(["a", "b"], Titles(q));
     }
+
+    [Fact]
+    public void Updated_metadata_keeps_entries_and_files()
+    {
+        var q = new PlayQueue();
+        var a = T("a");
+        q.Replace([a, T("b")]);
+        var before = q.Items.Select(i => i.Id).ToList();
+        int changes = 0;
+        q.Changed += () => changes++;
+
+        var edited = a with { Title = "A (edited)", Path = "/elsewhere/a" };
+        Assert.True(q.UpdateTracks(new Dictionary<Ulid, TrackInfo> { [a.TrackId] = edited }));
+
+        Assert.Equal(before, q.Items.Select(i => i.Id));
+        Assert.Equal("A (edited)", q.Items[0].Track.Title);
+        Assert.Equal(a.Path, q.Items[0].Track.Path);   // the file being played never changes under the engine
+        Assert.Equal(1, changes);
+        Assert.False(q.UpdateTracks(new Dictionary<Ulid, TrackInfo> { [a.TrackId] = edited }));
+    }
 }
