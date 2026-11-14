@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <PublishAot>true</PublishAot>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\LocalFM.Playback\LocalFM.Playback.csproj" />
+    <ProjectReference Include="..\..\src\LocalFM.Library\LocalFM.Library.csproj" />
+  </ItemGroup>
+</Project>
