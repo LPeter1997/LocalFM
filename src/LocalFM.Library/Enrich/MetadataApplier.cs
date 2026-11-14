@@ -4,8 +4,10 @@ using LocalFM.Library.Import;
 namespace LocalFM.Library.Enrich;
 
 /// <summary>Outcome of an apply. <c>Applied</c> is false when not a single local track fit the release:
-/// then it is almost certainly the wrong release and nothing was written.</summary>
-public sealed record ApplyResult(int TracksMatched, int TracksUnmatched, bool CoverStored, bool MergedIntoGroup, bool Applied = true);
+/// then it is almost certainly the wrong release and nothing was written.
+/// <c>MergedInto</c> is set when the release was already in the library as another local album: the tracks moved
+/// there and the album that was matched no longer exists.</summary>
+public sealed record ApplyResult(int TracksMatched, int TracksUnmatched, bool CoverStored, bool MergedIntoGroup, bool Applied = true, Ulid? MergedInto = null);
 
 /// <summary>
 /// Writes external release data onto a local release, inside a writer transaction.
@@ -23,17 +25,31 @@ public sealed class MetadataApplier(ImageStore images)
         long now = Sql.Now();
 
         // Match first, write after: a release none of our tracks fit is rejected untouched.
-        var local = tx.Query("""
+        List<LocalTrack> LocalTracks(Ulid release) => tx.Query("""
             SELECT t.id, m.id, m.position, t.position, t.title, t.recording_id,
                    COALESCE((SELECT MAX(f.duration_ms) FROM audio_file f WHERE f.track_id = t.id), t.length_ms)
             FROM track t JOIN medium m ON m.id = t.medium_id
             WHERE m.release_id = $1 ORDER BY m.position, t.position
-            """, r => new LocalTrack(r.Id(0), r.Id(1), r.GetInt32(2), r.GetInt32(3), r.GetString(4), r.Id(5), r.Long(6)), releaseId);
+            """, r => new LocalTrack(r.Id(0), r.Id(1), r.GetInt32(2), r.GetInt32(3), r.GetString(4), r.Id(5), r.Long(6)), release);
+        var local = LocalTracks(releaseId);
         var remote = d.Media.SelectMany(m => m.Tracks.Select(t => (Medium: m, Track: t))).ToList();
         var assigned = MatchTracks(local, remote, fileTitles);
         int matched = assigned.Count(a => a is not null);
         if (matched == 0 && local.Count > 0)
             return new ApplyResult(0, local.Count, false, false, Applied: false);
+
+        // This exact release is already another local album (songs of one album matched one at a time): join it
+        // rather than keep two copies of the same edition. The combined album is matched as a whole below.
+        Ulid? mergedInto = null;
+        if (Importer.ByExternal(tx, "release", src, d.Id) is { } twin && twin != releaseId)
+        {
+            Edit.MetadataEditor.MoveTracks(tx, local.Select(l => l.Id), twin, src, lockIt: false);
+            releaseId = twin;
+            mergedInto = twin;
+            local = LocalTracks(releaseId);
+            assigned = MatchTracks(local, remote, fileTitles);
+            matched = assigned.Count(a => a is not null);
+        }
 
         // ---- release
         SetField(tx, "release", releaseId, "title", d.Title, src, now);
@@ -119,7 +135,7 @@ public sealed class MetadataApplier(ImageStore images)
         }
 
         Edit.MetadataEditor.PruneOrphans(tx);
-        return new ApplyResult(matched, local.Count - matched, coverStored, merged);
+        return new ApplyResult(matched, local.Count - matched, coverStored, merged, MergedInto: mergedInto);
     }
 
     private sealed record LocalTrack(Ulid Id, Ulid MediumId, int Disc, int Position, string Title, Ulid RecordingId, long? LengthMs);
@@ -235,7 +251,7 @@ public sealed class MetadataApplier(ImageStore images)
         DeleteEntity(tx, "recording", from);
     }
 
-    private static void DeleteEntity(Tx tx, string type, Ulid id)
+    internal static void DeleteEntity(Tx tx, string type, Ulid id)
     {
         foreach (var t in new[] { "external_id", "attribute", "field_provenance", "entity_genre", "entity_image" })
             tx.Exec($"DELETE FROM {t} WHERE entity_type = $1 AND entity_id = $2", type, id);

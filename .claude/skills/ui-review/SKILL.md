@@ -16,7 +16,7 @@ The app has a built-in snapshot mode (`src/LocalFM.UI/Views/MainWindow.axaml.cs`
 `LOCALFM_SNAPSHOT=<png>` it renders its own window to a PNG and exits, so there's no screen capture and no window
 stealing focus. `LOCALFM_OUTPUT=null` keeps playback silent while the audio clock still runs, so lyrics,
 position and visualizers move as in real use. Other options: `LOCALFM_SNAPSHOT_PAGE` (a nav page,
-`album`, `match`, `edit`, `mini`, `artist:<name>`), `_PLAY=1`, `_LYRICS=1`, `_NOWPLAYING=<mode>`, `_WAIT=<ms>`,
+`album`, `album:<title>`, `match`, `move`, `edit`, `mini`, `artist:<name>`), `_PLAY=1`, `_LYRICS=1`, `_NOWPLAYING=<mode>`, `_WAIT=<ms>`,
 `_WIDTH`/`_HEIGHT`, `_SCROLL=<px>`. Add an option there when a state you need can't be reached.
 
 Never point a review at the user's real library (`~/.local/share/LocalFM`). Use a test library in the

@@ -45,6 +45,60 @@
         <TextBlock Text="{Binding CoverStatus}" Classes="muted small" IsVisible="{Binding CoverStatus, Converter={x:Static ObjectConverters.IsNotNull}}" />
       </StackPanel>
     </Grid>
+    <Border DockPanel.Dock="Top" Margin="24,0,24,12" Padding="14,10" CornerRadius="10" Background="{StaticResource Surface}"
+            IsVisible="{Binding Copies.Count}">
+      <StackPanel Spacing="6">
+        <TextBlock Classes="muted small" Text="Another copy of this album is in your library. Merging moves its songs here." TextWrapping="Wrap" />
+        <ItemsControl ItemsSource="{Binding Copies}">
+          <ItemsControl.ItemTemplate>
+            <DataTemplate x:DataType="lib:AlbumSummary">
+              <Grid ColumnDefinitions="*,Auto" Margin="0,2">
+                <TextBlock VerticalAlignment="Center" TextTrimming="CharacterEllipsis">
+                  <Run Text="{Binding Title}" FontWeight="Medium" /><Run Text="    " />
+                  <Run Text="{Binding Converter={x:Static ui:Converters.AlbumFacts}}" Foreground="{StaticResource Muted}" />
+                </TextBlock>
+                <Button Grid.Column="1" Classes="ghost" FontSize="12" Margin="12,0,0,0"
+                        Command="{Binding $parent[ItemsControl].((vm:AlbumDetailViewModel)DataContext).MergeCopyCommand}" CommandParameter="{Binding}">Merge into this album</Button>
+              </Grid>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+      </StackPanel>
+    </Border>
+    <Border DockPanel.Dock="Top" Margin="24,0,24,12" Padding="14" CornerRadius="10" Background="{StaticResource Surface}"
+            IsVisible="{Binding Move, Converter={x:Static ObjectConverters.IsNotNull}}">
+      <StackPanel DataContext="{Binding Move}" x:DataType="vm:MoveViewModel" Spacing="10">
+        <TextBlock Text="{Binding Heading}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+        <TextBox x:Name="MoveSearch" Text="{Binding Search}" PlaceholderText="Search albums by title or artist" CornerRadius="8" />
+        <TextBlock Text="{Binding Status}" Classes="muted small" TextWrapping="Wrap"
+                   IsVisible="{Binding Status, Converter={x:Static ObjectConverters.IsNotNull}}" />
+        <ListBox x:Name="MoveResults" Classes="rows" ItemsSource="{Binding Results}" SelectedItem="{Binding Selected}" MaxHeight="240"
+                 IsVisible="{Binding Results.Count}">
+          <ListBox.ItemTemplate>
+            <DataTemplate x:DataType="lib:AlbumSummary">
+              <Grid ColumnDefinitions="36,*,Auto">
+                <Border Width="32" Height="32" CornerRadius="4" ClipToBounds="True" Background="{StaticResource Surface3}" VerticalAlignment="Center">
+                  <Panel>
+                    <Path Classes="icon" Data="{StaticResource IcoAlbum}" Width="16" Height="16" Stroke="{StaticResource Faint}" />
+                    <c:CoverImage Path="{Binding CoverPath}" DecodeWidth="64" />
+                  </Panel>
+                </Border>
+                <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="10,0">
+                  <TextBlock Text="{Binding Title}" FontWeight="Medium" TextTrimming="CharacterEllipsis" />
+                  <TextBlock Classes="muted small" Text="{Binding Artist}" TextTrimming="CharacterEllipsis" />
+                </StackPanel>
+                <TextBlock Grid.Column="2" Classes="muted small" VerticalAlignment="Center"
+                           Text="{Binding Converter={x:Static ui:Converters.AlbumFacts}}" />
+              </Grid>
+            </DataTemplate>
+          </ListBox.ItemTemplate>
+        </ListBox>
+        <StackPanel Orientation="Horizontal" Spacing="8">
+          <Button Classes="primary" Command="{Binding ApplyCommand}" IsEnabled="{Binding !Busy}">Move to selected album</Button>
+          <Button Classes="ghost" Command="{Binding CancelCommand}">Cancel</Button>
+        </StackPanel>
+      </StackPanel>
+    </Border>
     <Border DockPanel.Dock="Top" Margin="24,0,24,12" Padding="14" CornerRadius="10" Background="{StaticResource Surface}"
             IsVisible="{Binding MatchOpen}">
       <StackPanel DataContext="{Binding Match}" x:DataType="vm:MatchViewModel" Spacing="10">
@@ -68,6 +122,8 @@
                   <TextBlock Classes="muted small" TextTrimming="CharacterEllipsis">
                     <Run Text="{Binding Artist}" /><Run Text="  " /><Run Text="{Binding Disambiguation}" Foreground="{StaticResource Faint}" />
                   </TextBlock>
+                  <TextBlock Classes="small" Text="in your library" Foreground="{StaticResource Accent}" IsVisible="{Binding InLibrary}"
+                             ToolTip.Tip="Another album in your library is this release; applying it moves these songs there" />
                 </StackPanel>
                 <TextBlock Grid.Column="1" Classes="muted small" VerticalAlignment="Center">
                   <Run Text="{Binding Date}" /><Run Text="  " /><Run Text="{Binding Country}" />

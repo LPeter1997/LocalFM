@@ -147,4 +147,52 @@ public class EditorTests
         Assert.Equal(["Hard Rock"], p.Genres);
         Assert.Null(ArtistProfiles.Load(lib.Db, lib.Images, topic.ArtistId));
     }
+
+    [SkippableFact]
+    public async Task Moving_a_track_to_another_copy_of_its_album_merges_them()
+    {
+        Skip.IfNot(TempLibrary.HaveFfmpeg);
+        using var lib = new TempLibrary();
+        lib.MakeTrack("a/7.mp3", new() { ["title"] = "My Michelle", ["artist"] = "Guns N' Roses", ["album"] = "Appetite for Destruction", ["track"] = "7", ["date"] = "1987" }, seconds: 0.3);
+        lib.MakeTrack("b/12.mp3", new() { ["title"] = "Rocket Queen", ["artist"] = "Guns N' Roses", ["album"] = "Appetite for Destruction", ["track"] = "12", ["date"] = "1998" }, seconds: 0.3);
+        lib.MakeTrack("b/7.mp3", new() { ["title"] = "Paradise City", ["artist"] = "Guns N' Roses", ["album"] = "Appetite for Destruction", ["track"] = "7", ["date"] = "1998" }, seconds: 0.3);
+        await lib.ScanAsync();
+        var michelle = lib.Queries.Tracks("My Michelle").Single();
+        var target = lib.Queries.Tracks("Rocket Queen").Single().ReleaseId;
+        Assert.Equal(target, lib.Queries.OtherCopies(michelle.ReleaseId).Single().ReleaseId);
+
+        int moved = await lib.Db.Writer.Run((c, t) => MetadataEditor.MoveTracks(new Tx(c, t), [michelle.TrackId], target));
+
+        Assert.Equal(1, moved);
+        var album = lib.Queries.Albums().Single();                    // the emptied copy is gone
+        Assert.Equal(target, album.ReleaseId);
+        var moved1 = lib.Queries.ByTrack(michelle.TrackId)!;
+        Assert.Equal(target, moved1.ReleaseId);
+        Assert.Equal(13, moved1.Position);                             // slot 7 was taken by another song: appended
+        Assert.True(MetadataEditor.States(lib.Db, "track", michelle.TrackId)["disc"].Locked);
+        Assert.Empty(lib.Queries.OtherCopies(target));
+    }
+
+    [SkippableFact]
+    public async Task Merging_copies_keeps_one_track_per_song()
+    {
+        Skip.IfNot(TempLibrary.HaveFfmpeg);
+        using var lib = new TempLibrary();
+        lib.MakeTrack("a/1.mp3", new() { ["title"] = "Welcome to the Jungle", ["artist"] = "Guns N' Roses", ["album"] = "Appetite for Destruction", ["track"] = "1", ["date"] = "1987" }, seconds: 0.3);
+        lib.MakeTrack("b/1.flac", new() { ["title"] = "Welcome to the Jungle", ["artist"] = "Guns N' Roses", ["album"] = "Appetite for Destruction", ["track"] = "1", ["date"] = "1998" }, seconds: 0.4);
+        lib.MakeTrack("b/2.flac", new() { ["title"] = "It's So Easy", ["artist"] = "Guns N' Roses", ["album"] = "Appetite for Destruction", ["track"] = "2", ["date"] = "1998" }, seconds: 0.3);
+        await lib.ScanAsync();
+        var albums = lib.Queries.Albums();
+        Assert.Equal(2, albums.Count);
+        var small = albums.Single(a => a.TrackCount == 1);
+        var big = albums.Single(a => a.TrackCount == 2);
+
+        await lib.Db.Writer.Run((c, t) => MetadataEditor.MergeRelease(new Tx(c, t), small.ReleaseId, big.ReleaseId));
+
+        var merged = lib.Queries.Albums().Single();
+        Assert.Equal(2, merged.TrackCount);                            // both Jungle files now belong to one track
+        using var c = lib.Db.Open();
+        Assert.Equal(3L, c.Scalar<long>("SELECT COUNT(*) FROM audio_file WHERE track_id IS NOT NULL"));
+        Assert.Equal(2L, c.Scalar<long>("SELECT COUNT(*) FROM recording"));
+    }
 }

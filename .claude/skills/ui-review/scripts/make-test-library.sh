@@ -6,6 +6,7 @@
 #   - "Karaoke Test/Neon Words": 40 s with word-synced (enhanced LRC) lyrics in its tags
 #   - "Estimate Test/Line Timed": 40 s with line-synced lyrics only (exercises the word-timing estimate)
 #   - "Messy Names/...": YouTube-rip style names (Tidy up suggestions, long titles, " - Topic" artists)
+#   - "Copy Test": two copies of one album (1987 and 1998), for the merge hint and the move panel
 # Then scans it into <dir>/home (LOCALFM_HOME) with the Debug build.
 set -euo pipefail
 dir=${1:?usage: make-test-library.sh <dir>}
@@ -52,6 +53,15 @@ if [ ! -f "music/messy/m1.mp3" ]; then
     -metadata artist="Example Band - Topic" -metadata album="An Album Name Long Enough To Need Trimming In Narrow Places" music/messy/m1.mp3
   ffmpeg -loglevel error -y -f lavfi -i "sine=f=550:d=8" -metadata title="Second+Song+Here" \
     -metadata artist="ExampleBandVEVO" -metadata album="An Album Name Long Enough To Need Trimming In Narrow Places" music/messy/m2.mp3
+fi
+
+# Two copies of one album (songs ripped one at a time, different years): the album page offers to merge them.
+if [ ! -f "music/copies/c1.mp3" ]; then
+  mkdir -p music/copies
+  ffmpeg -loglevel error -y -f lavfi -i "sine=f=600:d=8" -metadata title="First Copy Song" -metadata artist="Test Band" \
+    -metadata album="Copy Test" -metadata track=7 -metadata date=1987 music/copies/c1.mp3
+  ffmpeg -loglevel error -y -f lavfi -i "sine=f=650:d=8" -metadata title="Second Copy Song" -metadata artist="Test Band" \
+    -metadata album="Copy Test" -metadata track=12 -metadata date=1998 music/copies/c2.mp3
 fi
 
 if [ ! -f home/library.db ]; then

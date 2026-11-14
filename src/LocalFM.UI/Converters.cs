@@ -21,6 +21,11 @@ public static class Converters
     public static readonly IValueConverter ArtistCounts =
         new FuncValueConverter<LocalFM.Library.ArtistSummary?, string>(a => a is null ? "" : $"{Count(a.AlbumCount, "album")} · {Count(a.TrackCount, "track")}");
 
+    /// <summary>"1998 · Remaster · 12 tracks": only the parts that are known, so no stray separators.</summary>
+    public static readonly IValueConverter AlbumFacts =
+        new FuncValueConverter<LocalFM.Library.AlbumSummary?, string>(a => a is null ? "" : string.Join("  ·  ",
+            new[] { a.Date is { Length: >= 4 } d ? d[..4] : null, a.Edition, Count(a.TrackCount, "track") }.Where(x => !string.IsNullOrWhiteSpace(x))));
+
     public static readonly IValueConverter IsZero = new FuncValueConverter<int, bool>(n => n == 0);
 
     public static readonly IValueConverter NotNull =

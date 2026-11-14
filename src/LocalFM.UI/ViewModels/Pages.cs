@@ -105,13 +105,18 @@ public sealed partial class AlbumDetailViewModel : PageViewModel
     [ObservableProperty] private bool _matchOpen;
     [ObservableProperty] private MatchViewModel? _match;
     [ObservableProperty] private string? _coverStatus;
+    [ObservableProperty] private MoveViewModel? _move;
+
+    /// <summary>Other local albums that are this same album (see <see cref="LibraryQueries.OtherCopies"/>).</summary>
+    public ObservableCollection<AlbumSummary> Copies { get; } = new();
 
     public override Task RefreshAsync() => Load(
-        () => (Album: Host.Queries.Album(Album.ReleaseId), Tracks: Host.Queries.AlbumTracks(Album.ReleaseId)),
+        () => (Album: Host.Queries.Album(Album.ReleaseId), Tracks: Host.Queries.AlbumTracks(Album.ReleaseId), Copies: Host.Queries.OtherCopies(Album.ReleaseId)),
         r =>
         {
             if (r.Album is not null) Album = r.Album;
             Replace(Tracks, r.Tracks);
+            Replace(Copies, r.Copies);
             MultiDisc = r.Tracks.Select(t => t.Disc).Distinct().Count() > 1;
             long ms = r.Tracks.Sum(t => t.DurationMs ?? 0);
             // Only the parts we know, so a missing year leaves no stray separators.
@@ -122,15 +127,55 @@ public sealed partial class AlbumDetailViewModel : PageViewModel
     private void EnsureMatch()
     {
         if (Match is not null) return;
-        Match = new MatchViewModel(Host, Album.ReleaseId, Album.Title, Album.Artist, RefreshAsync);
+        Match = new MatchViewModel(Host, Album.ReleaseId, Album.Title, Album.Artist, AfterMatch);
         Match.SearchCommand.Execute(null);
+    }
+
+    private async Task AfterMatch(Library.Enrich.ApplyResult result)
+    {
+        if (result.MergedInto is { } into && Host.Queries.Album(into) is { } joined) Main.ReplaceWithAlbum(joined);
+        else await RefreshAsync();
+    }
+
+    /// <summary>Opens the panel for moving one track to another album.</summary>
+    public void OpenMove(TrackInfo track)
+    {
+        MatchOpen = false;
+        Move = new MoveViewModel(Host, track, AfterMove, () => Move = null);
+    }
+
+    private async Task AfterMove(TrackInfo track, AlbumSummary target)
+    {
+        Move = null;
+        _ = Host.Player.RefreshMetadataAsync();
+        Main.Notify($"Moved “{track.Title}” to {target.Title}");
+        if (Host.Queries.Album(Album.ReleaseId) is null) Main.ReplaceWithAlbum(Host.Queries.Album(target.ReleaseId) ?? target);
+        else await RefreshAsync();
+    }
+
+    /// <summary>Brings every track of another copy of this album onto this one; the other copy disappears.</summary>
+    [RelayCommand]
+    private async Task MergeCopy(AlbumSummary other)
+    {
+        try
+        {
+            int n = await Host.Db.Writer.Run((c, t) => Library.Edit.MetadataEditor.MergeRelease(new Tx(c, t), other.ReleaseId, Album.ReleaseId));
+            _ = Host.Player.RefreshMetadataAsync();
+            Main.Notify(n == 1 ? "Merged 1 track into this album" : $"Merged {n} tracks into this album");
+        }
+        catch (Exception ex)
+        {
+            Log.Error("Album", "Merge failed", ex);
+            Main.Notify($"Merging failed: {ex.Message}");
+        }
+        await RefreshAsync();
     }
 
     [RelayCommand]
     private void ToggleMatch()
     {
         MatchOpen = !MatchOpen;
-        if (MatchOpen) EnsureMatch();
+        if (MatchOpen) { Move = null; EnsureMatch(); }
     }
 
     [RelayCommand]
@@ -409,4 +454,66 @@ public sealed partial class SourcesViewModel(MainViewModel main) : PageViewModel
         }
         finally { BundleBusy = false; }
     }
+}
+
+/// <summary>Picks another album for a track and moves it there (e.g. a song that ended up on a second copy of its album).</summary>
+public sealed partial class MoveViewModel : ObservableObject
+{
+    private readonly AppHost _host;
+    private readonly Func<TrackInfo, AlbumSummary, Task> _moved;
+    private readonly Action _close;
+    private int _query;
+
+    public MoveViewModel(AppHost host, TrackInfo track, Func<TrackInfo, AlbumSummary, Task> moved, Action close)
+    {
+        _host = host;
+        _moved = moved;
+        _close = close;
+        Track = track;
+        _search = track.Album ?? "";
+        _ = Find();
+    }
+
+    public TrackInfo Track { get; }
+    public string Heading => $"Move “{Track.Title}” to another album";
+    public ObservableCollection<AlbumSummary> Results { get; } = new();
+
+    [ObservableProperty] private string _search;
+    [ObservableProperty] private AlbumSummary? _selected;
+    [ObservableProperty] private bool _busy;
+    [ObservableProperty] private string? _status;
+
+    partial void OnSearchChanged(string value) => _ = Find();
+
+    private async Task Find()
+    {
+        int query = ++_query;
+        string text = Search;
+        var list = await Task.Run(() => _host.Queries.Albums(text).Where(a => a.ReleaseId != Track.ReleaseId).Take(60).ToList());
+        if (query != _query) return; // a newer search is on its way
+        Results.Clear();
+        foreach (var a in list) Results.Add(a);
+        Selected = Results.FirstOrDefault();
+        Status = list.Count == 0 ? "No other album matches. Try part of the title or the artist." : null;
+    }
+
+    [RelayCommand]
+    private async Task Apply()
+    {
+        if (Selected is not { } target || Busy) return;
+        Busy = true;
+        try
+        {
+            await _host.Db.Writer.Run((c, t) => Library.Edit.MetadataEditor.MoveTracks(new Tx(c, t), [Track.TrackId], target.ReleaseId));
+            await _moved(Track, target);
+        }
+        catch (Exception ex)
+        {
+            Status = $"Moving failed: {ex.Message}";
+            Log.Error("Album", "Move failed", ex);
+        }
+        finally { Busy = false; }
+    }
+
+    [RelayCommand] private void Cancel() => _close();
 }

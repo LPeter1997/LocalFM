@@ -104,15 +104,29 @@ public sealed class MetadataService
         string title = string.IsNullOrWhiteSpace(titleOverride) ? q.Title : titleOverride;
         string? artist = artistOverride ?? q.Artist;
         var hits = await MusicBrainz.SearchReleasesAsync(title, string.IsNullOrWhiteSpace(artist) ? null : artist, ct).ConfigureAwait(false);
+        var inLibrary = LocalReleaseIds(q.ReleaseId);
         return hits
+            .Select(h => h with { InLibrary = inLibrary.Contains(h.Id) })
             .Select(h => h with { Score = Rank(h, q) })
             .OrderByDescending(h => h.Score)
             .ToList();
     }
 
+    /// <summary>MusicBrainz ids of the other local albums.</summary>
+    private HashSet<string> LocalReleaseIds(Ulid except)
+    {
+        using var c = _db.Open();
+        return c.Query("SELECT external_id FROM external_id WHERE provider = 'musicbrainz' AND entity_type = 'release' AND entity_id <> $1",
+            r => r.GetString(0), except).ToHashSet();
+    }
+
     private static double Rank(ReleaseCandidate c, AlbumQuery q)
     {
         double score = c.Score * 0.6;
+        // Part of an album (typically lone songs matched one by one): the edition already in the library is where it
+        // belongs, so applying it joins that album instead of starting a second copy of it.
+        if (q.TrackCount < c.TrackCount)
+            if (c.InLibrary) score += 40;
         // A lone song says nothing about the release's size (it is usually one track of a full album).
         if (q.TrackCount == 1)
             score += 15;

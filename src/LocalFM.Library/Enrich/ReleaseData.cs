@@ -65,7 +65,7 @@ public sealed record ReleaseData(
         string.Concat(credit.Select(c => c.CreditedName + c.JoinPhrase));
 }
 
-/// <summary>A search hit, enough to let a person pick the right edition.</summary>
+/// <summary>A search hit, enough to let a person pick the right edition. <c>InLibrary</c>: another local album already is this release.</summary>
 public sealed record ReleaseCandidate(
     string Provider,
     string Id,
@@ -82,7 +82,8 @@ public sealed record ReleaseCandidate(
     string? Disambiguation,
     string? ReleaseGroupId,
     string? ReleaseGroupType,
-    double Score);
+    double Score,
+    bool InLibrary = false);
 
 public enum LyricsFormat { Plain, Lrc, EnhancedLrc }
 

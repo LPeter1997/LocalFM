@@ -63,7 +63,11 @@ public sealed class LibraryQueries(Database db, ImageStore images)
 
     public AlbumSummary? Album(Ulid releaseId) => Albums(releaseId: releaseId).FirstOrDefault();
 
-    public List<AlbumSummary> Albums(string? search = null, Ulid? artistId = null, Ulid? releaseId = null)
+    /// <summary>Other local albums that are the same album: another edition in its release group, or the same
+    /// title by the same album artist (songs that were imported or matched one at a time).</summary>
+    public List<AlbumSummary> OtherCopies(Ulid releaseId) => Albums(copiesOf: releaseId);
+
+    public List<AlbumSummary> Albums(string? search = null, Ulid? artistId = null, Ulid? releaseId = null, Ulid? copiesOf = null)
     {
         using var c = db.Open();
         string where = "WHERE EXISTS (SELECT 1 FROM medium m JOIN track t ON t.medium_id = m.id JOIN audio_file f ON f.track_id = t.id WHERE m.release_id = rel.id AND f.missing = 0)";
@@ -72,6 +76,15 @@ public sealed class LibraryQueries(Database db, ImageStore images)
         {
             args.Add(rid);
             where += $" AND rel.id = ${args.Count}";
+        }
+        if (copiesOf is { } cid)
+        {
+            args.Add(cid);
+            int n = args.Count;
+            where += $"""
+                 AND rel.id <> ${n} AND EXISTS (SELECT 1 FROM release o WHERE o.id = ${n} AND (o.release_group_id = rel.release_group_id
+                     OR (o.title_key = rel.title_key AND COALESCE(o.artist_credit_id, '') = COALESCE(rel.artist_credit_id, ''))))
+                """;
         }
         if (!string.IsNullOrWhiteSpace(search))
         {

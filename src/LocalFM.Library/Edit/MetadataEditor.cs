@@ -202,6 +202,79 @@ public static class MetadataEditor
         return true;
     }
 
+    /// <summary>
+    /// Moves tracks onto another album, keeping their disc and number (or appending when that slot is taken by
+    /// another song). A song the target already has becomes one track with both files. Albums left empty are
+    /// removed; their cover moves along when the target has none. Returns how many tracks moved.
+    /// </summary>
+    public static int MoveTracks(Tx tx, IEnumerable<Ulid> trackIds, Ulid targetReleaseId, string source = UserSource, bool lockIt = true)
+    {
+        long now = Sql.Now();
+        int moved = 0;
+        var emptied = new HashSet<Ulid>();
+        foreach (var trackId in trackIds.Distinct().ToList())
+        {
+            var row = tx.Single("""
+                SELECT m.id, m.release_id, m.position, t.position, t.title, t.recording_id
+                FROM track t JOIN medium m ON m.id = t.medium_id WHERE t.id = $1
+                """, r => (Medium: r.Id(0), Release: r.Id(1), Disc: r.GetInt32(2), Pos: r.GetInt32(3), Title: r.GetString(4), Recording: r.Id(5)), trackId);
+            if (row.Title is null || row.Release == targetReleaseId) continue;
+            emptied.Add(row.Release);
+
+            var onTarget = tx.Query("""
+                SELECT t.id, t.title, t.recording_id FROM track t JOIN medium m ON m.id = t.medium_id WHERE m.release_id = $1
+                """, r => (Id: r.Id(0), Title: r.GetString(1), Recording: r.Id(2)), targetReleaseId);
+            var same = onTarget.FirstOrDefault(t => t.Recording == row.Recording);
+            if (same.Title is null) same = onTarget.FirstOrDefault(t => Normalize.Key(t.Title) == Normalize.Key(row.Title));
+            if (same.Title is not null)
+            {
+                tx.Exec("UPDATE audio_file SET track_id = $2 WHERE track_id = $1", trackId, same.Id);
+                MetadataApplier.MergeRecording(tx, row.Recording, same.Recording);
+                MetadataApplier.DeleteEntity(tx, "track", trackId);
+            }
+            else
+            {
+                var medium = tx.Single("SELECT id FROM medium WHERE release_id = $1 AND position = $2", r => r.IdN(0), targetReleaseId, row.Disc);
+                if (medium is null)
+                {
+                    medium = Ulid.NewUlid();
+                    tx.Exec("INSERT INTO medium(id, release_id, position) VALUES ($1,$2,$3)", medium, targetReleaseId, row.Disc);
+                }
+                int pos = tx.Long("SELECT COUNT(*) FROM track WHERE medium_id = $1 AND position = $2", medium, row.Pos) == 0
+                    ? row.Pos : (int)tx.Long("SELECT COALESCE(MAX(position), 0) + 1 FROM track WHERE medium_id = $1", medium);
+                tx.Exec("UPDATE track SET medium_id = $2, position = $3, number = CASE WHEN position = $3 THEN number ELSE $4 END, updated_at = $5 WHERE id = $1",
+                    trackId, medium, pos, pos.ToString(), now);
+                tx.Exec("""
+                    INSERT INTO field_provenance(entity_type, entity_id, field, source, updated_at, locked) VALUES ('track',$1,'medium_id',$2,$3,$4)
+                    ON CONFLICT(entity_type, entity_id, field) DO UPDATE SET source = excluded.source, updated_at = excluded.updated_at,
+                        locked = MAX(field_provenance.locked, excluded.locked)
+                    """, trackId, source, now, lockIt);
+            }
+            moved++;
+        }
+
+        foreach (var rel in emptied)
+        {
+            tx.Exec("DELETE FROM medium WHERE release_id = $1 AND NOT EXISTS (SELECT 1 FROM track t WHERE t.medium_id = medium.id)", rel);
+            if (tx.Long("SELECT COUNT(*) FROM medium WHERE release_id = $1", rel) > 0) continue;
+            if (tx.Long("SELECT COUNT(*) FROM entity_image WHERE entity_type = 'release' AND entity_id = $1 AND role = 'front'", targetReleaseId) == 0)
+                tx.Exec("UPDATE OR IGNORE entity_image SET entity_id = $2 WHERE entity_type = 'release' AND entity_id = $1", rel, targetReleaseId);
+            var group = tx.Single("SELECT release_group_id FROM release WHERE id = $1", r => r.Id(0), rel);
+            MetadataApplier.DeleteEntity(tx, "release", rel);
+            if (tx.Long("SELECT COUNT(*) FROM release WHERE release_group_id = $1", group) == 0)
+                MetadataApplier.DeleteEntity(tx, "release_group", group);
+        }
+        PruneOrphans(tx);
+        return moved;
+    }
+
+    /// <summary>Moves every track of one album onto another (merging two editions or two halves of one album).</summary>
+    public static int MergeRelease(Tx tx, Ulid fromReleaseId, Ulid intoReleaseId, string source = UserSource, bool lockIt = true) =>
+        fromReleaseId == intoReleaseId ? 0 : MoveTracks(tx,
+            tx.Query("SELECT t.id FROM track t JOIN medium m ON m.id = t.medium_id WHERE m.release_id = $1 ORDER BY m.position, t.position",
+                r => r.Id(0), fromReleaseId),
+            intoReleaseId, source, lockIt);
+
     /// <summary>Removes credits nothing uses any more, and artists left without credits that we know nothing else about.</summary>
     public static void PruneOrphans(Tx tx)
     {

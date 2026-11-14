@@ -201,6 +201,38 @@ public class MetadataTests
         Assert.Single(lib.Queries.Albums().Select(a => a.ReleaseGroupId).Distinct());
     }
 
+    [SkippableFact]
+    public async Task Lone_songs_matched_one_by_one_end_up_on_one_album()
+    {
+        Skip.IfNot(TempLibrary.HaveFfmpeg);
+        using var lib = new TempLibrary();
+        // Two songs of one album, ripped separately with different artist spellings: two local albums.
+        lib.MakeTrack("yt/airbag.mp3", new() { ["title"] = "Airbag", ["artist"] = "Radiohead", ["album"] = "OK Computer" }, seconds: 0.3);
+        lib.MakeTrack("yt/lucky.mp3", new() { ["title"] = "Lucky", ["artist"] = "Radiohead - Topic", ["album"] = "OK Computer" }, seconds: 0.3);
+        await lib.ScanAsync();
+        var albums = lib.Queries.Albums();
+        Assert.Equal(2, albums.Count);
+        var airbag = albums.Single(a => lib.Queries.AlbumTracks(a.ReleaseId).Single().Title == "Airbag");
+        var lucky = albums.Single(a => a.ReleaseId != airbag.ReleaseId);
+        await SetFileLengths(lib, airbag.ReleaseId, [OkcLengths[0]]);
+        await SetFileLengths(lib, lucky.ReleaseId, [OkcLengths[10]]);
+        var (svc, _) = Service(lib);
+        const string Mbid = "6a09041b-0f79-3278-88d9-0552dd28d37f";
+
+        var first = await svc.ApplyReleaseAsync(airbag.ReleaseId, Mbid, fetchCover: false);
+        Assert.Null(first!.MergedInto);
+
+        // Searching for the second song puts the edition already in the library first, marked as such.
+        var hits = await svc.SearchAlbumAsync(svc.DescribeAlbum(lucky.ReleaseId));
+        Assert.Contains(hits, h => h.Id == Mbid && h.InLibrary);
+
+        var second = await svc.ApplyReleaseAsync(lucky.ReleaseId, Mbid, fetchCover: false);
+        Assert.Equal(airbag.ReleaseId, second!.MergedInto);
+        var only = lib.Queries.Albums().Single();
+        Assert.Equal(["Airbag", "Lucky"], lib.Queries.AlbumTracks(only.ReleaseId).Select(t => t.Title));
+        Assert.Equal([1, 11], lib.Queries.AlbumTracks(only.ReleaseId).Select(t => t.Position));
+    }
+
     [Fact]
     public async Task Http_cache_retries_busy_and_caches_not_found()
     {

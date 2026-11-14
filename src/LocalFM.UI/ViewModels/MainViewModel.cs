@@ -180,12 +180,25 @@ public sealed partial class MainViewModel : ObservableObject
     }
 
     public void ShowAlbum(AlbumSummary album, bool openMatch = false) => Push(new AlbumDetailViewModel(this, album, openMatch));
+
+    /// <summary>Shows an album in place of the current page (the current one no longer exists, e.g. after a merge).</summary>
+    public void ReplaceWithAlbum(AlbumSummary album) => Show(new AlbumDetailViewModel(this, album));
     public void ShowArtist(ArtistSummary artist) => Push(new AlbumsViewModel(this, artist));
     public void EditAlbum(Ulid releaseId, Ulid? focusTrack = null) => Push(new AlbumEditorViewModel(this, releaseId, focusTrack));
 
     public void ShowAlbumOf(TrackInfo track, bool openMatch = false)
     {
         if (Host.Queries.Album(track.ReleaseId) is { } album) ShowAlbum(album, openMatch);
+    }
+
+    /// <summary>Opens the track's album with the "move to another album" panel for that track.</summary>
+    public void MoveTrack(TrackInfo track)
+    {
+        if (CurrentPage is AlbumDetailViewModel open && open.Album.ReleaseId == track.ReleaseId) { open.OpenMove(track); return; }
+        if (Host.Queries.Album(track.ReleaseId) is not { } album) return;
+        var page = new AlbumDetailViewModel(this, album);
+        Push(page);
+        page.OpenMove(track);
     }
 
     [RelayCommand]

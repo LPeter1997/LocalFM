@@ -11,9 +11,9 @@ public sealed partial class MatchViewModel : ObservableObject
 {
     private readonly AppHost _host;
     private readonly Ulid _releaseId;
-    private readonly Func<Task> _afterApply;
+    private readonly Func<ApplyResult, Task> _afterApply;
 
-    public MatchViewModel(AppHost host, Ulid releaseId, string title, string? artist, Func<Task> afterApply)
+    public MatchViewModel(AppHost host, Ulid releaseId, string title, string? artist, Func<ApplyResult, Task> afterApply)
     {
         _host = host;
         _releaseId = releaseId;
@@ -74,10 +74,11 @@ public sealed partial class MatchViewModel : ObservableObject
                 Status = "None of your tracks fit this release (titles and lengths differ), so nothing was changed. Try another edition.";
                 return;
             }
-            Status = $"Applied: {result.TracksMatched} tracks matched" +
+            Status = result.MergedInto is not null ? "This edition was already in your library, so the songs joined that album." :
+                     $"Applied: {result.TracksMatched} tracks matched" +
                      (result.TracksUnmatched > 0 ? $", {result.TracksUnmatched} not matched (left as they were)" : "") +
                      (result.CoverStored ? ", cover saved" : "") + ".";
-            await _afterApply();
+            await _afterApply(result);
             _ = _host.Player.RefreshMetadataAsync();
         }
         catch (Exception ex)

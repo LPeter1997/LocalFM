@@ -174,6 +174,10 @@ public partial class MainWindow : Window
             {
                 await Task.Delay(800);
                 if (page is "album" or "match" && vm.Albums.Albums.FirstOrDefault() is { } a) vm.ShowAlbum(a, openMatch: page == "match");
+                else if (page.StartsWith("album:", StringComparison.Ordinal)
+                         && vm.Albums.Albums.FirstOrDefault(x => x.Title == page[6..]) is { } named) vm.ShowAlbum(named);
+                else if (page == "move" && vm.Albums.Albums.FirstOrDefault() is { } m
+                         && vm.Host.Queries.AlbumTracks(m.ReleaseId).FirstOrDefault() is { } first) vm.MoveTrack(first);
                 else if (page == "edit" && vm.Albums.Albums.FirstOrDefault() is { } e) vm.EditAlbum(e.ReleaseId);
                 else if (page == "mini") MiniPlayerRequested?.Invoke();
                 else if (page.StartsWith("artist:", StringComparison.Ordinal)
