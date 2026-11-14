@@ -96,12 +96,22 @@ public partial class MainWindow : Window
         }
     }
 
+    /// <summary>Narrow windows: a slimmer lyrics panel and volume slider, so the page and player bar still fit.</summary>
+    protected override void OnSizeChanged(SizeChangedEventArgs e)
+    {
+        base.OnSizeChanged(e);
+        bool compact = e.NewSize.Width < 1100;
+        LyricsPanel.Width = compact ? 300 : 380;
+        VolumeSlider.Width = compact ? 80 : 120;
+    }
+
     protected override void OnOpened(EventArgs e)
     {
         base.OnOpened(e);
         if (Program.SnapshotPath is { } path)
         {
             if (int.TryParse(Environment.GetEnvironmentVariable("LOCALFM_SNAPSHOT_HEIGHT"), out int height)) Height = height;
+            if (int.TryParse(Environment.GetEnvironmentVariable("LOCALFM_SNAPSHOT_WIDTH"), out int width)) Width = width;
             _ = SnapshotAndExit(path);
         }
     }

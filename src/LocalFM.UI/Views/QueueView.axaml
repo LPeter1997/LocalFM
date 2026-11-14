@@ -7,12 +7,13 @@
              x:Class="LocalFM.UI.Views.QueueView"
              x:DataType="vm:QueueViewModel">
   <DockPanel>
-    <Grid DockPanel.Dock="Top" ColumnDefinitions="Auto,*,Auto" Margin="24,0,24,12">
-      <StackPanel Orientation="Horizontal" Spacing="16">
+    <Grid DockPanel.Dock="Top" ColumnDefinitions="Auto,*" Margin="24,0,24,12">
+      <StackPanel Orientation="Horizontal" Spacing="16" VerticalAlignment="Top">
         <TextBlock Classes="h1" Text="Queue" />
         <TextBlock Classes="muted" Text="{Binding Summary}" VerticalAlignment="Center" Margin="0,6,0,0" />
       </StackPanel>
-      <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="6">
+      <!-- Wraps onto a second row in a narrow window instead of running off the edge -->
+      <WrapPanel Grid.Column="1" ItemSpacing="6" LineSpacing="6" HorizontalAlignment="Right" ItemsAlignment="End" Margin="12,0,0,0">
         <Button Classes="ghost" Command="{Binding ReshuffleCommand}" ToolTip.Tip="Shuffle what is up next">Shuffle upcoming</Button>
         <Button Classes="ghost" Command="{Binding ClearUpcomingCommand}">Clear upcoming</Button>
         <TextBox Text="{Binding PlaylistName}" PlaceholderText="Playlist name" Width="160" CornerRadius="18" VerticalContentAlignment="Center">
@@ -20,7 +21,7 @@
         </TextBox>
         <Button Classes="ghost" Command="{Binding SaveQueueCommand}" ToolTip.Tip="Save the whole queue as a playlist">Save queue</Button>
         <Button Classes="ghost" Command="{Binding SaveSessionCommand}" ToolTip.Tip="Save everything played this session as a playlist">Save session</Button>
-      </StackPanel>
+      </WrapPanel>
     </Grid>
     <ListBox x:Name="List" Classes="rows" ItemsSource="{Binding Rows}" Margin="16,0,16,8">
       <ListBox.ItemTemplate>

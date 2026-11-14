@@ -54,11 +54,13 @@
       <!-- Content -->
       <DockPanel Grid.Column="1">
         <!-- Always the same height, so page titles sit at the same place with or without search -->
-        <Grid DockPanel.Dock="Top" ColumnDefinitions="Auto,*,Auto" Margin="20,14,20,6" MinHeight="36">
+        <Grid DockPanel.Dock="Top" Margin="20,14,20,6" MinHeight="36">
+          <!-- The search box takes up to 280 px and gives way when the window is narrow -->
+          <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /><ColumnDefinition Width="*" MaxWidth="280" /></Grid.ColumnDefinitions>
           <Button Classes="flat" Command="{Binding BackCommand}" IsVisible="{Binding CanGoBack}" Margin="0,0,8,0" ToolTip.Tip="Back (Alt+Left)">
             <Path Classes="icon" Data="{StaticResource IcoBack}" />
           </Button>
-          <TextBox Grid.Column="2" x:Name="Search" Width="280" PlaceholderText="Search"
+          <TextBox Grid.Column="2" x:Name="Search" PlaceholderText="Search"
                    Text="{Binding SearchText}" IsVisible="{Binding CurrentPage.Searchable}"
                    CornerRadius="18" Padding="14,7" Background="{StaticResource Surface2}" BorderThickness="0" />
         </Grid>
@@ -117,7 +119,7 @@
       </Panel>
 
       <!-- Lyrics -->
-      <Border Grid.Column="2" Width="380" Background="{StaticResource Surface}" BorderBrush="{StaticResource Line}" BorderThickness="1,0,0,0"
+      <Border Grid.Column="2" x:Name="LyricsPanel" Width="380" Background="{StaticResource Surface}" BorderBrush="{StaticResource Line}" BorderThickness="1,0,0,0"
               IsVisible="{Binding Lyrics.IsOpen}">
         <DockPanel DataContext="{Binding Lyrics}" x:DataType="vm:LyricsViewModel" Margin="0,14,0,0">
           <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto,Auto" Margin="20,0,12,8">
@@ -153,7 +155,8 @@
 
     <!-- Now playing -->
     <Border Grid.Row="1" Background="{StaticResource Surface}" BorderBrush="{StaticResource Line}" BorderThickness="0,1,0,0" Padding="14,10">
-      <Grid ColumnDefinitions="*,2*,*" DataContext="{Binding NowPlaying}" x:DataType="vm:NowPlayingViewModel">
+      <!-- The right-hand buttons keep their size; title and transport share what is left -->
+      <Grid ColumnDefinitions="*,2*,Auto" DataContext="{Binding NowPlaying}" x:DataType="vm:NowPlayingViewModel">
         <Grid ColumnDefinitions="Auto,*" VerticalAlignment="Center">
           <Button Padding="0" Background="Transparent" BorderThickness="0" CornerRadius="6"
                   Command="{Binding $parent[Window].((vm:MainViewModel)DataContext).ShowNowPlayingAlbumCommand}">
@@ -230,7 +233,7 @@
                 <Path Classes="icon" Data="{StaticResource IcoVolumeMute}" IsVisible="{Binding Muted}" />
               </Panel>
             </Button>
-            <Slider Width="120" Minimum="0" Maximum="100" Value="{Binding Volume}" Classes="seek" VerticalAlignment="Center" />
+            <Slider x:Name="VolumeSlider" Width="120" Minimum="0" Maximum="100" Value="{Binding Volume}" Classes="seek" VerticalAlignment="Center" />
           </StackPanel>
         </StackPanel>
       </Grid>
