@@ -45,6 +45,12 @@ public sealed unsafe class AudioOutput : IDisposable
     public void SetVolume(float linear) => NativeMethods.OutputSetVolume(Handle, linear);
     public void SetPaused(bool paused) => NativeMethods.OutputSetPaused(Handle, paused ? 1 : 0);
 
+    /// <summary>Applies an equalizer on the audio thread (heard within one device period). Empty = flat.</summary>
+    public void SetEq(ReadOnlySpan<EqBand> bands, float preampDb)
+    {
+        fixed (EqBand* p = bands) NativeMethods.OutputSetEq(Handle, p, bands.Length, preampDb);
+    }
+
     /// <summary>Pulls frames as the device would. Only valid for <see cref="OutputMode.Offline"/>.</summary>
     public void Render(Span<float> interleaved)
     {

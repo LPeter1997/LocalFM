@@ -8,10 +8,12 @@ public class EngineTests
 
     /// <summary>Drives an offline engine: plays the files as a queue and returns everything it rendered.</summary>
     private static (float[] Samples, List<EngineEvent> Events, long Underruns) RenderQueue(
-        string[] files, Action<PlaybackEngine, TrackHandle[], int>? onFrame = null)
+        string[] files, Action<PlaybackEngine, TrackHandle[], int>? onFrame = null,
+        Action<PlaybackEngine>? setup = null, Func<string, int, TrackHandle>? handle = null)
     {
         using var engine = new PlaybackEngine(OutputMode.Offline, Rate);
-        var handles = files.Select((f, i) => new TrackHandle(f, i)).ToArray();
+        setup?.Invoke(engine);
+        var handles = files.Select((f, i) => handle?.Invoke(f, i) ?? new TrackHandle(f, i)).ToArray();
         var events = new List<EngineEvent>();
         var output = new List<float>();
         var block = new float[512 * 2];
@@ -147,6 +149,108 @@ public class EngineTests
             if (engine.BufferedFrames >= 512) engine.RenderOffline(block); else Thread.Sleep(1);
         }
         Assert.Equal(["a", "c"], started);
+    }
+
+    [SkippableFact]
+    public void Changing_next_during_a_buffered_crossfade_rewinds_and_fades_into_the_new_choice()
+    {
+        Skip.IfNot(Fixtures.HaveFfmpeg);
+        var ha = new TrackHandle(Fixtures.Sine("xf-undo-a", 440, Rate, 3.0), "a");
+        var hb = new TrackHandle(Fixtures.Sine("xf-undo-b3", 660, Rate, 3.0), "b");
+        var hc = new TrackHandle(Fixtures.Sine("xf-undo-c3", 880, Rate, 3.0), "c");
+        using var engine = new PlaybackEngine(OutputMode.Offline, Rate, ringMs: 1000) { Crossfade = TimeSpan.FromSeconds(1) };
+        engine.Play(ha);
+        engine.SetNext(hb);
+        var block = new float[512 * 2];
+        var started = new List<string>();
+        var output = new List<float>();
+        bool changed = false, finished = false;
+        var deadline = DateTime.UtcNow.AddSeconds(20);
+        var lastData = DateTime.UtcNow;
+        while (DateTime.UtcNow < deadline && !finished)
+        {
+            while (engine.Events.TryRead(out var e))
+            {
+                if (e is TrackStarted ts)
+                {
+                    started.Add((string)ts.Track.Token!);
+                    if ((string)ts.Track.Token! == "c") engine.SetNext(null);
+                }
+                if (e is PlaybackFinished) finished = true;
+            }
+            // At 1.3 s the ring (1 s) already holds the start of the A→B mix at 2.0 s.
+            if (!changed && engine.Position > TimeSpan.FromSeconds(1.3))
+            {
+                engine.SetNext(hc);
+                changed = true;
+                Thread.Sleep(50);
+            }
+            if (engine.BufferedFrames >= 512 || (DateTime.UtcNow - lastData).TotalMilliseconds > 100)
+            {
+                engine.RenderOffline(block);
+                output.AddRange(block);
+                lastData = DateTime.UtcNow;
+                Thread.Sleep(2); // ~5x real time: file opening must get the head start it has in real playback
+            }
+            else Thread.Sleep(1);
+        }
+        if (Environment.GetEnvironmentVariable("LOCALFM_DUMP") is { } dump)
+            File.WriteAllBytes(dump, System.Runtime.InteropServices.MemoryMarshal.AsBytes(output.ToArray().AsSpan()).ToArray());
+        Assert.True(finished);
+        Assert.Equal(["a", "c"], started);
+        // A was rewound to where the A→B mix began and mixed into C over 1 s: 3 + 3 - 1 seconds in all.
+        // (A cut short at the old mix point would be ~4.3 s; no crossfade, 6 s.)
+        Assert.InRange(output.Count / 2, 5 * Rate - 4096, 5 * Rate + 4096);
+    }
+
+    private static double Rms(float[] s, int fromFrame, int toFrame)
+    {
+        double sum = 0;
+        for (int i = fromFrame; i < toFrame; i++) sum += s[i * 2] * s[i * 2];
+        return Math.Sqrt(sum / Math.Max(1, toFrame - fromFrame));
+    }
+
+    [SkippableFact]
+    public void Crossfade_overlaps_the_end_of_one_track_with_the_next()
+    {
+        Skip.IfNot(Fixtures.HaveFfmpeg);
+        string[] files = [Fixtures.Sine("xfade-a", 440, Rate, 3.0), Fixtures.Sine("xfade-b", 660, Rate, 3.0)];
+        var (s, events, _) = RenderQueue(files, setup: e => e.Crossfade = TimeSpan.FromSeconds(1));
+        int frames = s.Length / 2;
+
+        Assert.Equal(2, events.OfType<TrackStarted>().Count());
+        int expected = 5 * Rate; // 3 + 3 - 1 s of overlap
+        Assert.InRange(frames, expected - 2048, expected + 2048);
+        // No dip to silence anywhere in the mix (equal-power curves keep the level up).
+        for (int f = Rate / 10; f < expected - Rate / 10; f += Rate / 10)
+            Assert.True(Rms(s, f, f + Rate / 20) > 0.05, $"quiet at {f / (double)Rate:F2}s");
+    }
+
+    [SkippableFact]
+    public void Tracks_marked_gapless_are_not_crossfaded()
+    {
+        Skip.IfNot(Fixtures.HaveFfmpeg);
+        var files = Fixtures.SplitSine("xfade-album", "flac", Rate, 2.0, 2.0);
+        var (s, _, _) = RenderQueue(files, setup: e => e.Crossfade = TimeSpan.FromSeconds(1),
+            handle: (f, i) => new TrackHandle(f, i, JoinGapless: i > 0));
+        Assert.InRange(s.Length / 2, 4 * Rate, 4 * Rate + 1024);
+        var (max, at) = MaxDelta(s, 100, 4 * Rate - 100);
+        Assert.True(max < 0.012, $"discontinuity {max:F4} at frame {at}");
+    }
+
+    [SkippableFact]
+    public void Equalizer_boosts_its_band_on_the_audio_thread()
+    {
+        Skip.IfNot(Fixtures.HaveFfmpeg);
+        var files = Fixtures.SplitSine("eq", "flac", Rate, 1.5);
+        var (flat, _, _) = RenderQueue(files);
+        var (boosted, _, _) = RenderQueue(files, setup: e =>
+            e.SetEqualizer([new EqBand(EqBandType.Peak, 440, 1.41f, 12)], 0));
+        double ratio = Rms(boosted, Rate / 2, Rate) / Rms(flat, Rate / 2, Rate);
+        Assert.InRange(ratio, 3.6, 4.4); // +12 dB at the sine's frequency
+        var (cut, _, _) = RenderQueue(files, setup: e =>
+            e.SetEqualizer([new EqBand(EqBandType.HighShelf, 4000, 0.71f, 12)], -6));
+        Assert.InRange(Rms(cut, Rate / 2, Rate) / Rms(flat, Rate / 2, Rate), 0.45, 0.56); // shelf far above 440 Hz: just the preamp
     }
 
     private static void SpinUntil(Func<bool> cond)

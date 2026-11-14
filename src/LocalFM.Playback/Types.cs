@@ -3,8 +3,10 @@ namespace LocalFM.Playback;
 /// <summary>
 /// What to play. <paramref name="Token"/> is opaque to the engine and is handed back in events
 /// (the app uses its queue item id). <paramref name="Gain"/> is a linear factor (ReplayGain etc.).
+/// <paramref name="JoinGapless"/> asks never to crossfade into this track (it continues the previous one,
+/// like the next track of a live album).
 /// </summary>
-public sealed record TrackHandle(string Path, object? Token = null, float Gain = 1f);
+public sealed record TrackHandle(string Path, object? Token = null, float Gain = 1f, bool JoinGapless = false);
 
 public enum PlaybackState { Stopped, Playing, Paused }
 

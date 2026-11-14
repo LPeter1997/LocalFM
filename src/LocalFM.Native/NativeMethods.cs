@@ -33,6 +33,17 @@ public unsafe struct ProbeInfo
     public fixed byte Container[32];
 }
 
+public enum EqBandType
+{
+    Peak = 0,
+    LowShelf = 1,
+    HighShelf = 2,
+}
+
+/// <summary>One equalizer filter (mirrors lfm_eq_band).</summary>
+[StructLayout(LayoutKind.Sequential)]
+public record struct EqBand(EqBandType Type, float Frequency, float Q, float GainDb);
+
 public enum OutputMode
 {
     Device = 0,
@@ -70,6 +81,8 @@ public static unsafe partial class NativeMethods
     public static partial void OutputSetVolume(nint output, float linear);
     [LibraryImport(Lib, EntryPoint = "lfm_output_set_paused")]
     public static partial void OutputSetPaused(nint output, int paused);
+    [LibraryImport(Lib, EntryPoint = "lfm_output_set_eq")]
+    public static partial void OutputSetEq(nint output, EqBand* bands, int count, float preampDb);
     [LibraryImport(Lib, EntryPoint = "lfm_output_render")]
     public static partial void OutputRender(nint output, float* frames, int count);
 

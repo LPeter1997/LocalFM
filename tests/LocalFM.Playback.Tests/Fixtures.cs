@@ -47,4 +47,14 @@ public static class Fixtures
         }
         return files;
     }
+
+    /// <summary>A stereo sine of its own frequency (tracks that must not cancel each other when mixed).</summary>
+    public static string Sine(string name, int frequency, int rate, double seconds)
+    {
+        Directory.CreateDirectory(Dir);
+        string file = Path.Combine(Dir, $"{name}.flac");
+        if (!File.Exists(file))
+            Run($"-f lavfi -i \"sine=frequency={frequency}:sample_rate={rate}:duration={seconds.ToString(System.Globalization.CultureInfo.InvariantCulture)}\" -ac 2 \"{file}\"");
+        return file;
+    }
 }

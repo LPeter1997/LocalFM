@@ -23,6 +23,10 @@ namespace LocalFM.Playback;
 /// <see cref="Play"/> or, after a gapless transition, the track that just became audible. Callers
 /// re-issue SetNext after every <see cref="TrackStarted"/>; until then the engine will not end
 /// playback on its own.
+///
+/// Crossfade: with <see cref="Crossfade"/> set, the last seconds of a track are mixed with the start of the
+/// next (equal-power curves) while decoding, unless the next track asks to be joined gaplessly (consecutive
+/// album tracks). The next track's segment starts where the mix starts, so it is "playing" from then on.
 /// </summary>
 public sealed class PlaybackEngine : IDisposable
 {
@@ -35,6 +39,8 @@ public sealed class PlaybackEngine : IDisposable
     private readonly AutoResetEvent _wake = new(false);
     private readonly Channel<EngineEvent> _events = Channel.CreateUnbounded<EngineEvent>();
     private readonly float[] _buf = new float[ChunkFrames * 2];
+    private readonly float[] _buf2 = new float[ChunkFrames * 2];
+    private long _crossfadeTicks;
     private volatile bool _running = true;
 
     // published for readers on other threads
@@ -51,6 +57,8 @@ public sealed class PlaybackEngine : IDisposable
     private TrackHandle? _nextRequest;  // being opened
     private TrackHandle? _anchor;       // the track the caller's latest SetNext refers to
     private TrackHandle? _nextFor;      // the anchor at the time of the latest SetNext
+    private Source? _fadeIn;            // being mixed in over the end of _current (crossfade in progress)
+    private long _fadeLen, _fadePos;
     private int _playGen, _nextGen;
 
     private sealed class Source(TrackHandle track, Decoder decoder)
@@ -60,7 +68,14 @@ public sealed class PlaybackEngine : IDisposable
         public TimeSpan? Duration { get; } = decoder.DurationFrames >= 0
             ? TimeSpan.FromSeconds((double)decoder.DurationFrames / decoder.OutputRate) : null;
         public bool AtEnd;
+        public long Pos;                // frames decoded so far (track time of the next read)
+        public long? SpliceOutFrame;    // crossfaded in: where the previous track was when the mix began
+
+        public long DurationFrames => Decoder.DurationFrames;
     }
+
+    /// <summary>The source whose continuation matters for "next" decisions: the one fading in, else the current.</summary>
+    private Source? Lead => _fadeIn ?? _current;
 
     /// <summary>A run of ring frames starting at <see cref="WriteIndex"/>; Source null marks end of playback.</summary>
     private sealed record Segment(long WriteIndex, Source? Source, long StartFrame);
@@ -101,6 +116,16 @@ public sealed class PlaybackEngine : IDisposable
         get => _volume;
         set { _volume = Math.Clamp(value, 0f, 1f); _out.SetVolume(_volume); }
     }
+
+    /// <summary>Crossfade between tracks; zero (the default) means gapless.</summary>
+    public TimeSpan Crossfade
+    {
+        get => TimeSpan.FromTicks(Interlocked.Read(ref _crossfadeTicks));
+        set => Interlocked.Exchange(ref _crossfadeTicks, Math.Clamp(value.Ticks, 0, TimeSpan.FromSeconds(12).Ticks));
+    }
+
+    /// <summary>Sets the equalizer. It runs on the audio thread, so a change is heard right away. Empty = flat.</summary>
+    public void SetEqualizer(ReadOnlySpan<EqBand> bands, float preampDb) => _out.SetEq(bands, preampDb);
 
     public IReadOnlyList<IAudioProcessor> Processors
     {
@@ -168,16 +193,12 @@ public sealed class PlaybackEngine : IDisposable
     {
         while (_current is { } cur && _out.Writable >= ChunkFrames)
         {
-            int n = 0;
+            if (_fadeIn is { } inc) { MixFade(cur, inc); continue; }
+            if (!cur.AtEnd && TryStartFade(cur)) continue;
+            if (!cur.AtEnd && AwaitingFadePartner(cur)) return;
             if (!cur.AtEnd)
             {
-                try { n = cur.Decoder.Read(_buf); }
-                catch (Exception ex)
-                {
-                    Emit(new TrackFailed(cur.Track, ex.Message));
-                    n = 0;
-                }
-                if (n > 0) Process(_buf.AsSpan(0, n * 2), cur.Track.Gain);
+                int n = Read(cur, _buf, ChunkFrames);
                 if (n > 0) _out.Write(_buf.AsSpan(0, n * 2));
                 if (n < ChunkFrames) cur.AtEnd = true;
             }
@@ -189,6 +210,7 @@ public sealed class PlaybackEngine : IDisposable
             {
                 _next = null;
                 _current = nx;
+                nx.SpliceOutFrame = null;
                 _pending.Add(new Segment(_out.WriteIndex, nx, 0));
                 continue;
             }
@@ -197,6 +219,90 @@ public sealed class PlaybackEngine : IDisposable
             _current = null;
             Collect();
             return;
+        }
+    }
+
+    /// <summary>Decodes up to <paramref name="frames"/> frames with the track's gain applied. 0 = ended or failed.</summary>
+    private int Read(Source s, float[] buf, int frames)
+    {
+        int n;
+        try { n = s.Decoder.Read(buf.AsSpan(0, frames * 2)); }
+        catch (Exception ex)
+        {
+            Emit(new TrackFailed(s.Track, ex.Message));
+            return 0;
+        }
+        if (n <= 0) return 0;
+        Process(buf.AsSpan(0, n * 2), s.Track.Gain);
+        s.Pos += n;
+        return n;
+    }
+
+    /// <summary>Crossfade length for this pair, 0 when there should be none.
+    /// Never more than a third of either track (short intros, interludes).</summary>
+    private long FadeFrames(Source cur, TrackHandle next, Source? opened)
+    {
+        long fade = (long)(Crossfade.TotalSeconds * SampleRate);
+        if (fade < SampleRate / 10 || next.JoinGapless || cur.DurationFrames <= 0) return 0;
+        fade = Math.Min(fade, cur.DurationFrames / 3);
+        if (opened?.DurationFrames > 0) fade = Math.Min(fade, opened.DurationFrames / 3);
+        return fade;
+    }
+
+    /// <summary>Inside the crossfade window while the next track is still opening: hold off decoding further
+    /// (or the mix would start late and short), as long as enough is buffered to stay safe.</summary>
+    private bool AwaitingFadePartner(Source cur)
+    {
+        if (_nextRequest is not { } req || !ReferenceEquals(_nextFor, cur.Track)) return false;
+        long fade = FadeFrames(cur, req, null);
+        if (fade == 0 || cur.DurationFrames - cur.Pos > fade) return false;
+        return BufferedFrames > SampleRate / 4;
+    }
+
+    /// <summary>Starts mixing the next track in when the current one is within the crossfade of its end.</summary>
+    private bool TryStartFade(Source cur)
+    {
+        if (_next is not { } nx || !ReferenceEquals(_nextFor, cur.Track)) return false;
+        long fade = FadeFrames(cur, nx.Track, nx);
+        if (fade == 0) return false;
+        long remaining = cur.DurationFrames - cur.Pos;
+        if (remaining > fade || remaining < ChunkFrames) return false;
+
+        _next = null;
+        _fadeIn = nx;
+        _fadeLen = remaining;
+        _fadePos = 0;
+        nx.SpliceOutFrame = cur.Pos;
+        _pending.Add(new Segment(_out.WriteIndex, nx, 0));
+        return true;
+    }
+
+    private void MixFade(Source cur, Source inc)
+    {
+        int want = (int)Math.Clamp(_fadeLen - _fadePos, 1, ChunkFrames);
+        int n1 = cur.AtEnd ? 0 : Read(cur, _buf, want);
+        if (n1 < want) cur.AtEnd = true;
+        int n2 = inc.AtEnd ? 0 : Read(inc, _buf2, want);
+        if (n2 < want) inc.AtEnd = true;
+        int n = Math.Max(n1, n2);
+        if (n1 < n) _buf.AsSpan(n1 * 2, (n - n1) * 2).Clear();
+        if (n2 < n) _buf2.AsSpan(n2 * 2, (n - n2) * 2).Clear();
+        for (int i = 0; i < n; i++)
+        {
+            double t = Math.Clamp((_fadePos + i + 0.5) / _fadeLen, 0, 1);
+            float gOut = (float)Math.Cos(t * Math.PI / 2), gIn = (float)Math.Sin(t * Math.PI / 2);
+            _buf[2 * i] = _buf[2 * i] * gOut + _buf2[2 * i] * gIn;
+            _buf[2 * i + 1] = _buf[2 * i + 1] * gOut + _buf2[2 * i + 1] * gIn;
+        }
+        if (n > 0) _out.Write(_buf.AsSpan(0, n * 2));
+        _fadePos += n;
+        // Done when the ramp is complete (any rest of the old track is dropped: it is faded to silence)
+        // or the new track already ended (a very short one).
+        if (_fadePos >= _fadeLen || inc.AtEnd || n == 0)
+        {
+            _current = inc;
+            _fadeIn = null;
+            Collect();
         }
     }
 
@@ -264,8 +370,9 @@ public sealed class PlaybackEngine : IDisposable
     private void OnPlayOpened(int gen, TrackHandle track, Decoder dec, long startFrame)
     {
         if (gen != _playGen) { dec.Dispose(); return; }
-        var src = new Source(track, dec);
+        var src = new Source(track, dec) { Pos = startFrame };
         _live.Add(src);
+        _fadeIn = null;
         _out.Flush();
         if (_active?.Source is { } prev) Emit(new TrackEnded(prev.Track, Completed: false));
         _pending.Clear();
@@ -280,19 +387,27 @@ public sealed class PlaybackEngine : IDisposable
     private void DoSetNext(TrackHandle? next)
     {
         var anchorSrc = _active?.Source;
-        // A gapless splice already happened (the anchor is audible but we decode its successor).
-        if (_current is { } cur && anchorSrc is not null && !ReferenceEquals(cur, anchorSrc)
+        // A splice already happened (the anchor is audible but we decode its successor, gapless or crossfading).
+        if (Lead is { } lead && anchorSrc is not null && !ReferenceEquals(lead, anchorSrc)
             && ReferenceEquals(_anchor, anchorSrc.Track))
         {
-            if (next is not null && cur.Track == next) return; // same decision, keep the splice
-            int idx = _pending.FindIndex(s => ReferenceEquals(s.Source, cur));
+            if (next is not null && lead.Track == next) return; // same decision, keep the splice
+            int idx = _pending.FindIndex(s => ReferenceEquals(s.Source, lead));
             if (idx < 0 || !_out.Truncate(_pending[idx].WriteIndex))
             {
-                Log.Debug(Area, "Next changed too late to undo the gapless splice");
+                Log.Debug(Area, "Next changed too late to undo the splice");
                 return;
             }
             _pending.RemoveRange(idx, _pending.Count - idx);
+            // A crossfade consumed the anchor's tail: rewind it to where the mix began.
+            if (lead.SpliceOutFrame is { } outFrame && anchorSrc.Decoder.Seek(outFrame))
+            {
+                anchorSrc.Pos = outFrame;
+                anchorSrc.AtEnd = false;
+            }
+            _fadeIn = null;
             _current = anchorSrc;
+            _live.Add(anchorSrc);
         }
         else if (_current is null && anchorSrc is not null && ReferenceEquals(_anchor, anchorSrc.Track))
         {
@@ -358,10 +473,27 @@ public sealed class PlaybackEngine : IDisposable
         long frame = Math.Max(0, (long)(position.TotalSeconds * SampleRate));
         if (src.Duration is { } d) frame = Math.Min(frame, (long)(d.TotalSeconds * SampleRate));
 
+        if (_fadeIn is { } fi)
+        {
+            _fadeIn = null;
+            if (ReferenceEquals(fi, src)) _current = src; // seeking in the track fading in: the old one is done
+            else if (fi.Decoder.Seek(0))
+            {
+                // Seeking in the outgoing track: the incoming one goes back to being "next".
+                fi.AtEnd = false;
+                fi.Pos = 0;
+                CancelNext();
+                _next = fi;
+                _nextFor = src.Track;
+                _live.Add(fi);
+            }
+        }
+
         // If we already spliced the successor, rewind it and make it "next" again.
         if (_current is { } cur && !ReferenceEquals(cur, src) && cur.Decoder.Seek(0))
         {
             cur.AtEnd = false;
+            cur.Pos = 0;
             CancelNext();
             _next = cur;
             _nextFor = src.Track;
@@ -370,6 +502,7 @@ public sealed class PlaybackEngine : IDisposable
         _out.Flush();
         _pending.Clear();
         src.AtEnd = !src.Decoder.Seek(frame);
+        src.Pos = frame;
         _current = src;
         _active = new Segment(_out.WriteIndex, src, frame);
         Collect();
@@ -384,6 +517,7 @@ public sealed class PlaybackEngine : IDisposable
         _anchor = _nextFor = null;
         _pending.Clear();
         _current = null;
+        _fadeIn = null;
         CancelNext();
         SetState(PlaybackState.Stopped);
     }
@@ -395,7 +529,8 @@ public sealed class PlaybackEngine : IDisposable
         List<Source>? dead = null;
         foreach (var s in _live)
         {
-            if (ReferenceEquals(s, _current) || ReferenceEquals(s, _next) || ReferenceEquals(s, _active?.Source)) continue;
+            if (ReferenceEquals(s, _current) || ReferenceEquals(s, _next) || ReferenceEquals(s, _fadeIn)
+                || ReferenceEquals(s, _active?.Source)) continue;
             bool queued = false;
             foreach (var p in _pending) if (ReferenceEquals(p.Source, s)) { queued = true; break; }
             if (!queued) (dead ??= new()).Add(s);

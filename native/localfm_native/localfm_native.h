@@ -69,6 +69,20 @@ LFM_API int64_t lfm_output_underruns(lfm_output* o);
 LFM_API void lfm_output_set_volume(lfm_output* o, float linear);
 LFM_API void lfm_output_set_paused(lfm_output* o, int32_t paused);
 
+/* Equalizer, applied on the audio thread right before output, so changes are heard at once.
+ * Setting it never blocks the audio thread: new coefficients are picked up at the next callback
+ * and cross-faded from the old ones over ~20 ms (no zipper noise while dragging a slider). */
+enum { LFM_EQ_PEAK = 0, LFM_EQ_LOWSHELF = 1, LFM_EQ_HIGHSHELF = 2 };
+typedef struct lfm_eq_band {
+    int32_t type;
+    float   freq;    /* Hz */
+    float   q;       /* bandwidth; ~1.41 for octave bands, ~0.71 for shelves */
+    float   gain_db;
+} lfm_eq_band;
+#define LFM_EQ_MAX_BANDS 16
+/* count 0 (or all gains 0 and preamp 0) = flat, which costs nothing. Thread-safe against itself. */
+LFM_API void lfm_output_set_eq(lfm_output* o, const lfm_eq_band* bands, int32_t count, float preamp_db);
+
 /* Consumer side: what the device callback calls. Exposed for offline rendering/tests. */
 LFM_API void lfm_output_render(lfm_output* o, float* out, int32_t frames);
 
