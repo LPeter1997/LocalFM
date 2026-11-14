@@ -1,6 +1,8 @@
 using System.Net;
 using LocalFM.Library;
+using LocalFM.Core;
 using LocalFM.Library.Enrich;
+using LocalFM.Library.Import;
 using LocalFM.Library.Tests;
 
 namespace LocalFM.Metadata.Tests;
@@ -34,7 +36,89 @@ public class MetadataTests
             }, seconds: 0.3);
         }
         await lib.ScanAsync();
-        return lib.Queries.Albums().Single();
+        var album = lib.Queries.Albums().Single();
+        await SetFileLengths(lib, album.ReleaseId, OkcLengths);
+        return album;
+    }
+
+    private static readonly long[] OkcLengths =
+        [284400, 383493, 267706, 264800, 299266, 261626, 117333, 230640, 285200, 228533, 259626, 324533];
+
+    /// <summary>Fixture files are a fraction of a second long; give them the lengths real rips would have.</summary>
+    private static Task SetFileLengths(TempLibrary lib, Ulid releaseId, long[] lengths) => lib.Db.Writer.Run((c, t) =>
+    {
+        var tx = new Tx(c, t);
+        var tracks = tx.Query("SELECT t.id FROM track t JOIN medium m ON m.id = t.medium_id WHERE m.release_id = $1 ORDER BY m.position, t.position",
+            r => r.Id(0), releaseId);
+        for (int i = 0; i < tracks.Count; i++)
+            tx.Exec("UPDATE audio_file SET duration_ms = $2 WHERE track_id = $1", tracks[i], lengths[i]);
+    });
+
+    /// <summary>One song from an album, ripped on its own (the "The Zoo" from Comeblack case).</summary>
+    private static async Task<AlbumSummary> LoneSong(TempLibrary lib)
+    {
+        lib.MakeTrack("single/karma.mp3", new() { ["title"] = "Karma Police", ["artist"] = "Radiohead - Topic", ["album"] = "Karma Police" }, seconds: 0.3);
+        await lib.ScanAsync();
+        var album = lib.Queries.Albums().Single();
+        await SetFileLengths(lib, album.ReleaseId, [261626 + 1500]);
+        return album;
+    }
+
+    /// <summary>A one-track promo whose only track is a half-hour interview: same track count, wrong everything else.</summary>
+    private static ReleaseData InterviewPromo(ReleaseData real)
+    {
+        var t = real.Media[0].Tracks[0];
+        var interview = t with
+        {
+            Id = "track-qa", Title = "Radiohead 31x \"Q & A\"", LengthMs = 1_900_000,
+            Recording = t.Recording with { Id = "rec-qa", Title = "Radiohead 31x \"Q & A\"", LengthMs = 1_900_000 },
+        };
+        return real with { Id = "promo-qa", Media = [new MediumData(1, "CD", null, [interview])] };
+    }
+
+    [SkippableFact]
+    public async Task Release_where_no_track_fits_is_rejected_untouched()
+    {
+        Skip.IfNot(TempLibrary.HaveFfmpeg);
+        using var lib = new TempLibrary();
+        var album = await LoneSong(lib);
+        var (svc, _) = Service(lib);
+        var promo = InterviewPromo((await svc.MusicBrainz.GetReleaseAsync("6a09041b-0f79-3278-88d9-0552dd28d37f"))!);
+
+        var r = await lib.Db.Writer.Run((c, t) => new MetadataApplier(lib.Images).ApplyRelease(new Tx(c, t), album.ReleaseId, promo, null, null, null));
+
+        Assert.False(r.Applied);
+        Assert.Equal("Karma Police", lib.Queries.AlbumTracks(album.ReleaseId).Single().Title);
+        Assert.Equal("Karma Police", lib.Queries.Album(album.ReleaseId)!.Title);
+    }
+
+    [SkippableFact]
+    public async Task Lone_song_finds_its_place_on_the_full_album_by_file_title()
+    {
+        Skip.IfNot(TempLibrary.HaveFfmpeg);
+        using var lib = new TempLibrary();
+        var album = await LoneSong(lib);
+        var (svc, _) = Service(lib);
+        var applier = new MetadataApplier(lib.Images);
+        // An earlier bad apply left a wrong title and a wrong MusicBrainz id behind.
+        await lib.Db.Writer.Run((c, t) =>
+        {
+            var tx = new Tx(c, t);
+            var trackId = lib.Queries.AlbumTracks(album.ReleaseId).Single().TrackId;
+            MetadataApplier.SetField(tx, "track", trackId, "title", "Radiohead 31x \"Q & A\"", "musicbrainz", Sql.Now());
+            Importer.AddExternal(tx, "release", album.ReleaseId, "musicbrainz", "promo-qa");
+        });
+
+        var r = await svc.ApplyReleaseAsync(album.ReleaseId, "6a09041b-0f79-3278-88d9-0552dd28d37f", fetchCover: false);
+
+        Assert.True(r!.Applied);
+        Assert.Equal(1, r.TracksMatched);
+        var track = lib.Queries.AlbumTracks(album.ReleaseId).Single();
+        Assert.Equal("Karma Police", track.Title);
+        Assert.Equal(6, track.Position);
+        Assert.Equal("OK Computer", track.Album);
+        using var c = lib.Db.Open();
+        Assert.Equal(1L, c.Scalar<long>("SELECT COUNT(*) FROM external_id WHERE entity_type='release' AND entity_id=$1 AND provider='musicbrainz'", album.ReleaseId));
     }
 
     [SkippableFact]
@@ -108,6 +192,7 @@ public class MetadataTests
 
         // Pretend the other one is linked to the same release group (as a different MB release).
         var other = lib.Queries.Albums().Single(a => a.ReleaseId != album.ReleaseId);
+        await SetFileLengths(lib, other.ReleaseId, [OkcLengths[0]]);
         var data = await svc.MusicBrainz.GetReleaseAsync("6a09041b-0f79-3278-88d9-0552dd28d37f");
         var edition = data! with { Id = "11111111-2222-3333-4444-555555555555", Title = "OK Computer OKNOTOK 1997 2017", Date = "2017-06-23" };
         var applier = new MetadataApplier(lib.Images);

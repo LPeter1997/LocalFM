@@ -3,7 +3,9 @@ using LocalFM.Library.Import;
 
 namespace LocalFM.Library.Enrich;
 
-public sealed record ApplyResult(int TracksMatched, int TracksUnmatched, bool CoverStored, bool MergedIntoGroup);
+/// <summary>Outcome of an apply. <c>Applied</c> is false when not a single local track fit the release:
+/// then it is almost certainly the wrong release and nothing was written.</summary>
+public sealed record ApplyResult(int TracksMatched, int TracksUnmatched, bool CoverStored, bool MergedIntoGroup, bool Applied = true);
 
 /// <summary>
 /// Writes external release data onto a local release, inside a writer transaction.
@@ -12,10 +14,26 @@ public sealed record ApplyResult(int TracksMatched, int TracksUnmatched, bool Co
 /// </summary>
 public sealed class MetadataApplier(ImageStore images)
 {
-    public ApplyResult ApplyRelease(Tx tx, Ulid releaseId, ReleaseData d, byte[]? cover, string? coverMime, string? coverSource)
+    /// <param name="fileTitles">Titles from the files' own tags, by track id: a second name to match on when the
+    /// stored title has drifted (e.g. after an earlier wrong apply).</param>
+    public ApplyResult ApplyRelease(Tx tx, Ulid releaseId, ReleaseData d, byte[]? cover, string? coverMime, string? coverSource,
+        IReadOnlyDictionary<Ulid, string>? fileTitles = null)
     {
         string src = d.Provider;
         long now = Sql.Now();
+
+        // Match first, write after: a release none of our tracks fit is rejected untouched.
+        var local = tx.Query("""
+            SELECT t.id, m.id, m.position, t.position, t.title, t.recording_id,
+                   COALESCE((SELECT MAX(f.duration_ms) FROM audio_file f WHERE f.track_id = t.id), t.length_ms)
+            FROM track t JOIN medium m ON m.id = t.medium_id
+            WHERE m.release_id = $1 ORDER BY m.position, t.position
+            """, r => new LocalTrack(r.Id(0), r.Id(1), r.GetInt32(2), r.GetInt32(3), r.GetString(4), r.Id(5), r.Long(6)), releaseId);
+        var remote = d.Media.SelectMany(m => m.Tracks.Select(t => (Medium: m, Track: t))).ToList();
+        var assigned = MatchTracks(local, remote, fileTitles);
+        int matched = assigned.Count(a => a is not null);
+        if (matched == 0 && local.Count > 0)
+            return new ApplyResult(0, local.Count, false, false, Applied: false);
 
         // ---- release
         SetField(tx, "release", releaseId, "title", d.Title, src, now);
@@ -28,7 +46,7 @@ public sealed class MetadataApplier(ImageStore images)
         SetField(tx, "release", releaseId, "edition", d.Disambiguation, src, now);
         if (d.Credit.Count > 0)
             SetField(tx, "release", releaseId, "artist_credit_id", ResolveCredit(tx, d.Credit, src, now).ToString(), src, now);
-        Importer.AddExternal(tx, "release", releaseId, src, d.Id);
+        ReplaceExternal(tx, "release", releaseId, src, d.Id);
 
         // ---- release group: another local edition may already be linked to it; then join that group
         var groupId = tx.Single("SELECT release_group_id FROM release WHERE id = $1", r => r.IdN(0), releaseId)!.Value;
@@ -40,6 +58,22 @@ public sealed class MetadataApplier(ImageStore images)
                 DeleteEntity(tx, "release_group", groupId);
             groupId = existingGroup;
             merged = true;
+        }
+        else if (d.Group.Id is not null
+                 && tx.Single("SELECT external_id FROM external_id WHERE entity_type = 'release_group' AND entity_id = $1 AND provider = $2",
+                        r => r.GetString(0), groupId, src) is { } oldGroup && oldGroup != d.Group.Id)
+        {
+            // Previously linked to another group (a wrong earlier match). Other editions still belong there: split off.
+            if (tx.Long("SELECT COUNT(*) FROM release WHERE release_group_id = $1 AND id <> $2", groupId, releaseId) > 0)
+            {
+                var fresh = Ulid.NewUlid();
+                tx.Exec("INSERT INTO release_group(id, title, title_key, created_at, updated_at) VALUES ($1,$2,$3,$4,$4)",
+                    fresh, d.Group.Title, Normalize.Key(d.Group.Title), now);
+                tx.Exec("UPDATE release SET release_group_id = $2, updated_at = $3 WHERE id = $1", releaseId, fresh, now);
+                groupId = fresh;
+            }
+            else
+                tx.Exec("DELETE FROM external_id WHERE entity_type = 'release_group' AND entity_id = $1 AND provider = $2", groupId, src);
         }
         SetField(tx, "release_group", groupId, "title", d.Group.Title, src, now);
         SetField(tx, "release_group", groupId, "primary_type", d.Group.PrimaryType?.ToLowerInvariant(), src, now);
@@ -53,28 +87,10 @@ public sealed class MetadataApplier(ImageStore images)
         ReplaceGenres(tx, "release_group", groupId, d.Group.Genres.Count > 0 ? d.Group.Genres : d.Genres, src);
 
         // ---- media and tracks
-        var local = tx.Query("""
-            SELECT t.id, m.id, m.position, t.position, t.title, t.recording_id
-            FROM track t JOIN medium m ON m.id = t.medium_id
-            WHERE m.release_id = $1 ORDER BY m.position, t.position
-            """, r => new LocalTrack(r.Id(0), r.Id(1), r.GetInt32(2), r.GetInt32(3), r.GetString(4), r.Id(5)), releaseId);
-        var unmatched = new List<LocalTrack>(local);
-        int matched = 0;
-
-        // When the local release has exactly as many tracks in the same order, position matching is reliable;
-        // otherwise fall back to titles.
-        var remoteFlat = d.Media.SelectMany(m => m.Tracks.Select(t => (Medium: m, Track: t))).ToList();
-        bool sameShape = local.Count == remoteFlat.Count;
-
-        for (int i = 0; i < remoteFlat.Count; i++)
+        for (int i = 0; i < remote.Count; i++)
         {
-            var (m, t) = remoteFlat[i];
-            var hit = unmatched.FirstOrDefault(l => l.Disc == m.Position && l.Position == t.Position && SimilarTitle(l.Title, t.Title))
-                ?? unmatched.FirstOrDefault(l => SimilarTitle(l.Title, t.Title))
-                ?? unmatched.FirstOrDefault(l => l.Disc == m.Position && l.Position == t.Position)
-                ?? (sameShape ? local[i] : null);
-            if (hit is null || !unmatched.Remove(hit)) continue;
-            matched++;
+            if (assigned[i] is not { } hit) continue;
+            var (m, t) = remote[i];
 
             var mediumId = EnsureMedium(tx, releaseId, m, src, now);
             if (mediumId != hit.MediumId)
@@ -85,7 +101,7 @@ public sealed class MetadataApplier(ImageStore images)
             SetField(tx, "track", hit.Id, "length_ms", t.LengthMs?.ToString(), src, now);
             if (t.Credit.Count > 0)
                 SetField(tx, "track", hit.Id, "artist_credit_id", ResolveCredit(tx, t.Credit, src, now).ToString(), src, now);
-            Importer.AddExternal(tx, "track", hit.Id, src, t.Id);
+            ReplaceExternal(tx, "track", hit.Id, src, t.Id);
 
             ApplyRecording(tx, hit, t.Recording, src, now);
         }
@@ -105,7 +121,73 @@ public sealed class MetadataApplier(ImageStore images)
         return new ApplyResult(matched, local.Count - matched, coverStored, merged);
     }
 
-    private sealed record LocalTrack(Ulid Id, Ulid MediumId, int Disc, int Position, string Title, Ulid RecordingId);
+    private sealed record LocalTrack(Ulid Id, Ulid MediumId, int Disc, int Position, string Title, Ulid RecordingId, long? LengthMs);
+
+    /// <summary>
+    /// Pairs remote tracks with local ones, most trustworthy evidence first: position + title, title, position,
+    /// same order, and finally a unique length. Lengths veto: a 5-minute song never becomes a 30-minute interview.
+    /// </summary>
+    private static LocalTrack?[] MatchTracks(List<LocalTrack> local, List<(MediumData Medium, TrackData Track)> remote,
+        IReadOnlyDictionary<Ulid, string>? fileTitles)
+    {
+        var assigned = new LocalTrack?[remote.Count];
+        var taken = new HashSet<Ulid>();
+        static long? Len(TrackData t) => t.LengthMs ?? t.Recording.LengthMs;
+        bool Titled(LocalTrack l, TrackData t) =>
+            SimilarTitle(l.Title, t.Title) || (fileTitles?.TryGetValue(l.Id, out var ft) == true && SimilarTitle(ft, t.Title));
+
+        void Pass(Func<LocalTrack, int, bool> fits)
+        {
+            for (int i = 0; i < remote.Count; i++)
+            {
+                if (assigned[i] is not null) continue;
+                var hit = local.FirstOrDefault(l => !taken.Contains(l.Id) && fits(l, i));
+                if (hit is null) continue;
+                assigned[i] = hit;
+                taken.Add(hit.Id);
+            }
+        }
+
+        bool SamePos(LocalTrack l, int i) => l.Disc == remote[i].Medium.Position && l.Position == remote[i].Track.Position;
+        Pass((l, i) => SamePos(l, i) && Titled(l, remote[i].Track) && LengthFits(l.LengthMs, Len(remote[i].Track), loose: true));
+        Pass((l, i) => Titled(l, remote[i].Track) && LengthFits(l.LengthMs, Len(remote[i].Track), loose: true));
+        Pass((l, i) => SamePos(l, i) && LengthFits(l.LengthMs, Len(remote[i].Track), loose: false));
+        if (local.Count == remote.Count)
+            Pass((l, i) => local[i] == l && LengthFits(l.LengthMs, Len(remote[i].Track), loose: false));
+
+        // A track with a mangled title (e.g. "Track 07", a video rip) still matches when its length is unmistakable.
+        const long Tight = 2000;
+        for (int i = 0; i < remote.Count; i++)
+        {
+            if (assigned[i] is not null || Len(remote[i].Track) is not { } rl) continue;
+            var near = local.Where(l => !taken.Contains(l.Id) && l.LengthMs is { } ll && Math.Abs(ll - rl) <= Tight).ToList();
+            if (near.Count != 1) continue;
+            long ll0 = near[0].LengthMs!.Value;
+            bool ambiguous = remote.Where((r, j) => j != i && assigned[j] is null && Len(r.Track) is { } o && Math.Abs(o - ll0) <= Tight).Any();
+            if (ambiguous) continue;
+            assigned[i] = near[0];
+            taken.Add(near[0].Id);
+        }
+        return assigned;
+    }
+
+    /// <summary>Unknown lengths never veto. Loose (titles agree): tolerates other mixes and long fades;
+    /// strict (position only): a few seconds of rip/encoder difference.</summary>
+    private static bool LengthFits(long? a, long? b, bool loose)
+    {
+        if (a is not { } x || b is not { } y) return true;
+        long diff = Math.Abs(x - y), max = Math.Max(x, y);
+        return loose ? diff <= Math.Max(30_000, max / 4) : diff <= Math.Max(7_000, max / 20);
+    }
+
+    /// <summary>An entity is one thing at a provider: a new match replaces the old id instead of adding to it.</summary>
+    private static void ReplaceExternal(Tx tx, string entityType, Ulid id, string provider, string? externalId)
+    {
+        if (externalId is null) return;
+        tx.Exec("DELETE FROM external_id WHERE entity_type = $1 AND entity_id = $2 AND provider = $3 AND external_id <> $4",
+            entityType, id, provider, externalId);
+        Importer.AddExternal(tx, entityType, id, provider, externalId);
+    }
 
     private void ApplyRecording(Tx tx, LocalTrack track, RecordingData rec, string src, long now)
     {
@@ -120,7 +202,11 @@ public sealed class MetadataApplier(ImageStore images)
         SetField(tx, "recording", recordingId, "length_ms", rec.LengthMs?.ToString(), src, now);
         if (rec.Credit.Count > 0)
             SetField(tx, "recording", recordingId, "artist_credit_id", ResolveCredit(tx, rec.Credit, src, now).ToString(), src, now);
-        Importer.AddExternal(tx, "recording", recordingId, src, rec.Id);
+        // Re-pointing a recording that other tracks share would relabel them too; only a sole user may replace.
+        if (tx.Long("SELECT COUNT(*) FROM track WHERE recording_id = $1", recordingId) <= 1)
+            ReplaceExternal(tx, "recording", recordingId, src, rec.Id);
+        else
+            Importer.AddExternal(tx, "recording", recordingId, src, rec.Id);
         foreach (var isrc in rec.Isrcs) Importer.AddExternal(tx, "recording", recordingId, "isrc", isrc);
         ReplaceGenres(tx, "recording", recordingId, rec.Genres, src);
         if (rec.FirstReleaseDate is { } frd)

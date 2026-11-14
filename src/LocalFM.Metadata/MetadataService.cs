@@ -1,6 +1,8 @@
 using LocalFM.Core;
 using LocalFM.Library;
 using LocalFM.Library.Enrich;
+using LocalFM.Library.Import;
+using LocalFM.Native;
 
 namespace LocalFM.Metadata;
 
@@ -95,8 +97,13 @@ public sealed class MetadataService
     private static double Rank(ReleaseCandidate c, AlbumQuery q)
     {
         double score = c.Score * 0.6;
-        if (q.TrackCount > 0)
+        // A lone song says nothing about the release's size (it is usually one track of a full album).
+        if (q.TrackCount == 1)
+            score += 15;
+        else if (q.TrackCount > 1)
             score += c.TrackCount == q.TrackCount ? 25 : Math.Max(0, 25 - 5 * Math.Abs(c.TrackCount - q.TrackCount));
+        // CD-Rs are mostly promos and bootlegs: rarely the edition someone ripped.
+        if (c.Format?.Contains("CD-R", StringComparison.OrdinalIgnoreCase) == true) score -= 10;
         if (q.Year is not null && c.Date is { Length: >= 4 } d)
             score += d[..4] == q.Year ? 10 : 0;
         if (string.Equals(c.Status, "Official", StringComparison.OrdinalIgnoreCase)) score += 5;
@@ -114,10 +121,31 @@ public sealed class MetadataService
             cover = await CoverArt.FrontAsync(data.Id, data.Group.Id, ct).ConfigureAwait(false)
                 ?? await Itunes.FrontAsync(data.Title, ReleaseData.CreditText(data.Credit), ct).ConfigureAwait(false);
         }
+        var fileTitles = FileTagTitles(releaseId);
         var result = await _db.Writer.Run((c, t) =>
-            _applier.ApplyRelease(new Tx(c, t), releaseId, data, cover?.Data, cover?.Mime, cover?.Source)).ConfigureAwait(false);
+            _applier.ApplyRelease(new Tx(c, t), releaseId, data, cover?.Data, cover?.Mime, cover?.Source, fileTitles)).ConfigureAwait(false);
         Log.Info("Metadata", $"Applied {data.Provider} release {data.Id} to {releaseId}: {result}");
         return result;
+    }
+
+    /// <summary>The title each track's file carries in its own tags. The stored title may have drifted from it
+    /// (an earlier wrong match); the tag is a second chance to recognise the song.</summary>
+    private Dictionary<Ulid, string> FileTagTitles(Ulid releaseId)
+    {
+        List<(Ulid Track, string Path)> files;
+        using (var c = _db.Open())
+            files = c.Query("""
+                SELECT t.id, f.path FROM track t JOIN medium m ON m.id = t.medium_id JOIN audio_file f ON f.track_id = t.id
+                WHERE m.release_id = $1 AND f.missing = 0
+                """, r => (r.Id(0), r.GetString(1)), releaseId);
+        var titles = new Dictionary<Ulid, string>();
+        foreach (var (track, path) in files)
+        {
+            if (titles.ContainsKey(track) || !MediaProbe.TryOpen(path, out var probe) || probe is null) continue;
+            using (probe)
+                if (FileTags.Parse(probe.Tags).Title is { Length: > 0 } title) titles[track] = title;
+        }
+        return titles;
     }
 
     /// <summary>Downloads a front cover for a release that has none (by MusicBrainz id when known, else iTunes).</summary>

@@ -69,6 +69,11 @@ public sealed partial class MatchViewModel : ObservableObject
         {
             var result = await Task.Run(() => _host.Metadata.ApplyReleaseAsync(_releaseId, c.Id, FetchCover));
             if (result is null) { Status = "MusicBrainz did not return that release. Try again later."; return; }
+            if (!result.Applied)
+            {
+                Status = "None of your tracks fit this release (titles and lengths differ), so nothing was changed. Try another edition.";
+                return;
+            }
             Status = $"Applied: {result.TracksMatched} tracks matched" +
                      (result.TracksUnmatched > 0 ? $", {result.TracksUnmatched} not matched (left as they were)" : "") +
                      (result.CoverStored ? ", cover saved" : "") + ".";
