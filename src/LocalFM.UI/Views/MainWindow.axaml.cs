@@ -56,7 +56,11 @@ public partial class MainWindow : Window
     protected override void OnOpened(EventArgs e)
     {
         base.OnOpened(e);
-        if (Program.SnapshotPath is { } path) _ = SnapshotAndExit(path);
+        if (Program.SnapshotPath is { } path)
+        {
+            if (int.TryParse(Environment.GetEnvironmentVariable("LOCALFM_SNAPSHOT_HEIGHT"), out int height)) Height = height;
+            _ = SnapshotAndExit(path);
+        }
     }
 
     private void CommitSeek()
@@ -124,6 +128,12 @@ public partial class MainWindow : Window
             if (Environment.GetEnvironmentVariable("LOCALFM_SNAPSHOT_LYRICS") == "1" && Vm is { } v3) v3.Lyrics.IsOpen = true;
             int wait = int.TryParse(Environment.GetEnvironmentVariable("LOCALFM_SNAPSHOT_WAIT"), out int w) ? w : 2500;
             await Task.Delay(wait); // let pages, covers and lookups finish
+            if (double.TryParse(Environment.GetEnvironmentVariable("LOCALFM_SNAPSHOT_SCROLL"), out double scroll)
+                && this.GetVisualDescendants().OfType<ScrollViewer>().FirstOrDefault(sv => sv.Extent.Height > sv.Viewport.Height + 1) is { } scroller)
+            {
+                scroller.Offset = new Vector(0, scroll);
+                await Task.Delay(400);
+            }
             // The miniplayer replaces this window when it is open.
             Window shown = (Application.Current?.ApplicationLifetime as Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime)?
                 .Windows.FirstOrDefault(w => w is MiniPlayerWindow && w.IsVisible) ?? this;

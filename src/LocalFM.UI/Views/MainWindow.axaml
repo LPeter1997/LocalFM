@@ -19,6 +19,7 @@
     <DataTemplate DataType="vm:AlbumEditorViewModel"><v:AlbumEditorView /></DataTemplate>
     <DataTemplate DataType="vm:TidyViewModel"><v:TidyView /></DataTemplate>
     <DataTemplate DataType="vm:SoundViewModel"><v:SoundView /></DataTemplate>
+    <DataTemplate DataType="vm:StatsViewModel"><v:StatsView /></DataTemplate>
   </Window.DataTemplates>
 
   <Grid RowDefinitions="*,Auto" Background="{StaticResource Bg}">

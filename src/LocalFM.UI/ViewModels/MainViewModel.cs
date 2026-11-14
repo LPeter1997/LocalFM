@@ -35,6 +35,7 @@ public sealed partial class MainViewModel : ObservableObject
             new("Tracks", Icon("IcoTracks"), new TracksViewModel(this)),
             new("Playlists", Icon("IcoPlaylist"), new PlaylistsViewModel(this)),
             new("Queue", Icon("IcoQueue"), Queue),
+            new("Stats", Icon("IcoStats"), new StatsViewModel(this)),
             new("Tidy up", Icon("IcoMagic"), new TidyViewModel(this)),
             new("Sound", Icon("IcoSliders"), new SoundViewModel(this)),
             new("Sources", Icon("IcoFolder"), Sources),
