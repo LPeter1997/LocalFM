@@ -36,6 +36,7 @@ public sealed partial class MainViewModel : ObservableObject
             new("Playlists", Icon("IcoPlaylist"), new PlaylistsViewModel(this)),
             new("Queue", Icon("IcoQueue"), Queue),
             new("Tidy up", Icon("IcoMagic"), new TidyViewModel(this)),
+            new("Sound", Icon("IcoSliders"), new SoundViewModel(this)),
             new("Sources", Icon("IcoFolder"), Sources),
         ];
         _selectedNav = Nav[0];

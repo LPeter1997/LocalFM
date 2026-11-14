@@ -203,7 +203,7 @@ public sealed class PlayerService : IDisposable
         _resume = null;
         _engine.Play(Handle(item), start);
         var next = Queue.PeekNext();
-        _engine.SetNext(next is null ? null : Handle(next));
+        _engine.SetNext(next is null ? null : Handle(next, item));
     }
 
     private void OnQueueChanged()
@@ -218,10 +218,35 @@ public sealed class PlayerService : IDisposable
     {
         if (_engine.State == PlaybackState.Stopped && _engine.Current is null) return;
         var next = Queue.PeekNext();
-        _engine.SetNext(next is null ? null : Handle(next));
+        _engine.SetNext(next is null ? null : Handle(next, Queue.Current));
     }
 
-    private TrackHandle Handle(QueueItem item) => new(item.Track.Path, item.Id, Gain(item.Track));
+    private TrackHandle Handle(QueueItem item, QueueItem? previous = null) =>
+        new(item.Track.Path, item.Id, Gain(item.Track), JoinGapless: GaplessAlbums && previous is not null && Continues(previous.Track, item.Track));
+
+    /// <summary>Whether <paramref name="b"/> is the track right after <paramref name="a"/> on the same release.</summary>
+    public static bool Continues(TrackInfo a, TrackInfo b) =>
+        a.ReleaseId == b.ReleaseId &&
+        ((b.Disc == a.Disc && b.Position == a.Position + 1) || (b.Disc == a.Disc + 1 && b.Position == 1));
+
+    /// <summary>With crossfade on, still play consecutive album tracks gaplessly (live albums, DJ mixes, segues).</summary>
+    public bool GaplessAlbums { get; set; } = true;
+
+    /// <summary>Applies just the equalizer (cheap; for slider drags).</summary>
+    public void ApplyEqualizer(SoundSettings s) => _engine.SetEqualizer(s.Bands(), s.EffectivePreampDb);
+
+    /// <summary>Applies equalizer, crossfade and loudness settings. The EQ is heard at once; the rest from the next track.</summary>
+    public void ApplySound(SoundSettings s)
+    {
+        _engine.SetEqualizer(s.Bands(), s.EffectivePreampDb);
+        _engine.Crossfade = TimeSpan.FromSeconds(s.CrossfadeSeconds);
+        lock (_gate)
+        {
+            ReplayGain = s.ReplayGain;
+            GaplessAlbums = s.GaplessAlbums;
+            UpdateNext();
+        }
+    }
 
     private float Gain(TrackInfo t)
     {

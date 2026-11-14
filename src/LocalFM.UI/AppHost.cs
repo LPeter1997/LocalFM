@@ -37,7 +37,11 @@ public sealed class AppHost : IDisposable
             Engine = new PlaybackEngine(OutputMode.Null);
         }
         Player = new PlayerService(Engine, History, Queries);
+        Sound = SoundSettings.Load(History);
+        Player.ApplySound(Sound);
     }
+
+    public SoundSettings Sound { get; }
 
     public AppPaths Paths { get; }
     public Database Db { get; }

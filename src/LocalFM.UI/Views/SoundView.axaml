@@ -1,0 +1,98 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:LocalFM.UI.ViewModels"
+             xmlns:app="using:LocalFM.App"
+             x:Class="LocalFM.UI.Views.SoundView"
+             x:DataType="vm:SoundViewModel">
+  <ScrollViewer>
+    <StackPanel Margin="24,0,24,24" Spacing="14" MaxWidth="900" HorizontalAlignment="Left">
+      <TextBlock Classes="h1" Text="Sound" />
+
+      <!-- Equalizer -->
+      <Border Background="{StaticResource Surface}" CornerRadius="12" Padding="18">
+        <StackPanel Spacing="14">
+          <Grid ColumnDefinitions="*,Auto,Auto">
+            <StackPanel Orientation="Horizontal" Spacing="12">
+              <TextBlock Classes="h2" Text="Equalizer" VerticalAlignment="Center" />
+              <ToggleSwitch IsChecked="{Binding EqEnabled}" OnContent="" OffContent="" VerticalAlignment="Center" />
+            </StackPanel>
+            <ComboBox Grid.Column="1" ItemsSource="{Binding Presets}" SelectedItem="{Binding SelectedPreset}" PlaceholderText="Custom"
+                      MinWidth="170" Margin="0,0,8,0">
+              <ComboBox.ItemTemplate>
+                <DataTemplate x:DataType="app:EqPreset"><TextBlock Text="{Binding Name}" /></DataTemplate>
+              </ComboBox.ItemTemplate>
+            </ComboBox>
+            <Button Grid.Column="2" Classes="ghost" Command="{Binding ResetEqCommand}">Reset</Button>
+          </Grid>
+
+          <Border Height="120" CornerRadius="8" Background="{StaticResource Surface2}" ClipToBounds="True"
+                  Opacity="{Binding EqEnabled, Converter={x:Static vm:SoundConverters.EnabledOpacity}}">
+            <Viewbox Stretch="Fill">
+              <Canvas Width="1000" Height="240">
+                <Line StartPoint="0,120" EndPoint="1000,120" Stroke="{StaticResource Line}" StrokeThickness="2" />
+                <Polyline Points="{Binding Curve}" Stroke="{StaticResource Accent}" StrokeThickness="4" StrokeJoin="Round" />
+              </Canvas>
+            </Viewbox>
+          </Border>
+
+          <Grid ColumnDefinitions="Auto,*">
+            <!-- preamp -->
+            <StackPanel Spacing="4" Margin="0,0,18,0" HorizontalAlignment="Center">
+              <TextBlock Text="{Binding PreampText}" Classes="small muted" HorizontalAlignment="Center" />
+              <Slider Orientation="Vertical" Height="150" Minimum="-12" Maximum="12" Value="{Binding Preamp}"
+                      TickFrequency="0.5" IsSnapToTickEnabled="True" HorizontalAlignment="Center" Classes="eq" />
+              <TextBlock Text="Pre" Classes="small faint" HorizontalAlignment="Center" />
+            </StackPanel>
+            <ItemsControl Grid.Column="1" ItemsSource="{Binding Bands}">
+              <ItemsControl.ItemsPanel>
+                <ItemsPanelTemplate><UniformGrid Rows="1" /></ItemsPanelTemplate>
+              </ItemsControl.ItemsPanel>
+              <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="vm:EqBandViewModel">
+                  <StackPanel Spacing="4" HorizontalAlignment="Center">
+                    <TextBlock Text="{Binding GainText}" Classes="small muted" HorizontalAlignment="Center" />
+                    <Slider Orientation="Vertical" Height="150" Minimum="-12" Maximum="12" Value="{Binding Gain}"
+                            TickFrequency="0.5" IsSnapToTickEnabled="True" HorizontalAlignment="Center" Classes="eq" />
+                    <TextBlock Text="{Binding Label}" Classes="small faint" HorizontalAlignment="Center" />
+                  </StackPanel>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </Grid>
+
+          <WrapPanel ItemSpacing="10" LineSpacing="8">
+            <CheckBox IsChecked="{Binding PreventClipping}" VerticalAlignment="Center"
+                      ToolTip.Tip="Lowers the overall level by the largest boost, so boosting never distorts">Prevent clipping</CheckBox>
+            <TextBox Text="{Binding NewPresetName}" PlaceholderText="Preset name" Width="170" CornerRadius="8" />
+            <Button Classes="ghost" Command="{Binding SavePresetCommand}">Save as preset</Button>
+            <Button Classes="ghost" Command="{Binding DeletePresetCommand}" IsVisible="{Binding CanDeletePreset}">Delete preset</Button>
+          </WrapPanel>
+        </StackPanel>
+      </Border>
+
+      <!-- Crossfade -->
+      <Border Background="{StaticResource Surface}" CornerRadius="12" Padding="18">
+        <StackPanel Spacing="10">
+          <Grid ColumnDefinitions="*,Auto">
+            <TextBlock Classes="h2" Text="Crossfade" />
+            <TextBlock Grid.Column="1" Text="{Binding CrossfadeText}" Classes="muted" VerticalAlignment="Center" />
+          </Grid>
+          <Slider Minimum="0" Maximum="12" Value="{Binding Crossfade}" TickFrequency="0.5" IsSnapToTickEnabled="True" />
+          <CheckBox IsChecked="{Binding GaplessAlbums}">Keep albums gapless (no crossfade between consecutive tracks of an album)</CheckBox>
+          <TextBlock Classes="faint small" TextWrapping="Wrap"
+                     Text="Takes effect from the next track change. Skipping by hand always switches right away." />
+        </StackPanel>
+      </Border>
+
+      <!-- Loudness -->
+      <Border Background="{StaticResource Surface}" CornerRadius="12" Padding="18">
+        <StackPanel Spacing="10">
+          <TextBlock Classes="h2" Text="Volume levelling (ReplayGain)" />
+          <TextBlock Classes="muted small" TextWrapping="Wrap"
+                     Text="Evens out loudness between tracks using ReplayGain tags. Per album keeps the dynamics within an album." />
+          <ComboBox ItemsSource="{Binding ReplayGainModes}" SelectedIndex="{Binding ReplayGainIndex}" MinWidth="170" />
+        </StackPanel>
+      </Border>
+    </StackPanel>
+  </ScrollViewer>
+</UserControl>
