@@ -11,7 +11,7 @@
     <Grid DockPanel.Dock="Top" ColumnDefinitions="Auto,*" Margin="24,4,24,16">
       <Border Width="200" Height="200" CornerRadius="10" ClipToBounds="True" Background="{StaticResource Surface3}" BoxShadow="0 8 30 0 #60000000">
         <Panel>
-          <Path Classes="icon" Data="{StaticResource IcoAlbum}" Width="64" Height="64" Stroke="{StaticResource Faint}" StrokeThickness="1.2" />
+          <c:Icon Classes="icon" Data="{StaticResource IcoAlbum}" Width="64" Height="64" Stroke="{StaticResource Faint}" StrokeThickness="1.2" />
           <c:CoverImage Path="{Binding Album.CoverPath}" DecodeWidth="400" />
           <Button Classes="ghost" HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,12" FontSize="12"
                   Command="{Binding FetchCoverCommand}" IsVisible="{Binding Album.CoverPath, Converter={x:Static ObjectConverters.IsNull}}">Fetch cover</Button>
@@ -21,8 +21,8 @@
         <TextBlock Classes="muted small" Text="ALBUM" FontWeight="SemiBold" LetterSpacing="1" />
         <TextBlock Classes="h1" FontSize="34" Text="{Binding Album.Title}" TextWrapping="Wrap" />
         <TextBlock>
-          <Run Text="{Binding Album.Artist}" FontWeight="SemiBold" />
-          <Run Text="  ·  " Foreground="{StaticResource Faint}" /><Run Text="{Binding Summary}" Foreground="{StaticResource Muted}" />
+          <!-- One line: a line break between runs would add a space before the dot -->
+          <Run Text="{Binding Album.Artist}" FontWeight="SemiBold" /><Run Text="  ·  " Foreground="{StaticResource Faint}" /><Run Text="{Binding Summary}" Foreground="{StaticResource Muted}" />
         </TextBlock>
         <WrapPanel Margin="0,10,0,0" ItemSpacing="8" LineSpacing="8">
           <Button Classes="primary" Command="{Binding PlayAllCommand}">Play</Button>
@@ -31,13 +31,13 @@
           <Button Classes="ghost" Command="{Binding EnqueueAlbumCommand}">Add to queue</Button>
           <Button Classes="ghost" Command="{Binding ToggleMatchCommand}" ToolTip.Tip="Match this album with MusicBrainz">
             <StackPanel Orientation="Horizontal" Spacing="6">
-              <Path Classes="icon" Data="{StaticResource IcoMagic}" Width="15" Height="15" />
+              <c:Icon Classes="icon" Data="{StaticResource IcoMagic}" Width="15" Height="15" />
               <TextBlock Text="Find metadata" />
             </StackPanel>
           </Button>
           <Button Classes="ghost" Command="{Binding EditCommand}" ToolTip.Tip="Edit titles, artists and numbers by hand">
             <StackPanel Orientation="Horizontal" Spacing="6">
-              <Path Classes="icon" Data="{StaticResource IcoEdit}" Width="15" Height="15" />
+              <c:Icon Classes="icon" Data="{StaticResource IcoEdit}" Width="15" Height="15" />
               <TextBlock Text="Edit" />
             </StackPanel>
           </Button>
@@ -55,7 +55,7 @@
               <Grid ColumnDefinitions="*,Auto" Margin="0,2">
                 <TextBlock VerticalAlignment="Center" TextTrimming="CharacterEllipsis">
                   <Run Text="{Binding Title}" FontWeight="Medium" /><Run Text="    " />
-                  <Run Text="{Binding Converter={x:Static ui:Converters.AlbumFacts}}" Foreground="{StaticResource Muted}" />
+                  <Run Text="{Binding Converter={x:Static ui:Converters.AlbumFacts}, Mode=OneWay}" Foreground="{StaticResource Muted}" />
                 </TextBlock>
                 <Button Grid.Column="1" Classes="ghost" FontSize="12" Margin="12,0,0,0"
                         Command="{Binding $parent[ItemsControl].((vm:AlbumDetailViewModel)DataContext).MergeCopyCommand}" CommandParameter="{Binding}">Merge into this album</Button>
@@ -69,7 +69,7 @@
             IsVisible="{Binding Move, Converter={x:Static ObjectConverters.IsNotNull}}">
       <StackPanel DataContext="{Binding Move}" x:DataType="vm:MoveViewModel" Spacing="10">
         <TextBlock Text="{Binding Heading}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
-        <TextBox x:Name="MoveSearch" Text="{Binding Search}" PlaceholderText="Search albums by title or artist" CornerRadius="8" />
+        <TextBox x:Name="MoveSearch" Text="{Binding Search}" PlaceholderText="Search albums by title or artist" />
         <TextBlock Text="{Binding Status}" Classes="muted small" TextWrapping="Wrap"
                    IsVisible="{Binding Status, Converter={x:Static ObjectConverters.IsNotNull}}" />
         <ListBox x:Name="MoveResults" Classes="rows" ItemsSource="{Binding Results}" SelectedItem="{Binding Selected}" MaxHeight="240"
@@ -79,7 +79,7 @@
               <Grid ColumnDefinitions="36,*,Auto">
                 <Border Width="32" Height="32" CornerRadius="4" ClipToBounds="True" Background="{StaticResource Surface3}" VerticalAlignment="Center">
                   <Panel>
-                    <Path Classes="icon" Data="{StaticResource IcoAlbum}" Width="16" Height="16" Stroke="{StaticResource Faint}" />
+                    <c:Icon Classes="icon" Data="{StaticResource IcoAlbum}" Width="16" Height="16" Stroke="{StaticResource Faint}" />
                     <c:CoverImage Path="{Binding CoverPath}" DecodeWidth="64" />
                   </Panel>
                 </Border>
@@ -103,8 +103,8 @@
             IsVisible="{Binding MatchOpen}">
       <StackPanel DataContext="{Binding Match}" x:DataType="vm:MatchViewModel" Spacing="10">
         <Grid ColumnDefinitions="*,*,Auto,Auto" >
-          <TextBox Text="{Binding Title}" PlaceholderText="Album title" CornerRadius="8" Margin="0,0,8,0" />
-          <TextBox Grid.Column="1" Text="{Binding Artist}" PlaceholderText="Artist (optional)" CornerRadius="8" Margin="0,0,8,0" />
+          <TextBox Text="{Binding Title}" PlaceholderText="Album title" Margin="0,0,8,0" />
+          <TextBox Grid.Column="1" Text="{Binding Artist}" PlaceholderText="Artist (optional)" Margin="0,0,8,0" />
           <Button Grid.Column="2" Classes="ghost" Command="{Binding SearchCommand}" IsEnabled="{Binding !Busy}">Search</Button>
           <CheckBox Grid.Column="3" IsChecked="{Binding FetchCover}" Margin="12,0,0,0">Download cover</CheckBox>
         </Grid>
@@ -129,7 +129,7 @@
                   <Run Text="{Binding Date}" /><Run Text="  " /><Run Text="{Binding Country}" />
                 </TextBlock>
                 <TextBlock Grid.Column="2" Classes="muted small" VerticalAlignment="Center" TextTrimming="CharacterEllipsis">
-                  <Run Text="{Binding Format}" /><Run Text=" · " /><Run Text="{Binding TrackCount, Converter={x:Static ui:Converters.Tracks}}" />
+                  <Run Text="{Binding Format}" /><Run Text=" · " /><Run Text="{Binding TrackCount, Converter={x:Static ui:Converters.Tracks}, Mode=OneWay}" />
                 </TextBlock>
                 <TextBlock Grid.Column="3" Classes="faint small" VerticalAlignment="Center" TextTrimming="CharacterEllipsis">
                   <Run Text="{Binding Label}" /><Run Text="  " /><Run Text="{Binding CatalogNumber}" />

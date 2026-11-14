@@ -16,7 +16,7 @@
       <WrapPanel Grid.Column="1" ItemSpacing="6" LineSpacing="6" HorizontalAlignment="Right" ItemsAlignment="End" Margin="12,0,0,0">
         <Button Classes="ghost" Command="{Binding ReshuffleCommand}" ToolTip.Tip="Shuffle what is up next">Shuffle upcoming</Button>
         <Button Classes="ghost" Command="{Binding ClearUpcomingCommand}">Clear upcoming</Button>
-        <TextBox Text="{Binding PlaylistName}" PlaceholderText="Playlist name" Width="160" CornerRadius="18" VerticalContentAlignment="Center">
+        <TextBox Text="{Binding PlaylistName}" PlaceholderText="Playlist name" Width="160">
           <TextBox.KeyBindings><KeyBinding Gesture="Enter" Command="{Binding SaveQueueCommand}" /></TextBox.KeyBindings>
         </TextBox>
         <Button Classes="ghost" Command="{Binding SaveQueueCommand}" ToolTip.Tip="Save the whole queue as a playlist">Save queue</Button>
@@ -29,10 +29,14 @@
           <Grid ColumnDefinitions="44,2*,1.4*,64,Auto" Opacity="{Binding Opacity}">
             <Panel>
               <Border Width="36" Height="36" CornerRadius="4" ClipToBounds="True" Background="{StaticResource Surface3}" HorizontalAlignment="Left">
-                <c:CoverImage Path="{Binding Track.CoverPath}" DecodeWidth="72" />
+                <Panel>
+                  <!-- No cover: the same faint note as the player bar -->
+                  <c:Icon Classes="icon" Data="{StaticResource IcoNote}" Width="16" Height="16" Stroke="{StaticResource Faint}" StrokeThickness="1.4" />
+                  <c:CoverImage Path="{Binding Track.CoverPath}" DecodeWidth="72" />
+                </Panel>
               </Border>
               <Border Width="36" Height="36" CornerRadius="4" Background="#A0000000" HorizontalAlignment="Left" IsVisible="{Binding IsCurrent}">
-                <Path Classes="icon fill" Data="{StaticResource IcoPlay}" Width="14" Height="14" Fill="{StaticResource Accent}" />
+                <c:Icon Classes="icon fill" Data="{StaticResource IcoPlay}" Width="14" Height="14" Fill="{StaticResource Accent}" />
               </Border>
             </Panel>
             <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="4,0,12,0">
@@ -43,13 +47,13 @@
             <TextBlock Grid.Column="3" Text="{Binding Track.DurationMs, Converter={x:Static ui:Converters.Duration}}" Classes="muted" VerticalAlignment="Center" HorizontalAlignment="Right" />
             <StackPanel Grid.Column="4" Classes="actions" Orientation="Horizontal" Spacing="2" Margin="14,0,0,0">
               <Button Classes="flat" Padding="4" ToolTip.Tip="Move up" Command="{Binding $parent[UserControl].((vm:QueueViewModel)DataContext).MoveUpCommand}" CommandParameter="{Binding}">
-                <Path Classes="icon" Data="{StaticResource IcoUp}" Width="14" Height="14" />
+                <c:Icon Classes="icon" Data="{StaticResource IcoUp}" Width="14" Height="14" />
               </Button>
               <Button Classes="flat" Padding="4" ToolTip.Tip="Move down" Command="{Binding $parent[UserControl].((vm:QueueViewModel)DataContext).MoveDownCommand}" CommandParameter="{Binding}">
-                <Path Classes="icon" Data="{StaticResource IcoDown}" Width="14" Height="14" />
+                <c:Icon Classes="icon" Data="{StaticResource IcoDown}" Width="14" Height="14" />
               </Button>
               <Button Classes="flat" Padding="4" ToolTip.Tip="Remove" Command="{Binding $parent[UserControl].((vm:QueueViewModel)DataContext).RemoveCommand}" CommandParameter="{Binding}">
-                <Path Classes="icon" Data="{StaticResource IcoTrash}" Width="14" Height="14" />
+                <c:Icon Classes="icon" Data="{StaticResource IcoTrash}" Width="14" Height="14" />
               </Button>
             </StackPanel>
           </Grid>

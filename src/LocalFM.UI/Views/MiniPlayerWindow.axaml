@@ -12,7 +12,7 @@
     <Border Grid.RowSpan="2" Width="88" Height="88" CornerRadius="8" ClipToBounds="True" Background="{StaticResource Surface3}"
             VerticalAlignment="Top">
       <Panel>
-        <Path Classes="icon" Data="{StaticResource IcoNote}" Width="28" Height="28" Stroke="{StaticResource Faint}" />
+        <c:Icon Classes="icon" Data="{StaticResource IcoNote}" Width="28" Height="28" Stroke="{StaticResource Faint}" />
         <c:CoverImage Path="{Binding CoverPath}" DecodeWidth="176" />
       </Panel>
     </Border>
@@ -21,20 +21,20 @@
       <TextBlock Grid.Row="1" Text="{Binding Artist}" Classes="muted small" TextTrimming="CharacterEllipsis" />
       <Button Grid.Column="1" Grid.RowSpan="2" Classes="flat" x:Name="ExpandButton" ToolTip.Tip="Back to the full window"
               VerticalAlignment="Top" Margin="6,-4,-4,0">
-        <Path Classes="icon" Data="{StaticResource IcoExpand}" />
+        <c:Icon Classes="icon" Data="{StaticResource IcoExpand}" />
       </Button>
       <StackPanel Grid.Row="2" Grid.ColumnSpan="2" Orientation="Horizontal" Spacing="8" VerticalAlignment="Bottom">
         <Button Classes="flat" Command="{Binding PreviousCommand}" ToolTip.Tip="Previous">
-          <Path Classes="icon fill" Data="{StaticResource IcoPrev}" />
+          <c:Icon Classes="icon fill" Data="{StaticResource IcoPrev}" />
         </Button>
         <Button Classes="play" Command="{Binding PlayPauseCommand}" ToolTip.Tip="Play/Pause (Space)">
           <Panel>
-            <Path Classes="icon fill" Data="{StaticResource IcoPlay}" Width="20" Height="20" Margin="2,0,0,0" IsVisible="{Binding !IsPlaying}" />
-            <Path Classes="icon fill" Data="{StaticResource IcoPause}" Width="18" Height="18" IsVisible="{Binding IsPlaying}" />
+            <c:Icon Classes="icon fill" Data="{StaticResource IcoPlay}" Width="20" Height="20" Margin="3,0,0,0" IsVisible="{Binding !IsPlaying}" />
+            <c:Icon Classes="icon fill" Data="{StaticResource IcoPause}" Width="18" Height="18" IsVisible="{Binding IsPlaying}" />
           </Panel>
         </Button>
         <Button Classes="flat" Command="{Binding NextCommand}" ToolTip.Tip="Next">
-          <Path Classes="icon fill" Data="{StaticResource IcoNext}" />
+          <c:Icon Classes="icon fill" Data="{StaticResource IcoNext}" />
         </Button>
         <TextBlock VerticalAlignment="Center" Classes="faint small" Margin="6,0,0,0">
           <Run Text="{Binding PositionText}" /><Run Text=" / " /><Run Text="{Binding DurationText}" />

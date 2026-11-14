@@ -16,7 +16,11 @@
         <DataTemplate x:DataType="lib:TrackInfo">
           <Grid ColumnDefinitions="44,2*,1.4*,64">
             <Border Width="36" Height="36" CornerRadius="4" ClipToBounds="True" Background="{StaticResource Surface3}" HorizontalAlignment="Left">
-              <c:CoverImage Path="{Binding CoverPath}" DecodeWidth="72" />
+              <Panel>
+                  <!-- No cover: the same faint note as the player bar -->
+                  <c:Icon Classes="icon" Data="{StaticResource IcoNote}" Width="16" Height="16" Stroke="{StaticResource Faint}" StrokeThickness="1.4" />
+                  <c:CoverImage Path="{Binding CoverPath}" DecodeWidth="72" />
+                </Panel>
             </Border>
             <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="4,0,12,0">
               <TextBlock Text="{Binding Title}" TextTrimming="CharacterEllipsis" />

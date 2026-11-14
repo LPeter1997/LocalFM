@@ -14,7 +14,7 @@
           <Grid ColumnDefinitions="44,*,Auto">
             <Border Width="36" Height="36" CornerRadius="18" Background="{StaticResource Surface3}" ClipToBounds="True">
               <Panel>
-                <Path Classes="icon" Data="{StaticResource IcoArtist}" Width="16" Height="16" Stroke="{StaticResource Muted}" />
+                <c:Icon Classes="icon" Data="{StaticResource IcoArtist}" Width="16" Height="16" Stroke="{StaticResource Muted}" />
                 <c:CoverImage Path="{Binding PhotoPath}" DecodeWidth="72" />
               </Panel>
             </Border>

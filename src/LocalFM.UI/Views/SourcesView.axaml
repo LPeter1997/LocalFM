@@ -22,11 +22,11 @@
         <DataTemplate x:DataType="lib:Source">
           <Border Background="{StaticResource Surface}" CornerRadius="10" Padding="14,10" Margin="0,0,0,6">
             <Grid ColumnDefinitions="Auto,*,Auto">
-              <Path Classes="icon" Data="{StaticResource IcoFolder}" Stroke="{StaticResource Muted}" />
+              <c:Icon Classes="icon" Data="{StaticResource IcoFolder}" Stroke="{StaticResource Muted}" />
               <TextBlock Grid.Column="1" Text="{Binding Path}" VerticalAlignment="Center" Margin="12,0" TextTrimming="CharacterEllipsis" />
               <Button Grid.Column="2" Classes="flat" ToolTip.Tip="Remove source (its tracks are kept as missing)"
                       Command="{Binding $parent[UserControl].((vm:SourcesViewModel)DataContext).RemoveCommand}" CommandParameter="{Binding}">
-                <Path Classes="icon" Data="{StaticResource IcoTrash}" Width="16" Height="16" />
+                <c:Icon Classes="icon" Data="{StaticResource IcoTrash}" Width="16" Height="16" />
               </Button>
             </Grid>
           </Border>

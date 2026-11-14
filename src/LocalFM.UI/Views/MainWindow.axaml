@@ -30,12 +30,12 @@
     <Grid x:Name="TitleBar" Height="48" ColumnDefinitions="216,Auto,*,*,Auto" Background="{StaticResource Surface}">
       <StackPanel Orientation="Horizontal" Spacing="8" Margin="20,0,0,0" VerticalAlignment="Center">
         <Border Width="26" Height="26" CornerRadius="7" Background="{StaticResource Accent}">
-          <Path Classes="icon" Data="{StaticResource IcoNote}" Width="15" Height="15" Stroke="White" />
+          <c:Icon Classes="icon" Data="{StaticResource IcoNote}" Width="15" Height="15" Stroke="White" />
         </Border>
         <TextBlock Text="LocalFM" FontSize="18" FontWeight="Bold" VerticalAlignment="Center" />
       </StackPanel>
       <Button Grid.Column="1" Classes="flat" Command="{Binding BackCommand}" IsVisible="{Binding CanGoBack}" Margin="8,0,0,0" ToolTip.Tip="Back (Alt+Left)">
-        <Path Classes="icon" Data="{StaticResource IcoBack}" />
+        <c:Icon Classes="icon" Data="{StaticResource IcoBack}" />
       </Button>
       <!-- The search box takes up to 280 px and gives way when the window is narrow -->
       <TextBox Grid.Column="3" x:Name="Search" PlaceholderText="Search" MaxWidth="280" VerticalAlignment="Center" Margin="12,0,12,0"
@@ -57,7 +57,7 @@
             <ListBox.ItemTemplate>
               <DataTemplate x:DataType="vm:NavItem">
                 <StackPanel Orientation="Horizontal" Spacing="12">
-                  <Path Classes="icon" Data="{Binding Icon}" />
+                  <c:Icon Classes="icon" Data="{Binding Icon}" />
                   <TextBlock Text="{Binding Name}" VerticalAlignment="Center" FontWeight="Medium" />
                 </StackPanel>
               </DataTemplate>
@@ -92,7 +92,7 @@
             <ToggleButton Grid.Column="1" Classes="chip" IsChecked="{Binding CoverColours}" Margin="0,0,10,0"
                           ToolTip.Tip="Tint the app with colours from the album cover">
               <StackPanel Orientation="Horizontal" Spacing="7">
-                <Path Classes="icon" Data="{StaticResource IcoPalette}" Width="16" Height="16" />
+                <c:Icon Classes="icon" Data="{StaticResource IcoPalette}" Width="16" Height="16" />
                 <TextBlock Text="Cover colours" VerticalAlignment="Center" />
               </StackPanel>
             </ToggleButton>
@@ -107,7 +107,7 @@
               <Border Width="420" Height="420" CornerRadius="12" ClipToBounds="True" Margin="0,0,0,20"
                       Background="{StaticResource Surface3}" BoxShadow="0 18 50 0 #A0000000">
                 <Panel>
-                  <Path Classes="icon" Data="{StaticResource IcoNote}" Width="80" Height="80" Stroke="{StaticResource Faint}" />
+                  <c:Icon Classes="icon" Data="{StaticResource IcoNote}" Width="80" Height="80" Stroke="{StaticResource Faint}" />
                   <c:CoverImage Path="{Binding NowPlaying.CoverPath}" DecodeWidth="840" />
                 </Panel>
               </Border>
@@ -132,7 +132,7 @@
             <Button Grid.Column="1" Classes="flat" Content="Timing off?" FontSize="12" IsVisible="{Binding Synced}"
                     Command="{Binding OtherVersionCommand}" ToolTip.Tip="Try another synced version from LRCLIB" />
             <Button Grid.Column="2" Classes="flat" Command="{Binding RefetchCommand}" ToolTip.Tip="Look up again">
-              <Path Classes="icon" Data="{StaticResource IcoRefresh}" Width="16" Height="16" />
+              <c:Icon Classes="icon" Data="{StaticResource IcoRefresh}" Width="16" Height="16" />
             </Button>
           </Grid>
           <TextBlock DockPanel.Dock="Bottom" Text="{Binding Source}" Classes="faint small" Margin="20,8,20,12" />
@@ -169,7 +169,7 @@
                   Command="{Binding $parent[Window].((vm:MainViewModel)DataContext).ShowNowPlayingAlbumCommand}">
             <Border Width="58" Height="58" CornerRadius="6" ClipToBounds="True" Background="{StaticResource Surface3}">
               <Panel>
-                <Path Classes="icon" Data="{StaticResource IcoNote}" Width="24" Height="24" Stroke="{StaticResource Faint}" />
+                <c:Icon Classes="icon" Data="{StaticResource IcoNote}" Width="24" Height="24" Stroke="{StaticResource Faint}" />
                 <c:CoverImage Path="{Binding CoverPath}" DecodeWidth="128" />
               </Panel>
             </Border>
@@ -186,23 +186,23 @@
         <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2" MaxWidth="640">
           <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Spacing="10">
             <Button Classes="flat" Classes.on="{Binding Shuffle}" Command="{Binding ToggleShuffleCommand}" ToolTip.Tip="Shuffle">
-              <Path Classes="icon" Data="{StaticResource IcoShuffle}" />
+              <c:Icon Classes="icon" Data="{StaticResource IcoShuffle}" />
             </Button>
             <Button Classes="flat" Command="{Binding PreviousCommand}" ToolTip.Tip="Previous (Ctrl+Left)">
-              <Path Classes="icon fill" Data="{StaticResource IcoPrev}" />
+              <c:Icon Classes="icon fill" Data="{StaticResource IcoPrev}" />
             </Button>
             <Button Classes="play" Command="{Binding PlayPauseCommand}" ToolTip.Tip="Play/Pause (Space)">
               <Panel>
-                <Path Classes="icon fill" Data="{StaticResource IcoPlay}" Width="20" Height="20" Margin="2,0,0,0" IsVisible="{Binding !IsPlaying}" />
-                <Path Classes="icon fill" Data="{StaticResource IcoPause}" Width="18" Height="18" IsVisible="{Binding IsPlaying}" />
+                <c:Icon Classes="icon fill" Data="{StaticResource IcoPlay}" Width="20" Height="20" Margin="3,0,0,0" IsVisible="{Binding !IsPlaying}" />
+                <c:Icon Classes="icon fill" Data="{StaticResource IcoPause}" Width="18" Height="18" IsVisible="{Binding IsPlaying}" />
               </Panel>
             </Button>
             <Button Classes="flat" Command="{Binding NextCommand}" ToolTip.Tip="Next (Ctrl+Right)">
-              <Path Classes="icon fill" Data="{StaticResource IcoNext}" />
+              <c:Icon Classes="icon fill" Data="{StaticResource IcoNext}" />
             </Button>
             <Button Classes="flat" Classes.on="{Binding RepeatOn}" Command="{Binding CycleRepeatCommand}" ToolTip.Tip="Repeat: off / all / one">
               <Panel>
-                <Path Classes="icon" Data="{StaticResource IcoRepeat}" />
+                <c:Icon Classes="icon" Data="{StaticResource IcoRepeat}" />
                 <TextBlock Text="1" FontSize="9" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center"
                            IsVisible="{Binding RepeatOne}" />
               </Panel>
@@ -219,25 +219,25 @@
         <StackPanel Grid.Column="2" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center" Spacing="6">
           <Button Classes="flat" ToolTip.Tip="Find metadata for this album" IsEnabled="{Binding HasTrack}"
                   Command="{Binding $parent[Window].((vm:MainViewModel)DataContext).MatchNowPlayingCommand}">
-            <Path Classes="icon" Data="{StaticResource IcoMagic}" />
+            <c:Icon Classes="icon" Data="{StaticResource IcoMagic}" />
           </Button>
           <Button Classes="flat" Classes.on="{Binding $parent[Window].((vm:MainViewModel)DataContext).Lyrics.IsOpen}" ToolTip.Tip="Lyrics (L)"
                   Command="{Binding $parent[Window].((vm:MainViewModel)DataContext).ToggleLyricsCommand}">
-            <Path Classes="icon" Data="{StaticResource IcoLyrics}" />
+            <c:Icon Classes="icon" Data="{StaticResource IcoLyrics}" />
           </Button>
           <Button Classes="flat" Classes.on="{Binding $parent[Window].((vm:MainViewModel)DataContext).NowPlayingOpen}" ToolTip.Tip="Now playing view (V)"
                   Command="{Binding $parent[Window].((vm:MainViewModel)DataContext).ToggleNowPlayingCommand}">
-            <Path Classes="icon" Data="{StaticResource IcoWave}" />
+            <c:Icon Classes="icon" Data="{StaticResource IcoWave}" />
           </Button>
           <Button Classes="flat" x:Name="MiniButton" ToolTip.Tip="Miniplayer (Ctrl+M)">
-            <Path Classes="icon" Data="{StaticResource IcoMini}" />
+            <c:Icon Classes="icon" Data="{StaticResource IcoMini}" />
           </Button>
           <!-- Scroll anywhere over the icon or slider to change the volume -->
           <StackPanel x:Name="VolumeArea" Orientation="Horizontal" Background="Transparent" Margin="4,0,0,0">
             <Button Classes="flat" Command="{Binding ToggleMuteCommand}" ToolTip.Tip="Mute (scroll to change volume)">
               <Panel>
-                <Path Classes="icon" Data="{StaticResource IcoVolume}" IsVisible="{Binding !Muted}" />
-                <Path Classes="icon" Data="{StaticResource IcoVolumeMute}" IsVisible="{Binding Muted}" />
+                <c:Icon Classes="icon" Data="{StaticResource IcoVolume}" IsVisible="{Binding !Muted}" />
+                <c:Icon Classes="icon" Data="{StaticResource IcoVolumeMute}" IsVisible="{Binding Muted}" />
               </Panel>
             </Button>
             <Slider x:Name="VolumeSlider" Width="120" Minimum="0" Maximum="100" Value="{Binding Volume}" Classes="seek" VerticalAlignment="Center" />

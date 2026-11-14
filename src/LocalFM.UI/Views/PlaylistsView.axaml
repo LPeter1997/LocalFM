@@ -14,7 +14,7 @@
           <TextBox.KeyBindings><KeyBinding Gesture="Enter" Command="{Binding CreateCommand}" /></TextBox.KeyBindings>
         </TextBox>
         <Button Grid.Column="1" Classes="flat" Command="{Binding CreateCommand}" ToolTip.Tip="Create playlist" Margin="4,0,0,0">
-          <Path Classes="icon" Data="{StaticResource IcoPlus}" />
+          <c:Icon Classes="icon" Data="{StaticResource IcoPlus}" />
         </Button>
       </Grid>
       <ListBox Classes="nav" ItemsSource="{Binding Playlists}" SelectedItem="{Binding Selected}">
@@ -27,7 +27,7 @@
               </StackPanel>
               <Button Grid.Column="1" Classes="flat" Padding="4" ToolTip.Tip="Delete playlist"
                       Command="{Binding $parent[UserControl].((vm:PlaylistsViewModel)DataContext).DeleteCommand}" CommandParameter="{Binding}">
-                <Path Classes="icon" Data="{StaticResource IcoTrash}" Width="14" Height="14" />
+                <c:Icon Classes="icon" Data="{StaticResource IcoTrash}" Width="14" Height="14" />
               </Button>
             </Grid>
           </DataTemplate>
@@ -36,7 +36,7 @@
     </DockPanel>
     <StackPanel Grid.Column="1" VerticalAlignment="Center" HorizontalAlignment="Center" Spacing="8" MaxWidth="360"
                 IsVisible="{Binding Playlists.Count, Converter={x:Static ui:Converters.IsZero}}">
-      <Path Classes="icon" Data="{StaticResource IcoPlaylist}" Width="40" Height="40" Stroke="{StaticResource Faint}" HorizontalAlignment="Center" />
+      <c:Icon Classes="icon" Data="{StaticResource IcoPlaylist}" Width="40" Height="40" Stroke="{StaticResource Faint}" HorizontalAlignment="Center" />
       <TextBlock Classes="h2" Text="No playlists yet" HorizontalAlignment="Center" />
       <TextBlock Classes="muted" TextWrapping="Wrap" TextAlignment="Center"
                  Text="Name one on the left, save the queue from the Queue page, or right-click any track and add it to a playlist." />
@@ -52,7 +52,11 @@
           <DataTemplate x:DataType="lib:TrackInfo">
           <Grid ColumnDefinitions="44,2*,1.4*,64">
             <Border Width="36" Height="36" CornerRadius="4" ClipToBounds="True" Background="{StaticResource Surface3}" HorizontalAlignment="Left">
-              <c:CoverImage Path="{Binding CoverPath}" DecodeWidth="72" />
+              <Panel>
+                  <!-- No cover: the same faint note as the player bar -->
+                  <c:Icon Classes="icon" Data="{StaticResource IcoNote}" Width="16" Height="16" Stroke="{StaticResource Faint}" StrokeThickness="1.4" />
+                  <c:CoverImage Path="{Binding CoverPath}" DecodeWidth="72" />
+                </Panel>
             </Border>
             <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="4,0,12,0">
               <TextBlock Text="{Binding Title}" TextTrimming="CharacterEllipsis" />

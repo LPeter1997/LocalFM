@@ -21,7 +21,7 @@
               DataContext="{Binding Profile}" x:DataType="vm:ArtistProfileViewModel">
           <Border Width="150" Height="150" CornerRadius="75" ClipToBounds="True" Background="{StaticResource Surface3}" VerticalAlignment="Top">
             <Panel>
-              <Path Classes="icon" Data="{StaticResource IcoArtist}" Width="52" Height="52" Stroke="{StaticResource Faint}" StrokeThickness="1.2" />
+              <c:Icon Classes="icon" Data="{StaticResource IcoArtist}" Width="52" Height="52" Stroke="{StaticResource Faint}" StrokeThickness="1.2" />
               <c:CoverImage Path="{Binding PhotoPath}" DecodeWidth="300" />
             </Panel>
           </Border>
@@ -103,7 +103,7 @@
               </ItemsControl>
               <Button Classes="ghost" Margin="0,0,6,6" Command="{Binding LookUpCommand}" IsEnabled="{Binding !Busy}">
                 <StackPanel Orientation="Horizontal" Spacing="6">
-                  <Path Classes="icon" Data="{StaticResource IcoRefresh}" Width="14" Height="14" />
+                  <c:Icon Classes="icon" Data="{StaticResource IcoRefresh}" Width="14" Height="14" />
                   <TextBlock Text="{Binding LookupLabel}" />
                 </StackPanel>
               </Button>
@@ -136,7 +136,7 @@
                 <StackPanel Spacing="8">
                   <Border Width="168" Height="168" CornerRadius="8" ClipToBounds="True" Background="{StaticResource Surface3}">
                     <Panel>
-                      <Path Classes="icon" Data="{StaticResource IcoAlbum}" Width="48" Height="48" Stroke="{StaticResource Faint}" StrokeThickness="1.2" />
+                      <c:Icon Classes="icon" Data="{StaticResource IcoAlbum}" Width="48" Height="48" Stroke="{StaticResource Faint}" StrokeThickness="1.2" />
                       <c:CoverImage Path="{Binding CoverPath}" DecodeWidth="336" />
                       <!-- Tracks you have files for: "12", or "5/12" for an incomplete album -->
                       <Border Classes="owned" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="8" ToolTip.Tip="{Binding OwnedTip}">
@@ -145,14 +145,14 @@
                       <Button Classes="play" Width="40" Height="40" CornerRadius="20" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="8"
                               Background="{StaticResource Accent}" Foreground="White" ToolTip.Tip="Play album"
                               Command="{Binding $parent[ItemsControl].((vm:AlbumsViewModel)DataContext).PlayCommand}" CommandParameter="{Binding}">
-                        <Path Classes="icon fill" Data="{StaticResource IcoPlay}" Width="16" Height="16" Margin="2,0,0,0" />
+                        <c:Icon Classes="icon fill" Data="{StaticResource IcoPlay}" Width="16" Height="16" Margin="2,0,0,0" />
                       </Button>
                     </Panel>
                   </Border>
                   <StackPanel Spacing="1">
                     <TextBlock Text="{Binding Title}" FontWeight="SemiBold" Foreground="{StaticResource Text}" TextTrimming="CharacterEllipsis" />
                     <TextBlock Classes="muted small" TextTrimming="CharacterEllipsis">
-                      <Run Text="{Binding Artist}" /><Run Text="  " /><Run Text="{Binding Date, Converter={x:Static ui:Converters.Year}}" Foreground="{StaticResource Faint}" />
+                      <Run Text="{Binding Artist}" /><Run Text="  " /><Run Text="{Binding Date, Converter={x:Static ui:Converters.Year}, Mode=OneWay}" Foreground="{StaticResource Faint}" />
                     </TextBlock>
                   </StackPanel>
                 </StackPanel>

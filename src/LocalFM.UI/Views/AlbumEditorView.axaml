@@ -1,5 +1,6 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:c="using:LocalFM.UI.Controls"
              xmlns:vm="using:LocalFM.UI.ViewModels"
              xmlns:v="using:LocalFM.UI.Views"
              x:Class="LocalFM.UI.Views.AlbumEditorView"
@@ -14,7 +15,7 @@
       <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Top">
         <Button Classes="ghost" Command="{Binding SuggestFixesCommand}" ToolTip.Tip="Remove '(Official Video)', '- Topic', remaster notes and similar">
           <StackPanel Orientation="Horizontal" Spacing="6">
-            <Path Classes="icon" Data="{StaticResource IcoMagic}" Width="15" Height="15" />
+            <c:Icon Classes="icon" Data="{StaticResource IcoMagic}" Width="15" Height="15" />
             <TextBlock Text="Suggest fixes" />
           </StackPanel>
         </Button>
@@ -48,13 +49,14 @@
           <TextBlock Classes="h2" Text="Tracks" VerticalAlignment="Center" />
           <Button Grid.Column="1" Classes="ghost" FontSize="12" Command="{Binding AlbumArtistForAllCommand}">Album artist for all tracks</Button>
         </Grid>
-        <Grid ColumnDefinitions="80,80,*,*" Margin="10,0">
+        <Grid ColumnDefinitions="80,80,*,*">
           <TextBlock Classes="faint small" Text="DISC" />
           <TextBlock Grid.Column="1" Classes="faint small" Text="#" />
           <TextBlock Grid.Column="2" Classes="faint small" Text="TITLE" />
           <TextBlock Grid.Column="3" Classes="faint small" Text="ARTIST" />
         </Grid>
-        <ItemsControl ItemsSource="{Binding Tracks}">
+        <!-- Rows reach 10 px past the column edges, so their fields line up with the album fields and headings -->
+        <ItemsControl ItemsSource="{Binding Tracks}" Margin="-10,0">
           <ItemsControl.ItemTemplate>
             <DataTemplate x:DataType="vm:TrackEditRow">
               <Border CornerRadius="8" Padding="10,4" Classes.focused="{Binding Focused}" Classes="editrow">
