@@ -11,8 +11,9 @@ namespace LocalFM.UI.ViewModels;
 public sealed partial class EditField : ObservableObject
 {
     public EditField(string entityType, Ulid id, string field, string label, string? value, FieldState? state,
-        IReadOnlyList<string>? suggestions = null)
+        IReadOnlyList<string>? suggestions = null, string? placeholder = null)
     {
+        Placeholder = placeholder;
         EntityType = entityType;
         Id = id;
         Field = field;
@@ -33,6 +34,8 @@ public sealed partial class EditField : ObservableObject
     public bool OriginalLocked { get; }
     public string Source { get; }
     public IReadOnlyList<string>? Suggestions { get; }
+    /// <summary>What an empty field means (a track without its own artist is by the album artist).</summary>
+    public string? Placeholder { get; }
 
     [ObservableProperty] [NotifyPropertyChangedFor(nameof(IsChanged))] private string _value;
     [ObservableProperty] [NotifyPropertyChangedFor(nameof(LockTip))] private bool _locked;
@@ -57,14 +60,14 @@ public sealed partial class EditField : ObservableObject
     };
 }
 
-public sealed class TrackEditRow(TrackEditData t, IReadOnlyList<string> artists, bool focused)
+public sealed class TrackEditRow(TrackEditData t, IReadOnlyList<string> artists, bool focused, string? albumArtist)
 {
     public Ulid TrackId { get; } = t.TrackId;
     public bool Focused { get; } = focused;
     public EditField Disc { get; } = new("track", t.TrackId, "disc", "Disc", t.Disc.ToString(), t.States.GetValueOrDefault("disc"));
     public EditField Position { get; } = new("track", t.TrackId, "position", "#", t.Position.ToString(), t.States.GetValueOrDefault("position"));
     public EditField Title { get; } = new("track", t.TrackId, "title", "Title", t.Title, t.States.GetValueOrDefault("title"));
-    public EditField Artist { get; } = new("track", t.TrackId, "artist", "Artist", t.Artist, t.States.GetValueOrDefault("artist"), artists);
+    public EditField Artist { get; } = new("track", t.TrackId, "artist", "Artist", t.Artist, t.States.GetValueOrDefault("artist"), artists, albumArtist);
     public IEnumerable<EditField> Fields => [Disc, Position, Title, Artist];
 }
 
@@ -103,7 +106,7 @@ public sealed partial class AlbumEditorViewModel(MainViewModel main, Ulid releas
                 new EditField("release", releaseId, "edition", "Edition", d.Edition, s.GetValueOrDefault("edition")),
                 new EditField("release", releaseId, "country", "Country", d.Country, s.GetValueOrDefault("country")),
             ]);
-            Replace(Tracks, d.Tracks.Select(t => new TrackEditRow(t, r.Artists, t.TrackId == focusTrack)));
+            Replace(Tracks, d.Tracks.Select(t => new TrackEditRow(t, r.Artists, t.TrackId == focusTrack, d.Artist)));
             OnPropertyChanged(nameof(AlbumArtist));
         });
 

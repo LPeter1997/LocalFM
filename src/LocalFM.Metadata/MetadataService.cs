@@ -158,6 +158,19 @@ public sealed class MetadataService
         return result;
     }
 
+    /// <summary>
+    /// Re-applies the release an album is already matched to, e.g. after songs were moved onto it: they pick up
+    /// their real number, credit and ids. Does nothing for an unmatched album. Locked fields stay as they are.
+    /// </summary>
+    public async Task<ApplyResult?> ReapplyMatchAsync(Ulid releaseId, CancellationToken ct = default)
+    {
+        string? mbid;
+        using (var c = _db.Open())
+            mbid = c.QuerySingle("SELECT external_id FROM external_id WHERE entity_type = 'release' AND entity_id = $1 AND provider = 'musicbrainz'",
+                r => r.Str(0), releaseId);
+        return mbid is null ? null : await ApplyReleaseAsync(releaseId, mbid, fetchCover: false, ct).ConfigureAwait(false);
+    }
+
     /// <summary>The title each track's file carries in its own tags. The stored title may have drifted from it
     /// (an earlier wrong match); the tag is a second chance to recognise the song.</summary>
     private Dictionary<Ulid, string> FileTagTitles(Ulid releaseId)

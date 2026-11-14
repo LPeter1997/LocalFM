@@ -242,6 +242,15 @@ public static class MetadataEditor
                 }
                 int pos = tx.Long("SELECT COUNT(*) FROM track WHERE medium_id = $1 AND position = $2", medium, row.Pos) == 0
                     ? row.Pos : (int)tx.Long("SELECT COALESCE(MAX(position), 0) + 1 FROM track WHERE medium_id = $1", medium);
+                // A track without its own credit was by its album's artist; keep that when the new album is someone else's.
+                // Unlocked: it is a carried-over guess, and a later lookup may well know better.
+                var credits = tx.Single("""
+                    SELECT (SELECT artist_credit_id FROM track WHERE id = $1), r.artist_credit_id, ac.display_name,
+                           (SELECT ac2.display_name FROM release r2 JOIN artist_credit ac2 ON ac2.id = r2.artist_credit_id WHERE r2.id = $3)
+                    FROM release r LEFT JOIN artist_credit ac ON ac.id = r.artist_credit_id WHERE r.id = $2
+                    """, r => (Track: r.Str(0), From: r.Str(1), FromName: r.Str(2), ToName: r.Str(3)), trackId, row.Release, targetReleaseId);
+                if (credits.Track is null && credits.From is not null && Normalize.Key(credits.FromName) != Normalize.Key(credits.ToName))
+                    MetadataApplier.SetField(tx, "track", trackId, "artist_credit_id", credits.From, source, now);
                 tx.Exec("UPDATE track SET medium_id = $2, position = $3, number = CASE WHEN position = $3 THEN number ELSE $4 END, updated_at = $5 WHERE id = $1",
                     trackId, medium, pos, pos.ToString(), now);
                 tx.Exec("""

@@ -151,10 +151,19 @@ public sealed partial class AlbumDetailViewModel : PageViewModel
     private async Task AfterMove(TrackInfo track, AlbumSummary target)
     {
         Move = null;
+        await RefineFromMatch(target.ReleaseId);
         _ = Host.Player.RefreshMetadataAsync();
         Main.Notify($"Moved “{track.Title}” to {target.Title}");
         if (Host.Queries.Album(Album.ReleaseId) is null) Main.ReplaceWithAlbum(Host.Queries.Album(target.ReleaseId) ?? target);
         else await RefreshAsync();
+    }
+
+    /// <summary>Songs moved onto a matched album take its numbering and credits (from the cached lookup).
+    /// Best effort: offline, they simply keep what they had.</summary>
+    private async Task RefineFromMatch(Ulid releaseId)
+    {
+        try { await Task.Run(() => Host.Metadata.ReapplyMatchAsync(releaseId)); }
+        catch (Exception ex) { Log.Warn("Album", $"Re-applying the match after a move failed: {ex.Message}"); }
     }
 
     /// <summary>Brings every track of another copy of this album onto this one; the other copy disappears.</summary>
@@ -164,6 +173,7 @@ public sealed partial class AlbumDetailViewModel : PageViewModel
         try
         {
             int n = await Host.Db.Writer.Run((c, t) => Library.Edit.MetadataEditor.MergeRelease(new Tx(c, t), other.ReleaseId, Album.ReleaseId));
+            await RefineFromMatch(Album.ReleaseId);
             _ = Host.Player.RefreshMetadataAsync();
             Main.Notify(n == 1 ? "Merged 1 track into this album" : $"Merged {n} tracks into this album");
         }

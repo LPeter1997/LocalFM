@@ -209,6 +209,32 @@ public class EditorTests
     }
 
     [SkippableFact]
+    public async Task A_moved_track_keeps_its_old_albums_artist_only_when_the_new_album_is_someone_elses()
+    {
+        Skip.IfNot(TempLibrary.HaveFfmpeg);
+        using var lib = new TempLibrary();
+        lib.MakeTrack("a/1.mp3", new() { ["title"] = "Sweet Child O' Mine", ["album_artist"] = "Guns N' Roses", ["album"] = "Single", ["track"] = "1" }, seconds: 0.3);
+        lib.MakeTrack("b/7.mp3", new() { ["title"] = "My Michelle", ["artist"] = "Guns N’ Roses", ["album_artist"] = "Guns N’ Roses", ["album"] = "Appetite for Destruction", ["track"] = "7" }, seconds: 0.3);
+        lib.MakeTrack("c/1.mp3", new() { ["title"] = "Patience", ["album_artist"] = "Guns N' Roses", ["album"] = "Lies", ["track"] = "1" }, seconds: 0.3);
+        lib.MakeTrack("d/1.mp3", new() { ["title"] = "Some Song", ["artist"] = "Various", ["album_artist"] = "Various Artists", ["album"] = "Mix", ["track"] = "1" }, seconds: 0.3);
+        await lib.ScanAsync();
+        var sweet = lib.Queries.Tracks("Sweet Child").Single();
+        var patience = lib.Queries.Tracks("Patience").Single();
+        var appetite = lib.Queries.Tracks("My Michelle").Single().ReleaseId;
+        var mix = lib.Queries.Tracks("Some Song").Single().ReleaseId;
+        using (var c = lib.Db.Open())
+        {
+            c.Exec("UPDATE track SET artist_credit_id = NULL WHERE id IN ($1, $2)", sweet.TrackId, patience.TrackId);
+        }
+
+        await lib.Db.Writer.Run((c, t) => MetadataEditor.MoveTracks(new Tx(c, t), [sweet.TrackId], appetite));
+        await lib.Db.Writer.Run((c, t) => MetadataEditor.MoveTracks(new Tx(c, t), [patience.TrackId], mix));
+
+        Assert.Null(MetadataEditor.LoadAlbum(lib.Db, appetite)!.Tracks.Single(t => t.TrackId == sweet.TrackId).Artist); // same act: still the album's
+        Assert.Equal("guns n roses", Normalize.Key(MetadataEditor.LoadAlbum(lib.Db, mix)!.Tracks.Single(t => t.TrackId == patience.TrackId).Artist));
+    }
+
+    [SkippableFact]
     public async Task Merging_copies_keeps_one_track_per_song()
     {
         Skip.IfNot(TempLibrary.HaveFfmpeg);
