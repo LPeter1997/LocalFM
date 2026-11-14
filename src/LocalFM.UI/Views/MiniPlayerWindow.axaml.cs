@@ -1,6 +1,7 @@
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
+using LocalFM.App;
 using LocalFM.UI.ViewModels;
 
 namespace LocalFM.UI.Views;
@@ -33,6 +34,19 @@ public partial class MiniPlayerWindow : Window
             }
             e.Handled = true;
         };
+    }
+
+    /// <summary>Feeds the background visualizer; it follows the mode chosen in the now-playing view and runs only while shown.</summary>
+    public void AttachVisualizer(PlayerService player, MainViewModel main)
+    {
+        Backdrop.Source = player;
+        Backdrop.Mode = main.VisualizerMode;
+        main.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(MainViewModel.VisualizerMode)) Backdrop.Mode = main.VisualizerMode;
+        };
+        Backdrop.Active = IsVisible;
+        PropertyChanged += (_, e) => { if (e.Property == IsVisibleProperty) Backdrop.Active = IsVisible; };
     }
 
     /// <summary>Raised when the person wants the full window back.</summary>

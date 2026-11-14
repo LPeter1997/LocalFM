@@ -73,6 +73,7 @@ public sealed class DesktopShell : IDisposable
         {
             _mini = new MiniPlayerWindow { DataContext = _vm.NowPlaying, Icon = _main.Icon };
             _mini.Expand += ShowMain;
+            _mini.AttachVisualizer(_host.Player, _vm);
         }
         _mini.Show();
         _mini.Activate();

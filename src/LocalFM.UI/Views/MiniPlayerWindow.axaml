@@ -8,6 +8,9 @@
         WindowStartupLocation="CenterScreen" Background="{StaticResource Bg}">
   <!-- No system title bar: drag anywhere to move, double-click (or the expand button) for the full window -->
   <Border x:Name="Root" Background="{StaticResource Bg}" Padding="12">
+  <Panel>
+  <!-- The chosen visualizer, faded behind everything (out to the window edges, under the padding) -->
+  <c:Visualizer x:Name="Backdrop" Margin="-12" Opacity="0.25" IsHitTestVisible="False" BarBrush="{StaticResource Accent}" Bands="48" />
   <Grid ColumnDefinitions="Auto,*" RowDefinitions="*,Auto">
     <Border Grid.RowSpan="2" Width="88" Height="88" CornerRadius="8" ClipToBounds="True" Background="{StaticResource Surface3}"
             VerticalAlignment="Top">
@@ -45,5 +48,6 @@
                  Maximum="{Binding Duration}" Value="{Binding Position}" Foreground="{StaticResource Accent}"
                  Background="{StaticResource Surface3}" />
   </Grid>
+  </Panel>
   </Border>
 </Window>
