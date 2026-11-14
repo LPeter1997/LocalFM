@@ -37,7 +37,7 @@ public sealed class LibraryQueries(Database db, ImageStore images)
     private const string CoverSql = """
         (SELECT i.rel_path FROM entity_image ei JOIN image i ON i.id = ei.image_id
          WHERE ei.entity_type = 'release' AND ei.entity_id = rel.id AND ei.role = 'front'
-         ORDER BY CASE ei.source WHEN 'user' THEN 0 WHEN 'folder' THEN 1 WHEN 'embedded' THEN 2 ELSE 3 END LIMIT 1)
+         ORDER BY CASE ei.source WHEN 'user' THEN 0 WHEN 'folder' THEN 1 WHEN 'embedded' THEN 2 WHEN 'coverartarchive' THEN 3 ELSE 4 END LIMIT 1)
         """;
 
     // The best available file of a track: present on disk, highest quality first.
@@ -61,11 +61,18 @@ public sealed class LibraryQueries(Database db, ImageStore images)
 
     private string? CoverFullPath(string? rel) => rel is null ? null : images.FullPath(rel);
 
-    public List<AlbumSummary> Albums(string? search = null, Ulid? artistId = null)
+    public AlbumSummary? Album(Ulid releaseId) => Albums(releaseId: releaseId).FirstOrDefault();
+
+    public List<AlbumSummary> Albums(string? search = null, Ulid? artistId = null, Ulid? releaseId = null)
     {
         using var c = db.Open();
         string where = "WHERE EXISTS (SELECT 1 FROM medium m JOIN track t ON t.medium_id = m.id JOIN audio_file f ON f.track_id = t.id WHERE m.release_id = rel.id AND f.missing = 0)";
         var args = new List<object?>();
+        if (releaseId is { } rid)
+        {
+            args.Add(rid);
+            where += $" AND rel.id = ${args.Count}";
+        }
         if (!string.IsNullOrWhiteSpace(search))
         {
             args.Add("%" + search.Trim() + "%");

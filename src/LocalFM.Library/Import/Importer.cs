@@ -336,7 +336,7 @@ public sealed class Importer(ImageStore images)
             entityType, id, provider, externalId.Trim().ToLowerInvariant());
     }
 
-    private static void LinkGenre(Tx tx, string entityType, Ulid id, string name)
+    public static void LinkGenre(Tx tx, string entityType, Ulid id, string name, string source = TagSource)
     {
         string? clean = Normalize.Text(name);
         if (clean is null) return;
@@ -348,7 +348,7 @@ public sealed class Importer(ImageStore images)
             tx.Exec("INSERT INTO genre(id, name, name_key) VALUES ($1,$2,$3)", genreId, clean, key);
         }
         tx.Exec("INSERT OR IGNORE INTO entity_genre(entity_type, entity_id, genre_id, source) VALUES ($1,$2,$3,$4)",
-            entityType, id, genreId, TagSource);
+            entityType, id, genreId, source);
     }
 
     private static void SetAttribute(Tx tx, string entityType, Ulid id, string key, string value, long now) =>
