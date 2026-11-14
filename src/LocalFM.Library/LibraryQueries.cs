@@ -5,7 +5,15 @@ namespace LocalFM.Library;
 
 public sealed record AlbumSummary(
     Ulid ReleaseId, Ulid ReleaseGroupId, string Title, string? Artist, string? Date, string? Edition,
-    string? CoverPath, int TrackCount);
+    string? CoverPath, int TrackCount, int OwnedCount)
+{
+    /// <summary>The tile badge: "12", or "5/12" when only some of the album's tracks have a file.</summary>
+    public string OwnedText => OwnedCount >= TrackCount ? $"{OwnedCount}" : $"{OwnedCount}/{TrackCount}";
+
+    public string OwnedTip => OwnedCount >= TrackCount
+        ? $"All {TrackCount} tracks are in your library"
+        : $"{OwnedCount} of {TrackCount} tracks are in your library";
+}
 
 public sealed record ArtistSummary(Ulid ArtistId, string Name, string? SortName, int AlbumCount, int TrackCount, string? PhotoPath = null);
 
@@ -102,7 +110,9 @@ public sealed class LibraryQueries(Database db, ImageStore images)
         }
         return c.Query($"""
             SELECT rel.id, rel.release_group_id, rel.title, ac.display_name, rel.date, rel.edition, {CoverSql},
-                   (SELECT COUNT(*) FROM medium m JOIN track t ON t.medium_id = m.id WHERE m.release_id = rel.id)
+                   (SELECT COUNT(*) FROM medium m JOIN track t ON t.medium_id = m.id WHERE m.release_id = rel.id),
+                   (SELECT COUNT(*) FROM medium m JOIN track t ON t.medium_id = m.id WHERE m.release_id = rel.id
+                      AND EXISTS (SELECT 1 FROM audio_file f WHERE f.track_id = t.id AND f.missing = 0))
             FROM release rel
             LEFT JOIN artist_credit ac ON ac.id = rel.artist_credit_id
             {where}
@@ -110,7 +120,7 @@ public sealed class LibraryQueries(Database db, ImageStore images)
                                WHERE n.credit_id = rel.artist_credit_id AND n.position = 0), ac.display_name) COLLATE NOCASE,
                      rel.date, rel.title COLLATE NOCASE
             """,
-            r => new AlbumSummary(r.Id(0), r.Id(1), r.GetString(2), r.Str(3), r.Str(4), r.Str(5), CoverFullPath(r.Str(6)), r.GetInt32(7)),
+            r => new AlbumSummary(r.Id(0), r.Id(1), r.GetString(2), r.Str(3), r.Str(4), r.Str(5), CoverFullPath(r.Str(6)), r.GetInt32(7), r.GetInt32(8)),
             [.. args]);
     }
 

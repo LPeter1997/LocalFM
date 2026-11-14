@@ -138,6 +138,10 @@
                     <Panel>
                       <Path Classes="icon" Data="{StaticResource IcoAlbum}" Width="48" Height="48" Stroke="{StaticResource Faint}" StrokeThickness="1.2" />
                       <c:CoverImage Path="{Binding CoverPath}" DecodeWidth="336" />
+                      <!-- Tracks you have files for: "12", or "5/12" for an incomplete album -->
+                      <Border Classes="owned" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="8" ToolTip.Tip="{Binding OwnedTip}">
+                        <TextBlock Text="{Binding OwnedText}" />
+                      </Border>
                       <Button Classes="play" Width="40" Height="40" CornerRadius="20" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="8"
                               Background="{StaticResource Accent}" Foreground="White" ToolTip.Tip="Play album"
                               Command="{Binding $parent[ItemsControl].((vm:AlbumsViewModel)DataContext).PlayCommand}" CommandParameter="{Binding}">
@@ -168,6 +172,14 @@
     <!-- the card's play button only shows on hover -->
     <Style Selector="Button.albumcard Button.play"><Setter Property="Opacity" Value="0" /></Style>
     <Style Selector="Button.albumcard:pointerover Button.play"><Setter Property="Opacity" Value="1" /></Style>
+    <Style Selector="Border.owned">
+      <Setter Property="MinWidth" Value="24" /><Setter Property="Height" Value="24" /><Setter Property="CornerRadius" Value="12" />
+      <Setter Property="Padding" Value="7,0" /><Setter Property="Background" Value="#B8141418" />
+    </Style>
+    <Style Selector="Border.owned TextBlock">
+      <Setter Property="FontSize" Value="11" /><Setter Property="FontWeight" Value="SemiBold" /><Setter Property="Foreground" Value="#F0FFFFFF" />
+      <Setter Property="HorizontalAlignment" Value="Center" /><Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
     <Style Selector="Button.link">
       <Setter Property="Background" Value="Transparent" />
       <Setter Property="BorderThickness" Value="0" />

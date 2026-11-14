@@ -127,6 +127,22 @@ public class LibraryTests
     }
 
     [SkippableFact]
+    public async Task Album_counts_owned_tracks()
+    {
+        Skip.IfNot(TempLibrary.HaveFfmpeg);
+        using var lib = new TempLibrary();
+        lib.MakeTrack("a/01.flac", Tags("One", "X", "Album", 1));
+        lib.MakeTrack("a/02.flac", Tags("Two", "X", "Album", 2));
+        await lib.ScanAsync();
+        var full = lib.Queries.Albums().Single();
+        Assert.Equal((2, 2, "2"), (full.TrackCount, full.OwnedCount, full.OwnedText));
+
+        using (var c = lib.Db.Open()) c.Exec("UPDATE audio_file SET missing = 1 WHERE path LIKE '%02.flac'");
+        var partial = lib.Queries.Albums().Single();
+        Assert.Equal((2, 1, "1/2"), (partial.TrackCount, partial.OwnedCount, partial.OwnedText));
+    }
+
+    [SkippableFact]
     public async Task Embedded_cover_is_stored_once()
     {
         Skip.IfNot(TempLibrary.HaveFfmpeg);
