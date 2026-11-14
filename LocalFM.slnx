@@ -11,6 +11,7 @@
   <Folder Name="/tests/">
     <Project Path="tests/LocalFM.App.Tests/LocalFM.App.Tests.csproj" />
     <Project Path="tests/LocalFM.Library.Tests/LocalFM.Library.Tests.csproj" />
+    <Project Path="tests/LocalFM.Metadata.Tests/LocalFM.Metadata.Tests.csproj" />
     <Project Path="tests/LocalFM.Playback.Tests/LocalFM.Playback.Tests.csproj" />
   </Folder>
   <Folder Name="/tools/">
