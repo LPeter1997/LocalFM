@@ -120,4 +120,31 @@ public class EditorTests
         Assert.Equal(track.TrackId, after.TrackId);
         Assert.Equal("Blackout", after.Title);
     }
+
+    [SkippableFact]
+    public async Task Renaming_an_artist_keeps_its_fetched_profile()
+    {
+        Skip.IfNot(TempLibrary.HaveFfmpeg);
+        using var lib = new TempLibrary();
+        lib.MakeTrack("a/1.flac", new() { ["title"] = "Blackout", ["artist"] = "Scorpions - Topic", ["album"] = "Blackout", ["track"] = "1" }, seconds: 0.3);
+        await lib.ScanAsync();
+        var topic = lib.Queries.Artists().Single();
+        var profile = new ArtistProfileData("mbid-1", "Scorpions", "Scorpions", "Group", "DE", "Germany", "1965", null, false, null,
+            ["Hard Rock"], [new ArtistLink("Website", "https://example.org/")], [], [], "Q1", Bio: "A German band.");
+        await lib.Db.Writer.Run((c, t) => ArtistProfiles.Apply(new Tx(c, t), lib.Images, topic.ArtistId, profile));
+
+        // Tidy up renames every credit, which leaves the old artist without credits.
+        var fixes = Cleanup.Find(lib.Db).SelectMany(s => s.Changes).ToList();
+        await lib.Db.Writer.Run((c, t) => MetadataEditor.Apply(new Tx(c, t), fixes, MetadataEditor.CleanupSource, lockFields: false));
+
+        var artist = Assert.Single(lib.Queries.Artists());
+        Assert.Equal("Scorpions", artist.Name);
+        Assert.NotEqual(topic.ArtistId, artist.ArtistId);
+        var p = ArtistProfiles.Load(lib.Db, lib.Images, artist.ArtistId)!;
+        Assert.Equal("mbid-1", p.Mbid);
+        Assert.Equal("A German band.", p.Bio);
+        Assert.Equal("group", p.Type);
+        Assert.Equal(["Hard Rock"], p.Genres);
+        Assert.Null(ArtistProfiles.Load(lib.Db, lib.Images, topic.ArtistId));
+    }
 }

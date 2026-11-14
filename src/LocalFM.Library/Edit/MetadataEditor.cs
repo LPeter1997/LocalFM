@@ -213,6 +213,7 @@ public static class MetadataEditor
                 NOT EXISTS (SELECT 1 FROM release_group WHERE artist_credit_id = artist_credit.id)
             """);
         tx.Exec("DELETE FROM artist_credit_name WHERE NOT EXISTS (SELECT 1 FROM artist_credit WHERE id = artist_credit_name.credit_id)");
+        CarryOverRenamedArtists(tx);
         var orphans = tx.Query("""
             SELECT a.id FROM artist a
             WHERE NOT EXISTS (SELECT 1 FROM artist_credit_name n WHERE n.artist_id = a.id)
@@ -224,5 +225,44 @@ public static class MetadataEditor
                 tx.Exec($"DELETE FROM {t} WHERE entity_type = 'artist' AND entity_id = $1", id);
             tx.Exec("DELETE FROM artist WHERE id = $1", id);
         }
+    }
+
+    /// <summary>
+    /// An artist that lost all its credits by being renamed ("Scorpions - Topic" → "Scorpions") but carries online
+    /// ids hands its profile (ids, photo, bio, genres, facts) to the artist now credited under the tidied name.
+    /// </summary>
+    private static void CarryOverRenamedArtists(Tx tx)
+    {
+        var orphans = tx.Query("""
+            SELECT a.id, a.name FROM artist a
+            WHERE NOT EXISTS (SELECT 1 FROM artist_credit_name n WHERE n.artist_id = a.id)
+              AND EXISTS (SELECT 1 FROM external_id e WHERE e.entity_type = 'artist' AND e.entity_id = a.id)
+            """, r => (Id: r.Id(0), Name: r.GetString(1)));
+        foreach (var (from, name) in orphans)
+        {
+            string key = Normalize.Key(Cleanup.CleanArtist(name)?.Text ?? name);
+            var successors = tx.Query("""
+                SELECT a.id FROM artist a
+                WHERE a.name_key = $1 AND a.id <> $2 AND EXISTS (SELECT 1 FROM artist_credit_name n WHERE n.artist_id = a.id)
+                  AND NOT EXISTS (SELECT 1 FROM external_id e WHERE e.entity_type = 'artist' AND e.entity_id = a.id AND e.provider = 'musicbrainz')
+                """, r => r.Id(0), key, from);
+            if (successors.Count == 1) MergeArtist(tx, from, successors[0]);
+        }
+    }
+
+    /// <summary>Moves everything known about <paramref name="from"/> onto <paramref name="to"/> where <paramref name="to"/> has nothing yet.</summary>
+    public static void MergeArtist(Tx tx, Ulid from, Ulid to)
+    {
+        tx.Exec("UPDATE OR IGNORE external_id SET entity_id = $2 WHERE entity_type = 'artist' AND entity_id = $1", from, to);
+        tx.Exec("UPDATE OR IGNORE attribute SET entity_id = $2 WHERE entity_type = 'artist' AND entity_id = $1", from, to);
+        tx.Exec("UPDATE OR IGNORE entity_genre SET entity_id = $2 WHERE entity_type = 'artist' AND entity_id = $1", from, to);
+        tx.Exec("UPDATE OR IGNORE entity_image SET entity_id = $2 WHERE entity_type = 'artist' AND entity_id = $1", from, to);
+        tx.Exec("UPDATE OR IGNORE field_provenance SET entity_id = $2 WHERE entity_type = 'artist' AND entity_id = $1 AND field <> 'name'", from, to);
+        foreach (var col in new[] { "sort_name", "type", "disambiguation", "country", "begin_date", "end_date" })
+            tx.Exec($"UPDATE artist SET {col} = (SELECT {col} FROM artist WHERE id = $1) WHERE id = $2 AND {col} IS NULL", from, to);
+        tx.Exec("DELETE FROM artist_credit_name WHERE artist_id = $1", from);
+        foreach (var t in new[] { "external_id", "attribute", "field_provenance", "entity_genre", "entity_image" })
+            tx.Exec($"DELETE FROM {t} WHERE entity_type = 'artist' AND entity_id = $1", from);
+        tx.Exec("DELETE FROM artist WHERE id = $1", from);
     }
 }

@@ -7,7 +7,7 @@ public sealed record AlbumSummary(
     Ulid ReleaseId, Ulid ReleaseGroupId, string Title, string? Artist, string? Date, string? Edition,
     string? CoverPath, int TrackCount);
 
-public sealed record ArtistSummary(Ulid ArtistId, string Name, string? SortName, int AlbumCount, int TrackCount);
+public sealed record ArtistSummary(Ulid ArtistId, string Name, string? SortName, int AlbumCount, int TrackCount, string? PhotoPath = null);
 
 /// <summary>A playable track: everything the queue and now-playing view need, in one row.</summary>
 public sealed record TrackInfo(
@@ -108,7 +108,10 @@ public sealed class LibraryQueries(Database db, ImageStore images)
         return c.Query($"""
             SELECT a.id, a.name, a.sort_name,
                    (SELECT COUNT(DISTINCT rel.id) FROM artist_credit_name n JOIN release rel ON rel.artist_credit_id = n.credit_id WHERE n.artist_id = a.id),
-                   (SELECT COUNT(*) FROM artist_credit_name n JOIN track t ON t.artist_credit_id = n.credit_id WHERE n.artist_id = a.id)
+                   (SELECT COUNT(*) FROM artist_credit_name n JOIN track t ON t.artist_credit_id = n.credit_id WHERE n.artist_id = a.id),
+                   (SELECT i.rel_path FROM entity_image ei JOIN image i ON i.id = ei.image_id
+                    WHERE ei.entity_type = 'artist' AND ei.entity_id = a.id AND ei.role = 'photo'
+                    ORDER BY CASE ei.source WHEN 'user' THEN 0 ELSE 1 END LIMIT 1)
             FROM artist a
             WHERE EXISTS (SELECT 1 FROM artist_credit_name n
                           JOIN track t ON t.artist_credit_id = n.credit_id OR t.medium_id IN
@@ -118,7 +121,7 @@ public sealed class LibraryQueries(Database db, ImageStore images)
             {filter}
             ORDER BY COALESCE(a.sort_name, a.name) COLLATE NOCASE
             """,
-            r => new ArtistSummary(r.Id(0), r.GetString(1), r.Str(2), r.GetInt32(3), r.GetInt32(4)),
+            r => new ArtistSummary(r.Id(0), r.GetString(1), r.Str(2), r.GetInt32(3), r.GetInt32(4), CoverFullPath(r.Str(5))),
             string.IsNullOrWhiteSpace(search) ? [] : ["%" + search.Trim() + "%"]);
     }
 

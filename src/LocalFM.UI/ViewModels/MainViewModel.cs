@@ -81,6 +81,9 @@ public sealed partial class MainViewModel : ObservableObject
     /// <summary>Set by the window: shows a folder picker and returns the chosen local path.</summary>
     public Func<Task<string?>>? PickFolder { get; set; }
 
+    /// <summary>Set by the window: opens a web link in the person's browser.</summary>
+    public Action<string>? OpenUrl { get; set; }
+
     [ObservableProperty] private NavItem? _selectedNav;
     [ObservableProperty] private PageViewModel _currentPage;
     [ObservableProperty] private string? _searchText;

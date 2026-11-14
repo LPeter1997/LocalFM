@@ -24,6 +24,17 @@ public sealed class FakeHandler : HttpMessageHandler
         return this;
     }
 
+    public FakeHandler OnBytes(string urlContains, byte[] body, string contentType)
+    {
+        _routes.Add((u => u.Contains(urlContains, StringComparison.Ordinal), () =>
+        {
+            var content = new ByteArrayContent(body);
+            content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue(contentType);
+            return new HttpResponseMessage(HttpStatusCode.OK) { Content = content };
+        }));
+        return this;
+    }
+
     public FakeHandler OnStatus(string urlContains, params HttpStatusCode[] statuses)
     {
         int i = 0;

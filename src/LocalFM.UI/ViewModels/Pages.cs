@@ -50,17 +50,22 @@ public sealed partial class AlbumsViewModel(MainViewModel main, ArtistSummary? a
     public override bool Searchable => artist is null;
     public ArtistSummary? Artist => artist;
     public bool IsArtistPage => artist is not null;
+    public ArtistProfileViewModel? Profile { get; } = artist is null ? null : new ArtistProfileViewModel(main, artist);
     public ObservableCollection<AlbumSummary> Albums { get; } = new();
 
     [ObservableProperty] private string _summary = "";
 
-    public override Task RefreshAsync() => Load(
-        () => Host.Queries.Albums(artist is null ? Main.SearchText : null, artist?.ArtistId),
-        list =>
-        {
-            Replace(Albums, list);
-            Summary = list.Count == 1 ? "1 album" : $"{list.Count} albums";
-        });
+    public override Task RefreshAsync()
+    {
+        var albums = Load(
+            () => Host.Queries.Albums(artist is null ? Main.SearchText : null, artist?.ArtistId),
+            list =>
+            {
+                Replace(Albums, list);
+                Summary = list.Count == 1 ? "1 album" : $"{list.Count} albums";
+            });
+        return Profile is null ? albums : Task.WhenAll(albums, Profile.RefreshAsync());
+    }
 
     [RelayCommand] private void Open(AlbumSummary album) => Main.ShowAlbum(album);
 

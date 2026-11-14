@@ -49,6 +49,12 @@ public partial class MainWindow : Window
         if (Vm is { } vm)
         {
             vm.PickFolder = PickFolderAsync;
+            vm.OpenUrl = url =>
+            {
+                // Only web links: the URLs come from online sources.
+                if (Uri.TryCreate(url, UriKind.Absolute, out var uri) && (uri.Scheme == Uri.UriSchemeHttps || uri.Scheme == Uri.UriSchemeHttp))
+                    _ = Launcher.LaunchUriAsync(uri);
+            };
             vm.Lyrics.CurrentLineChanged += ScrollLyricTo;
         }
     }
@@ -118,6 +124,12 @@ public partial class MainWindow : Window
                 if (page is "album" or "match" && vm.Albums.Albums.FirstOrDefault() is { } a) vm.ShowAlbum(a, openMatch: page == "match");
                 else if (page == "edit" && vm.Albums.Albums.FirstOrDefault() is { } e) vm.EditAlbum(e.ReleaseId);
                 else if (page == "mini") MiniPlayerRequested?.Invoke();
+                else if (page.StartsWith("artist:", StringComparison.Ordinal)
+                         && vm.Host.Queries.Artists(page[7..]).FirstOrDefault() is { } artist)
+                {
+                    vm.ShowArtist(artist);
+                    if (vm.CurrentPage is AlbumsViewModel { Profile: { } profile }) await profile.LookUpCommand.ExecuteAsync(null);
+                }
                 else if (vm.Nav.FirstOrDefault(n => n.Name.StartsWith(page, StringComparison.OrdinalIgnoreCase)) is { } nav) vm.Navigate(nav);
             }
             if (Environment.GetEnvironmentVariable("LOCALFM_SNAPSHOT_PLAY") == "1" && Vm is { } v2)

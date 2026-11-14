@@ -67,7 +67,9 @@ public sealed class CachedHttp(Database db, HttpClient http)
     }
 
     /// <param name="cache">False for large binary payloads (images) that are stored elsewhere.</param>
-    public async Task<HttpResult> GetAsync(string provider, string url, TimeSpan ttl, bool cache = true, CancellationToken ct = default)
+    /// <param name="accept">Overrides the default JSON Accept header (image servers may refuse it).</param>
+    public async Task<HttpResult> GetAsync(string provider, string url, TimeSpan ttl, bool cache = true, CancellationToken ct = default,
+        string? accept = null)
     {
         if (cache && Cached(provider, url) is { } hit) return hit;
 
@@ -80,6 +82,11 @@ public sealed class CachedHttp(Database db, HttpClient http)
                 try
                 {
                     using var req = new HttpRequestMessage(HttpMethod.Get, url);
+                    if (accept is not null)
+                    {
+                        req.Headers.Accept.Clear();
+                        req.Headers.Accept.ParseAdd(accept);
+                    }
                     using var resp = await http.SendAsync(req, ct).ConfigureAwait(false);
                     var body = await resp.Content.ReadAsByteArrayAsync(ct).ConfigureAwait(false);
                     result = new((int)resp.StatusCode, body, resp.Content.Headers.ContentType?.MediaType, false);

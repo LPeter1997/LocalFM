@@ -1,3 +1,4 @@
+using System.Globalization;
 using LocalFM.Core;
 using LocalFM.Library;
 using LocalFM.Library.Enrich;
@@ -18,6 +19,8 @@ public sealed record LyricsView(LyricsData Data, IReadOnlyList<LyricLine> Lines)
 /// Online enrichment: finds candidates, applies a chosen one (respecting locked fields), fetches
 /// covers and lyrics. Everything is cached and rate-limited; nothing here runs on the playback path.
 /// </summary>
+public sealed record ArtistLookupResult(bool Updated, IReadOnlyList<ArtistCandidate> Candidates, string? Message);
+
 public sealed class MetadataService
 {
     private const string OnlineKey = "metadata.online";
@@ -39,7 +42,10 @@ public sealed class MetadataService
         Http.SetRateLimit(CoverArtArchive.Provider, TimeSpan.FromSeconds(0.5));
         Http.SetRateLimit(Itunes.Provider, TimeSpan.FromSeconds(3));
         Http.SetRateLimit(Lrclib.Provider, TimeSpan.FromSeconds(0.5));
+        Http.SetRateLimit(Wikimedia.Provider, TimeSpan.FromSeconds(0.25));
         MusicBrainz = new MusicBrainz(Http);
+        Artists = new MusicBrainzArtists(Http);
+        Wiki = new Wikimedia(Http);
         CoverArt = new CoverArtArchive(Http);
         Itunes = new Itunes(Http);
         Lrclib = new Lrclib(Http);
@@ -50,6 +56,8 @@ public sealed class MetadataService
     public CoverArtArchive CoverArt { get; }
     public Itunes Itunes { get; }
     public Lrclib Lrclib { get; }
+    public MusicBrainzArtists Artists { get; }
+    public Wikimedia Wiki { get; }
 
     /// <summary>Master switch: offline-first, so everything online can be turned off.</summary>
     public bool OnlineEnabled
@@ -172,6 +180,77 @@ public sealed class MetadataService
             tx.Exec("INSERT OR IGNORE INTO entity_image(entity_type, entity_id, image_id, role, source) VALUES ('release',$1,$2,'front',$3)", releaseId, id, img.Source);
         }).ConfigureAwait(false);
         return true;
+    }
+
+    // ------------------------------------------------------------------ artists
+
+    /// <summary>Profiles older than this are refreshed when the artist page is opened.</summary>
+    public static readonly TimeSpan ProfileMaxAge = TimeSpan.FromDays(90);
+
+    /// <summary>Whether opening the artist page should quietly fetch (or refresh) its profile.</summary>
+    public bool ShouldAutoFetchProfile(ArtistProfileView v) =>
+        OnlineEnabled && v.Mbid is not null && (v.FetchedAt is not { } f || DateTimeOffset.UtcNow - f > ProfileMaxAge);
+
+    /// <summary>
+    /// Fetches an artist's profile: MusicBrainz (by its known id, the given one, or an unambiguous name search),
+    /// then the Wikidata photo and the Wikipedia summary in the person's language (English as fallback).
+    /// When the name is ambiguous, nothing is stored and the candidates are returned to choose from.
+    /// </summary>
+    public async Task<ArtistLookupResult> FetchArtistProfileAsync(Ulid artistId, string? mbid = null, CancellationToken ct = default)
+    {
+        if (!OnlineEnabled) return new(false, [], "Online lookups are turned off (Sources page).");
+        string? name;
+        using (var c = _db.Open())
+        {
+            name = c.Scalar<string>("SELECT name FROM artist WHERE id = $1", artistId);
+            mbid ??= c.Scalar<string>("SELECT external_id FROM external_id WHERE entity_type='artist' AND entity_id=$1 AND provider=$2",
+                artistId, MusicBrainz.Provider);
+        }
+        if (name is null) return new(false, [], "This artist no longer exists.");
+
+        if (mbid is null)
+        {
+            // YouTube-style names ("Scorpions - Topic", "ScorpionsVEVO") search better tidied up.
+            string query = LocalFM.Library.Edit.Cleanup.CleanArtist(name)?.Text ?? name;
+            var found = await Artists.SearchAsync(query, ct).ConfigureAwait(false);
+            string key = Normalize.Key(query);
+            var exact = found.Where(f => f.Score >= 90 && Normalize.Key(f.Name) == key).ToList();
+            if (exact.Count == 1) mbid = exact[0].Mbid;
+            else return new(false, found.Take(8).ToList(), found.Count == 0
+                ? $"MusicBrainz knows no artist called “{name}”."
+                : $"More than one artist could be “{name}”. Pick the right one.");
+        }
+
+        var profile = await Artists.GetAsync(mbid, ct).ConfigureAwait(false);
+        if (profile is null) return new(false, [], "MusicBrainz did not answer. Try again later.");
+
+        ImageBytes? photo = null;
+        if (profile.WikidataId is { } qid)
+        {
+            try
+            {
+                string lang = CultureInfo.CurrentUICulture.TwoLetterISOLanguageName is { Length: 2 } l and not "iv" ? l : "en";
+                if (await Wiki.EntityAsync(qid, lang, ct).ConfigureAwait(false) is { } entity)
+                {
+                    profile = profile with { Description = entity.Description };
+                    string? title = entity.Sitelinks.GetValueOrDefault(lang + "wiki");
+                    string titleLang = lang;
+                    if (title is null && lang != "en") { title = entity.Sitelinks.GetValueOrDefault("enwiki"); titleLang = "en"; }
+                    if (title is not null && await Wiki.SummaryAsync(titleLang, title, ct).ConfigureAwait(false) is { } summary)
+                        profile = profile with { Bio = summary.Extract, BioUrl = summary.Url, BioSource = "Wikipedia" };
+                    if (entity.Image is { } file) photo = await Wiki.FileAsync(file, ct).ConfigureAwait(false);
+                }
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                // The MusicBrainz part is still worth keeping.
+                Log.Warn("Artist", $"Wikimedia lookup for {qid} failed: {ex.Message}");
+            }
+        }
+
+        await _db.Writer.Run((c, t) => ArtistProfiles.Apply(new Tx(c, t), _images, artistId, profile, photo?.Data, photo?.Mime)).ConfigureAwait(false);
+        Log.Info("Artist", $"Profile for '{name}' from MusicBrainz {mbid}{(profile.Bio is null ? "" : " + Wikipedia")}{(photo is null ? "" : " + photo")}");
+        return new(true, [], null);
     }
 
     // ------------------------------------------------------------------ lyrics
