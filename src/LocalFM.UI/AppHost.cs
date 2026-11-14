@@ -2,6 +2,7 @@ using LocalFM.App;
 using LocalFM.Core;
 using LocalFM.Library;
 using LocalFM.Library.Import;
+using LocalFM.Metadata;
 using LocalFM.Native;
 using LocalFM.Playback;
 
@@ -20,6 +21,7 @@ public sealed class AppHost : IDisposable
         History = new History(Db);
         Scanner = new Scanner(Db, Images);
         Watcher = new FolderWatcher(Scanner);
+        Metadata = new MetadataService(Db, Images, History);
 
         try
         {
@@ -45,6 +47,7 @@ public sealed class AppHost : IDisposable
     public History History { get; }
     public Scanner Scanner { get; }
     public FolderWatcher Watcher { get; }
+    public MetadataService Metadata { get; }
     public PlaybackEngine Engine { get; }
     public PlayerService Player { get; }
     public string? StartupWarning { get; }

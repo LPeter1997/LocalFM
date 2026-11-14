@@ -23,6 +23,7 @@ public sealed partial class MainViewModel : ObservableObject
         Host = host;
         Actions = new TrackActions(this);
         NowPlaying = new NowPlayingViewModel(host.Player);
+        Lyrics = new LyricsViewModel(host);
         Albums = new AlbumsViewModel(this);
         Queue = new QueueViewModel(this);
         Sources = new SourcesViewModel(this);
@@ -66,6 +67,7 @@ public sealed partial class MainViewModel : ObservableObject
     public AppHost Host { get; }
     public TrackActions Actions { get; }
     public NowPlayingViewModel NowPlaying { get; }
+    public LyricsViewModel Lyrics { get; }
     public AlbumsViewModel Albums { get; }
     public QueueViewModel Queue { get; }
     public SourcesViewModel Sources { get; }
@@ -131,13 +133,12 @@ public sealed partial class MainViewModel : ObservableObject
         CanGoBack = _back.Count > 0;
     }
 
-    public void ShowAlbum(AlbumSummary album) => Push(new AlbumDetailViewModel(this, album));
+    public void ShowAlbum(AlbumSummary album, bool openMatch = false) => Push(new AlbumDetailViewModel(this, album, openMatch));
     public void ShowArtist(ArtistSummary artist) => Push(new AlbumsViewModel(this, artist));
 
-    public void ShowAlbumOf(TrackInfo track)
+    public void ShowAlbumOf(TrackInfo track, bool openMatch = false)
     {
-        var album = Host.Queries.Albums().FirstOrDefault(a => a.ReleaseId == track.ReleaseId);
-        if (album is not null) ShowAlbum(album);
+        if (Host.Queries.Album(track.ReleaseId) is { } album) ShowAlbum(album, openMatch);
     }
 
     [RelayCommand]
@@ -145,6 +146,15 @@ public sealed partial class MainViewModel : ObservableObject
     {
         if (Host.Player.Current?.Track is { } t) ShowAlbumOf(t);
     }
+
+    /// <summary>The now-playing "fetch data" button: the playing album, with the MusicBrainz match open.</summary>
+    [RelayCommand]
+    private void MatchNowPlaying()
+    {
+        if (Host.Player.Current?.Track is { } t) ShowAlbumOf(t, openMatch: true);
+    }
+
+    [RelayCommand] private void ToggleLyrics() => Lyrics.IsOpen = !Lyrics.IsOpen;
 
     public async Task RefreshPlaylistsAsync()
     {

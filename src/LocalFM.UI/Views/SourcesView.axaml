@@ -32,6 +32,13 @@
         </DataTemplate>
       </ItemsControl.ItemTemplate>
     </ItemsControl>
+    <TextBlock Classes="h2" Text="Online metadata" Margin="0,14,0,0" />
+    <TextBlock Classes="muted" TextWrapping="Wrap">
+      LocalFM works fully offline. When allowed, it asks free services (MusicBrainz, Cover Art Archive, iTunes, LRCLIB)
+      about your music: album and track details, covers and lyrics. Answers are stored locally, so each question is asked once.
+    </TextBlock>
+    <CheckBox IsChecked="{Binding OnlineEnabled}">Use online services</CheckBox>
+    <CheckBox IsChecked="{Binding AutoFetchLyrics}" IsEnabled="{Binding OnlineEnabled}">Look up lyrics automatically when a track starts</CheckBox>
     <TextBlock Classes="faint small"><Run Text="Library data: " /><Run Text="{Binding DataFolder}" /></TextBlock>
   </StackPanel>
 </UserControl>

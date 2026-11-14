@@ -80,26 +80,60 @@ public sealed partial class AlbumsViewModel(MainViewModel main, ArtistSummary? a
     }
 }
 
-public sealed partial class AlbumDetailViewModel(MainViewModel main, AlbumSummary album) : PageViewModel(main)
+public sealed partial class AlbumDetailViewModel : PageViewModel
 {
-    public override string Title => album.Title;
-    public AlbumSummary Album => album;
-    public string? Year => album.Date is { Length: >= 4 } d ? d[..4] : null;
+    public AlbumDetailViewModel(MainViewModel main, AlbumSummary album, bool openMatch = false) : base(main)
+    {
+        _album = album;
+        _matchOpen = openMatch;
+        if (openMatch) EnsureMatch();
+    }
+
+    public override string Title => Album.Title;
+    public string? Year => Album.Date is { Length: >= 4 } d ? d[..4] : null;
     public ObservableCollection<TrackInfo> Tracks { get; } = new();
     public TrackActions Actions => Main.Actions;
 
+    [ObservableProperty] [NotifyPropertyChangedFor(nameof(Year))] private AlbumSummary _album;
     [ObservableProperty] private string _summary = "";
     [ObservableProperty] private bool _multiDisc;
+    [ObservableProperty] private bool _matchOpen;
+    [ObservableProperty] private MatchViewModel? _match;
+    [ObservableProperty] private string? _coverStatus;
 
     public override Task RefreshAsync() => Load(
-        () => Host.Queries.AlbumTracks(album.ReleaseId),
-        list =>
+        () => (Album: Host.Queries.Album(Album.ReleaseId), Tracks: Host.Queries.AlbumTracks(Album.ReleaseId)),
+        r =>
         {
-            Replace(Tracks, list);
-            MultiDisc = list.Select(t => t.Disc).Distinct().Count() > 1;
-            long ms = list.Sum(t => t.DurationMs ?? 0);
-            Summary = $"{list.Count} tracks · {Converters.Time(TimeSpan.FromMilliseconds(ms))}";
+            if (r.Album is not null) Album = r.Album;
+            Replace(Tracks, r.Tracks);
+            MultiDisc = r.Tracks.Select(t => t.Disc).Distinct().Count() > 1;
+            long ms = r.Tracks.Sum(t => t.DurationMs ?? 0);
+            Summary = $"{r.Tracks.Count} tracks · {Converters.Time(TimeSpan.FromMilliseconds(ms))}";
         });
+
+    private void EnsureMatch()
+    {
+        if (Match is not null) return;
+        Match = new MatchViewModel(Host, Album.ReleaseId, Album.Title, Album.Artist, RefreshAsync);
+        Match.SearchCommand.Execute(null);
+    }
+
+    [RelayCommand]
+    private void ToggleMatch()
+    {
+        MatchOpen = !MatchOpen;
+        if (MatchOpen) EnsureMatch();
+    }
+
+    [RelayCommand]
+    private async Task FetchCover()
+    {
+        CoverStatus = "Looking for a cover…";
+        bool ok = await Task.Run(() => Host.Metadata.FetchCoverAsync(Album.ReleaseId));
+        CoverStatus = ok ? null : "No cover found online.";
+        await RefreshAsync();
+    }
 
     [RelayCommand] private void PlayAll() => Host.Player.PlayTracks(Tracks.ToList());
 
@@ -258,6 +292,18 @@ public sealed partial class SourcesViewModel(MainViewModel main) : PageViewModel
     public ObservableCollection<Source> Sources { get; } = new();
 
     public string DataFolder => Host.Paths.Root;
+
+    public bool OnlineEnabled
+    {
+        get => Host.Metadata.OnlineEnabled;
+        set { Host.Metadata.OnlineEnabled = value; OnPropertyChanged(); }
+    }
+
+    public bool AutoFetchLyrics
+    {
+        get => Host.Metadata.AutoFetchLyrics;
+        set { Host.Metadata.AutoFetchLyrics = value; OnPropertyChanged(); }
+    }
 
     public override Task RefreshAsync() => Load(() => Library.Sources.List(Host.Db), list => Replace(Sources, list));
 

@@ -21,6 +21,20 @@ public partial class MainWindow : Window
         SeekSlider.AddHandler(PointerReleasedEvent, (_, _) => CommitSeek(), RoutingStrategies.Tunnel, handledEventsToo: true);
         SeekSlider.AddHandler(PointerCaptureLostEvent, (_, _) => CommitSeek(), RoutingStrategies.Tunnel, handledEventsToo: true);
         AddHandler(KeyDownEvent, OnKeyDownTunnel, RoutingStrategies.Tunnel);
+        LyricsList.AddHandler(PointerPressedEvent, (_, e) =>
+        {
+            if ((e.Source as Control)?.DataContext is LyricLineViewModel line) Vm?.Lyrics.SeekTo(line);
+        }, RoutingStrategies.Bubble, handledEventsToo: true);
+    }
+
+    /// <summary>Keeps the sung line about a third from the top of the lyrics panel.</summary>
+    private void ScrollLyricTo(int index)
+    {
+        if (index < 0 || LyricsList.ContainerFromIndex(index) is not Control c) return;
+        var p = c.TranslatePoint(new Point(0, 0), LyricsList);
+        if (p is null) return;
+        double target = Math.Max(0, p.Value.Y - LyricsScroll.Viewport.Height / 3);
+        LyricsScroll.Offset = new Vector(0, target);
     }
 
     private MainViewModel? Vm => DataContext as MainViewModel;
@@ -28,7 +42,11 @@ public partial class MainWindow : Window
     protected override void OnDataContextChanged(EventArgs e)
     {
         base.OnDataContextChanged(e);
-        if (Vm is { } vm) vm.PickFolder = PickFolderAsync;
+        if (Vm is { } vm)
+        {
+            vm.PickFolder = PickFolderAsync;
+            vm.Lyrics.CurrentLineChanged += ScrollLyricTo;
+        }
     }
 
     protected override void OnOpened(EventArgs e)
@@ -73,6 +91,7 @@ public partial class MainWindow : Window
             case Key.Left when ctrl: vm.NowPlaying.PreviousCommand.Execute(null); break;
             case Key.Right: vm.NowPlaying.SeekBy(5); break;
             case Key.Left: vm.NowPlaying.SeekBy(-5); break;
+            case Key.L: vm.ToggleLyricsCommand.Execute(null); break;
             default: return;
         }
         e.Handled = true;
@@ -87,7 +106,7 @@ public partial class MainWindow : Window
             if (Vm is { } vm && Program.SnapshotPage is { } page)
             {
                 await Task.Delay(800);
-                if (page == "album" && vm.Albums.Albums.FirstOrDefault() is { } a) vm.ShowAlbum(a);
+                if (page is "album" or "match" && vm.Albums.Albums.FirstOrDefault() is { } a) vm.ShowAlbum(a, openMatch: page == "match");
                 else if (vm.Nav.FirstOrDefault(n => n.Name.Equals(page, StringComparison.OrdinalIgnoreCase)) is { } nav) vm.Navigate(nav);
             }
             if (Environment.GetEnvironmentVariable("LOCALFM_SNAPSHOT_PLAY") == "1" && Vm is { } v2)
@@ -95,7 +114,9 @@ public partial class MainWindow : Window
                 await Task.Delay(500);
                 if (v2.Albums.Albums.FirstOrDefault() is { } first) v2.Albums.PlayCommand.Execute(first);
             }
-            await Task.Delay(2500); // let pages and covers load
+            if (Environment.GetEnvironmentVariable("LOCALFM_SNAPSHOT_LYRICS") == "1" && Vm is { } v3) v3.Lyrics.IsOpen = true;
+            int wait = int.TryParse(Environment.GetEnvironmentVariable("LOCALFM_SNAPSHOT_WAIT"), out int w) ? w : 2500;
+            await Task.Delay(wait); // let pages, covers and lookups finish
             var root = (Visual?)this.GetVisualDescendants().OfType<Avalonia.Controls.Primitives.VisualLayerManager>().FirstOrDefault() ?? (Visual)Content!;
             var visual = ElementComposition.GetElementVisual(root)!;
             using Bitmap bmp = await visual.Compositor.CreateCompositionVisualSnapshot(visual, RenderScaling);

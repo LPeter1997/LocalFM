@@ -4,6 +4,7 @@
              xmlns:lib="using:LocalFM.Library"
              xmlns:c="using:LocalFM.UI.Controls"
              xmlns:ui="using:LocalFM.UI"
+             xmlns:enrich="using:LocalFM.Library.Enrich"
              x:Class="LocalFM.UI.Views.AlbumDetailView"
              x:DataType="vm:AlbumDetailViewModel">
   <DockPanel>
@@ -12,6 +13,8 @@
         <Panel>
           <Path Classes="icon" Data="{StaticResource IcoAlbum}" Width="64" Height="64" Stroke="{StaticResource Faint}" StrokeThickness="1.2" />
           <c:CoverImage Path="{Binding Album.CoverPath}" DecodeWidth="400" />
+          <Button Classes="ghost" HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,12" FontSize="12"
+                  Command="{Binding FetchCoverCommand}" IsVisible="{Binding Album.CoverPath, Converter={x:Static ObjectConverters.IsNull}}">Fetch cover</Button>
         </Panel>
       </Border>
       <StackPanel Grid.Column="1" Margin="24,0,0,0" VerticalAlignment="Bottom" Spacing="6">
@@ -24,14 +27,68 @@
           <Run Text="  ·  " Foreground="{StaticResource Faint}" />
           <Run Text="{Binding Summary}" Foreground="{StaticResource Muted}" />
         </TextBlock>
-        <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,10,0,0">
+        <WrapPanel Margin="0,10,0,0" ItemSpacing="8" LineSpacing="8">
           <Button Classes="primary" Command="{Binding PlayAllCommand}">Play</Button>
           <Button Classes="ghost" Command="{Binding ShuffleAllCommand}">Shuffle</Button>
           <Button Classes="ghost" Command="{Binding PlayAlbumNextCommand}">Play next</Button>
           <Button Classes="ghost" Command="{Binding EnqueueAlbumCommand}">Add to queue</Button>
-        </StackPanel>
+          <Button Classes="ghost" Command="{Binding ToggleMatchCommand}" ToolTip.Tip="Match this album with MusicBrainz">
+            <StackPanel Orientation="Horizontal" Spacing="6">
+              <Path Classes="icon" Data="{StaticResource IcoMagic}" Width="15" Height="15" />
+              <TextBlock Text="Find metadata" />
+            </StackPanel>
+          </Button>
+        </WrapPanel>
+        <TextBlock Text="{Binding CoverStatus}" Classes="muted small" IsVisible="{Binding CoverStatus, Converter={x:Static ObjectConverters.IsNotNull}}" />
       </StackPanel>
     </Grid>
+    <Border DockPanel.Dock="Top" Margin="24,0,24,12" Padding="14" CornerRadius="10" Background="{StaticResource Surface}"
+            IsVisible="{Binding MatchOpen}">
+      <StackPanel DataContext="{Binding Match}" x:DataType="vm:MatchViewModel" Spacing="10">
+        <Grid ColumnDefinitions="*,*,Auto,Auto" >
+          <TextBox Text="{Binding Title}" PlaceholderText="Album title" CornerRadius="8" Margin="0,0,8,0" />
+          <TextBox Grid.Column="1" Text="{Binding Artist}" PlaceholderText="Artist (optional)" CornerRadius="8" Margin="0,0,8,0" />
+          <Button Grid.Column="2" Classes="ghost" Command="{Binding SearchCommand}" IsEnabled="{Binding !Busy}">Search</Button>
+          <CheckBox Grid.Column="3" IsChecked="{Binding FetchCover}" Margin="12,0,0,0">Download cover</CheckBox>
+        </Grid>
+        <StackPanel Orientation="Horizontal" Spacing="8">
+          <ProgressBar IsIndeterminate="True" Width="80" IsVisible="{Binding Busy}" VerticalAlignment="Center" />
+          <TextBlock Text="{Binding Status}" Classes="muted small" VerticalAlignment="Center" TextWrapping="Wrap" />
+        </StackPanel>
+        <ListBox Classes="rows" ItemsSource="{Binding Candidates}" SelectedItem="{Binding Selected}" MaxHeight="260"
+                 IsVisible="{Binding Candidates.Count}">
+          <ListBox.ItemTemplate>
+            <DataTemplate x:DataType="enrich:ReleaseCandidate">
+              <Grid ColumnDefinitions="2.2*,1.1*,1.3*,1.4*,44">
+                <StackPanel VerticalAlignment="Center" Margin="0,0,10,0">
+                  <TextBlock Text="{Binding Title}" FontWeight="Medium" TextTrimming="CharacterEllipsis" />
+                  <TextBlock Classes="muted small" TextTrimming="CharacterEllipsis">
+                    <Run Text="{Binding Artist}" /><Run Text="  " /><Run Text="{Binding Disambiguation}" Foreground="{StaticResource Faint}" />
+                  </TextBlock>
+                </StackPanel>
+                <TextBlock Grid.Column="1" Classes="muted small" VerticalAlignment="Center">
+                  <Run Text="{Binding Date}" /><Run Text="  " /><Run Text="{Binding Country}" />
+                </TextBlock>
+                <TextBlock Grid.Column="2" Classes="muted small" VerticalAlignment="Center" TextTrimming="CharacterEllipsis">
+                  <Run Text="{Binding Format}" /><Run Text=" · " /><Run Text="{Binding TrackCount}" /><Run Text=" tracks" />
+                </TextBlock>
+                <TextBlock Grid.Column="3" Classes="faint small" VerticalAlignment="Center" TextTrimming="CharacterEllipsis">
+                  <Run Text="{Binding Label}" /><Run Text="  " /><Run Text="{Binding CatalogNumber}" />
+                </TextBlock>
+                <Border Grid.Column="4" CornerRadius="6" Background="{StaticResource Surface3}" Padding="4,2" HorizontalAlignment="Right" VerticalAlignment="Center">
+                  <TextBlock Text="{Binding Score}" Classes="small" FontWeight="SemiBold" />
+                </Border>
+              </Grid>
+            </DataTemplate>
+          </ListBox.ItemTemplate>
+        </ListBox>
+        <StackPanel Orientation="Horizontal" Spacing="8">
+          <Button Classes="primary" Command="{Binding ApplyCommand}" IsEnabled="{Binding !Busy}">Apply selected release</Button>
+          <TextBlock Classes="faint small" VerticalAlignment="Center" TextWrapping="Wrap"
+                     Text="Fields you have edited by hand are never overwritten." />
+        </StackPanel>
+      </StackPanel>
+    </Border>
     <ListBox x:Name="List" Classes="rows" ItemsSource="{Binding Tracks}" Margin="16,0,16,8">
       <ListBox.ItemTemplate>
         <DataTemplate x:DataType="lib:TrackInfo">
