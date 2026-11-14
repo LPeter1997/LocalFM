@@ -316,7 +316,12 @@ public sealed partial class QueueViewModel(MainViewModel main) : PageViewModel(m
     [RelayCommand] private void Play(QueueRow row) => Host.Player.PlayItem(row.Item.Id);
     [RelayCommand] private void Remove(QueueRow row) => Host.Player.RemoveItem(row.Item.Id);
     /// <summary>Drag and drop in the list.</summary>
-    public void Move(int from, int to) { if (from != to) Host.Player.MoveItem(from, to); }
+    public void Move(int from, int to)
+    {
+        if (from == to) return;
+        Host.Player.MoveItem(from, to);
+        _ = RefreshAsync(); // right away, so the dropped row doesn't flash back to its old place
+    }
 
     [RelayCommand] private void MoveUp(QueueRow row) => Host.Player.MoveItem(row.Index, row.Index - 1);
     [RelayCommand] private void MoveDown(QueueRow row) => Host.Player.MoveItem(row.Index, row.Index + 1);

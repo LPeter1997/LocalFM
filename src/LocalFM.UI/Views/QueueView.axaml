@@ -62,6 +62,12 @@
     <Style Selector="ListBoxItem StackPanel.actions"><Setter Property="Opacity" Value="0" /></Style>
     <Style Selector="ListBoxItem:pointerover StackPanel.actions, ListBoxItem:selected StackPanel.actions"><Setter Property="Opacity" Value="1" /></Style>
     <Style Selector="ListBox.dragging ListBoxItem"><Setter Property="Cursor" Value="SizeNorthSouth" /></Style>
+    <!-- The row being dragged sits a step above the others -->
+    <Style Selector="ListBoxItem.lifted /template/ ContentPresenter">
+      <Setter Property="Background" Value="{StaticResource Surface3}" />
+      <Setter Property="BoxShadow" Value="0 6 18 0 #60000000" />
+    </Style>
+    <Style Selector="ListBox.dragging ListBoxItem:pointerover StackPanel.actions"><Setter Property="Opacity" Value="0" /></Style>
     <Style Selector="TextBlock.current"><Setter Property="Foreground" Value="{StaticResource Accent}" /><Setter Property="FontWeight" Value="SemiBold" /></Style>
   </UserControl.Styles>
 </UserControl>
