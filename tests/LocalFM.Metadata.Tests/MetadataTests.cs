@@ -235,7 +235,52 @@ public class MetadataTests
         var e = Lrc.Parse("[00:01.00]<00:01.00>Hello <00:01.50>world", LyricsFormat.EnhancedLrc);
         Assert.Equal("Hello world", e[0].Text);
         Assert.Equal(2, e[0].Words.Count);
-        Assert.Equal(TimeSpan.FromSeconds(1.5), e[0].Words[1].Time);
+        Assert.Equal(TimeSpan.FromSeconds(1.5), e[0].Words[1].Start);
+    }
+
+    [Fact]
+    public void Word_tags_keep_their_place_in_the_tidied_line()
+    {
+        var lines = Lrc.Parse("[00:10.00] <00:10.00>Hold  <00:10.40>me <00:11.00>now<00:11.80>\n[00:20.00]<00:20.00>Next", LyricsFormat.EnhancedLrc);
+        var l = lines[0];
+        Assert.Equal("Hold me now", l.Text);
+        Assert.Equal(["Hold", "me", "now"], l.Words.Select(w => l.Text.Substring(w.CharStart, w.CharLength)));
+        Assert.Equal(TimeSpan.FromSeconds(10.4), l.Words[0].End);
+        Assert.Equal(TimeSpan.FromSeconds(11.8), l.Words[2].End); // closing tag ends the last word
+
+        // A chorus stamped twice is sung twice: its words move with the second stamp.
+        var twice = Lrc.Parse("[00:05.00][00:30.00]<00:05.00>La <00:05.50>la", LyricsFormat.EnhancedLrc);
+        Assert.Equal(TimeSpan.FromSeconds(30.5), twice[1].Words[1].Start);
+        Assert.Equal(TimeSpan.FromSeconds(5.5), twice[0].Words[1].Start);
+    }
+
+    [Fact]
+    public void Karaoke_follows_real_word_timing()
+    {
+        var lines = Lrc.Parse("[00:10.00]<00:10.00>Hold <00:10.40>me <00:11.00>now<00:11.80>\n[00:20.00]<00:20.00>Next", LyricsFormat.EnhancedLrc);
+        var t = Karaoke.Timings(lines, estimate: false);
+        Assert.Equal(0, Karaoke.SungChars(t[0], TimeSpan.FromSeconds(9)));
+        Assert.Equal(2, Karaoke.SungChars(t[0], TimeSpan.FromSeconds(10.2)), 3);  // halfway through "Hold"
+        Assert.Equal(5, Karaoke.SungChars(t[0], TimeSpan.FromSeconds(10.4)), 3);  // "Hold " done, "me" starts
+        Assert.Equal(11, Karaoke.SungChars(t[0], TimeSpan.FromSeconds(15)), 3);   // whole line
+        // The last line's last word has no end tag: it still ends, before any following line would.
+        Assert.True(t[1][0].End > t[1][0].Start);
+    }
+
+    [Fact]
+    public void Karaoke_estimates_line_synced_lyrics_only_when_asked()
+    {
+        var lines = Lrc.Parse("[00:10.00]One two three\n[00:11.00]Short gap\n[00:40.00]Last", LyricsFormat.Lrc);
+        Assert.All(Karaoke.Timings(lines, estimate: false), w => Assert.Empty(w));
+
+        var t = Karaoke.Timings(lines, estimate: true);
+        Assert.Equal(["One", "two", "three"], t[0].Select(w => lines[0].Text.Substring(w.CharStart, w.CharLength)));
+        Assert.True(t[0][^1].End <= TimeSpan.FromSeconds(11)); // never runs into the next line
+        Assert.Equal(lines[0].Text.Length, Karaoke.SungChars(t[0], TimeSpan.FromSeconds(11)), 3);
+        // A long instrumental gap does not stretch the line: it is sung at a normal pace.
+        Assert.True(t[1][^1].End - t[1][0].Start < TimeSpan.FromSeconds(2));
+        double mid = Karaoke.SungChars(t[1], TimeSpan.FromSeconds(11) + (t[1][^1].End - TimeSpan.FromSeconds(11)) / 2);
+        Assert.InRange(mid, 3, 6);
     }
 
     [Fact]

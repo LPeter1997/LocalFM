@@ -312,6 +312,12 @@ public sealed partial class SourcesViewModel(MainViewModel main) : PageViewModel
         set { Host.Metadata.AutoFetchLyrics = value; OnPropertyChanged(); }
     }
 
+    public bool EstimateWordTiming
+    {
+        get => Host.Metadata.EstimateWordTiming;
+        set { Host.Metadata.EstimateWordTiming = value; OnPropertyChanged(); Main.Lyrics.Retime(); }
+    }
+
     public override Task RefreshAsync() => Load(() => Library.Sources.List(Host.Db), list => Replace(Sources, list));
 
     [RelayCommand]

@@ -176,7 +176,8 @@ public sealed class Importer(ImageStore images)
 
         if (Normalize.Text(t.Lyrics) is { } lyrics)
         {
-            string format = LooksSynced(lyrics) ? "lrc" : "plain";
+            string format = !LooksSynced(lyrics) ? "plain"
+                : System.Text.RegularExpressions.Regex.IsMatch(lyrics, @"<\d{1,2}:\d{2}(\.\d{1,3})?>") ? "elrc" : "lrc";
             tx.Exec("INSERT INTO lyrics(id, recording_id, format, content, source, updated_at) VALUES ($1,$2,$3,$4,$5,$6)",
                 Ulid.NewUlid(), id, format, t.Lyrics!.Trim(), TagSource, now);
         }

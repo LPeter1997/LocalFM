@@ -25,6 +25,7 @@ public sealed class MetadataService
 {
     private const string OnlineKey = "metadata.online";
     private const string LyricsKey = "lyrics.autofetch";
+    private const string WordEstimateKey = "lyrics.wordEstimate";
 
     private readonly Database _db;
     private readonly History _kv;
@@ -70,6 +71,13 @@ public sealed class MetadataService
     {
         get => _kv.Get(LyricsKey) != "0";
         set => _ = _kv.SetAsync(LyricsKey, value ? "1" : "0");
+    }
+
+    /// <summary>Sweep through lines word by word even when the lyrics are only timed per line (an estimate).</summary>
+    public bool EstimateWordTiming
+    {
+        get => _kv.Get(WordEstimateKey) != "0";
+        set => _ = _kv.SetAsync(WordEstimateKey, value ? "1" : "0");
     }
 
     // ------------------------------------------------------------------ albums

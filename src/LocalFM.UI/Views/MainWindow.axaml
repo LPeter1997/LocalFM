@@ -127,8 +127,10 @@
               <ItemsControl x:Name="LyricsList" ItemsSource="{Binding Lines}" Margin="20,8,20,120">
                 <ItemsControl.ItemTemplate>
                   <DataTemplate x:DataType="vm:LyricLineViewModel">
-                    <TextBlock Classes="lyric" Classes.current="{Binding IsCurrent}" Classes.past="{Binding IsPast}"
-                               Text="{Binding Text}" TextWrapping="Wrap" Tag="{Binding}" />
+                    <c:KaraokeText Classes="lyric" Classes.current="{Binding IsCurrent}" Classes.past="{Binding IsPast}"
+                                     Text="{Binding Text}" TextWrapping="Wrap" Tag="{Binding}"
+                                     Words="{Binding Words}" Clock="{Binding Clock}" Live="{Binding IsCurrent}"
+                                     SungBrush="{StaticResource Accent}" />
                   </DataTemplate>
                 </ItemsControl.ItemTemplate>
               </ItemsControl>

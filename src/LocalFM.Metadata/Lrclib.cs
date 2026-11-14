@@ -106,8 +106,11 @@ public sealed partial class Lrclib(CachedHttp http)
     private static partial Regex WordTag();
 }
 
+/// <summary>A sung word: when it starts (and ends, when the lyrics say), and where it sits in the line's text.</summary>
+public sealed record LyricWord(TimeSpan Start, TimeSpan? End, int CharStart, int CharLength);
+
 /// <summary>One lyric line with its start time (null for unsynced text) and optional per-word timings.</summary>
-public sealed record LyricLine(TimeSpan? Time, string Text, IReadOnlyList<(TimeSpan Time, string Word)> Words);
+public sealed record LyricLine(TimeSpan? Time, string Text, IReadOnlyList<LyricWord> Words);
 
 public static partial class Lrc
 {
@@ -127,26 +130,57 @@ public static partial class Lrc
             if (offset.Success) { offsetMs = double.Parse(offset.Groups[1].Value, CultureInfo.InvariantCulture); continue; }
             var stamps = LineTag().Matches(raw);
             if (stamps.Count == 0) continue;
-            string text = raw[(stamps[^1].Index + stamps[^1].Length)..];
-            var words = new List<(TimeSpan, string)>();
-            var wordTags = WordTag().Matches(text);
-            if (wordTags.Count > 0)
-            {
-                for (int i = 0; i < wordTags.Count; i++)
-                {
-                    int start = wordTags[i].Index + wordTags[i].Length;
-                    int end = i + 1 < wordTags.Count ? wordTags[i + 1].Index : text.Length;
-                    string w = text[start..end];
-                    if (w.Trim().Length > 0) words.Add((Time(wordTags[i]) - TimeSpan.FromMilliseconds(offsetMs), w));
-                }
-                text = WordTag().Replace(text, "");
-            }
-            text = Spaces().Replace(text, " ").Trim();
+            var shift = TimeSpan.FromMilliseconds(offsetMs);
+            var (text, words) = SplitWords(raw[(stamps[^1].Index + stamps[^1].Length)..], shift);
+            // A line stamped more than once (a repeated chorus) is sung again later: move its words along with it.
+            var first = Time(stamps[0]);
             foreach (Match s in stamps)
-                lines.Add(new LyricLine(Time(s) - TimeSpan.FromMilliseconds(offsetMs), text, words));
+            {
+                var delta = Time(s) - first;
+                var moved = delta == TimeSpan.Zero ? words
+                    : words.Select(w => w with { Start = w.Start + delta, End = w.End + delta }).ToList();
+                lines.Add(new LyricLine(Time(s) - shift, text, moved));
+            }
         }
         lines.Sort((a, b) => a.Time!.Value.CompareTo(b.Time!.Value));
         return lines;
+    }
+
+    /// <summary>
+    /// Removes the word tags of an enhanced LRC line, keeping where each word ends up in the tidied text.
+    /// A word ends where the next tag starts; a tag with nothing after it only marks the end of the word before.
+    /// </summary>
+    private static (string Text, List<LyricWord> Words) SplitWords(string text, TimeSpan shift)
+    {
+        var tags = WordTag().Matches(text);
+        if (tags.Count == 0) return (Spaces().Replace(text, " ").Trim(), []);
+
+        var sb = new System.Text.StringBuilder();
+        var words = new List<LyricWord>();
+        void Append(string piece)
+        {
+            piece = Spaces().Replace(piece, " ");
+            if (sb.Length > 0 && sb[^1] == ' ' && piece.StartsWith(' ')) piece = piece[1..];
+            sb.Append(piece);
+        }
+        Append(text[..tags[0].Index]);
+        for (int i = 0; i < tags.Count; i++)
+        {
+            int from = tags[i].Index + tags[i].Length;
+            int to = i + 1 < tags.Count ? tags[i + 1].Index : text.Length;
+            string piece = text[from..to];
+            if (piece.Trim().Length == 0) { Append(piece); continue; }
+            Append(piece);
+            string tidy = Spaces().Replace(piece, " ");
+            int end = sb.Length - (tidy.Length - tidy.TrimEnd().Length);
+            int length = tidy.Trim().Length;
+            TimeSpan? until = i + 1 < tags.Count ? Time(tags[i + 1]) - shift : null;
+            words.Add(new LyricWord(Time(tags[i]) - shift, until, end - length, length));
+        }
+        int lead = sb.Length - sb.ToString().TrimStart().Length;
+        var result = sb.ToString().Trim();
+        return (result, words.Select(w => w with { CharStart = w.CharStart - lead })
+            .Where(w => w.CharStart >= 0 && w.CharStart + w.CharLength <= result.Length).ToList());
     }
 
     private static TimeSpan Time(Match m)

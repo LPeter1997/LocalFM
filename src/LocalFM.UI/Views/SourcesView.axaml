@@ -41,6 +41,7 @@
     </TextBlock>
     <CheckBox IsChecked="{Binding OnlineEnabled}">Use online services</CheckBox>
     <CheckBox IsChecked="{Binding AutoFetchLyrics}" IsEnabled="{Binding OnlineEnabled}">Look up lyrics automatically when a track starts</CheckBox>
+    <CheckBox IsChecked="{Binding EstimateWordTiming}">Highlight lyrics word by word, estimating the timing for lyrics that are only synced by line</CheckBox>
     <TextBlock Classes="h2" Text="Knowledge base file" Margin="0,14,0,0" />
     <TextBlock Classes="muted" TextWrapping="Wrap">
       Everything LocalFM knows about your music, in one file: corrected names, locks, album details, covers, artist

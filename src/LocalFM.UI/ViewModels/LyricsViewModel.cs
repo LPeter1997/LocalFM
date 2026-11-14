@@ -8,11 +8,15 @@ using LocalFM.Metadata;
 
 namespace LocalFM.UI.ViewModels;
 
-public sealed partial class LyricLineViewModel(LyricLine line, int index) : ObservableObject
+public sealed partial class LyricLineViewModel(LyricLine line, int index, Func<TimeSpan> clock) : ObservableObject
 {
     public LyricLine Line { get; } = line;
     public int Index { get; } = index;
     public string Text => Line.Text.Length == 0 ? "♪" : Line.Text;
+    /// <summary>Playback position the word highlight follows (shared by all lines).</summary>
+    public Func<TimeSpan> Clock { get; } = clock;
+    /// <summary>When each word is sung; empty when the line is only highlighted as a whole.</summary>
+    [ObservableProperty] private IReadOnlyList<WordTiming> _words = [];
     [ObservableProperty] private bool _isCurrent;
     [ObservableProperty] private bool _isPast;
 }
@@ -25,6 +29,9 @@ public sealed partial class LyricsViewModel : ObservableObject
     private Ulid? _recording;
     private CancellationTokenSource? _cts;
     private int _current = -1;
+    private LyricsView? _view;
+    /// <summary>A tiny lead makes the highlight feel in time with the voice.</summary>
+    private static readonly TimeSpan Lead = TimeSpan.FromMilliseconds(150);
 
     public LyricsViewModel(AppHost host)
     {
@@ -56,6 +63,7 @@ public sealed partial class LyricsViewModel : ObservableObject
         var track = _host.Player.Current?.Track;
         if (track?.RecordingId == _recording) return;
         _recording = track?.RecordingId;
+        _view = null;
         Lines.Clear();
         _current = -1;
         Status = null;
@@ -100,6 +108,7 @@ public sealed partial class LyricsViewModel : ObservableObject
             var view = await Task.Run(() => _host.Metadata.GetLyricsAsync(track, allowFetch, cts.Token, force));
             if (cts.IsCancellationRequested || track.RecordingId != _recording) return;
             Lines.Clear();
+            _view = null;
             _current = -1;
             if (view is null)
             {
@@ -118,10 +127,21 @@ public sealed partial class LyricsViewModel : ObservableObject
         Lines.Clear();
         _current = -1;
         Status = null;
+        _view = view;
         int i = 0;
-        foreach (var l in view.Lines) Lines.Add(new LyricLineViewModel(l, i++));
+        Func<TimeSpan> clock = () => _host.Player.Position + Lead;
+        foreach (var l in view.Lines) Lines.Add(new LyricLineViewModel(l, i++, clock));
         Synced = view.Synced;
+        Retime();
         Source = view.Data.Provider switch { "lrclib" => "Lyrics from LRCLIB", "tags" => "Lyrics from file tags", var p => $"Lyrics from {p}" };
+    }
+
+    /// <summary>Recomputes the word timings (after the estimate setting changes).</summary>
+    public void Retime()
+    {
+        if (_view is null || Lines.Count != _view.Lines.Count) return;
+        var timings = _view.Synced ? Karaoke.Timings(_view.Lines, _host.Metadata.EstimateWordTiming) : null;
+        for (int i = 0; i < Lines.Count; i++) Lines[i].Words = timings?[i] ?? [];
     }
 
     public void SeekTo(LyricLineViewModel line)
@@ -132,7 +152,7 @@ public sealed partial class LyricsViewModel : ObservableObject
     private void Follow()
     {
         if (!IsOpen || !Synced || Lines.Count == 0) return;
-        var pos = _host.Player.Position + TimeSpan.FromMilliseconds(150); // tiny lead feels in time
+        var pos = _host.Player.Position + Lead;
         int idx = -1;
         for (int i = 0; i < Lines.Count; i++)
         {
