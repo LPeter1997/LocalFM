@@ -40,6 +40,8 @@ public partial class MainWindow : Window
 
     private MainViewModel? Vm => DataContext as MainViewModel;
 
+    private static readonly FilePickerFileType BundleType = new("LocalFM knowledge base") { Patterns = ["*.localfm-kb"] };
+
     /// <summary>The person asked to switch to the miniplayer.</summary>
     public event Action? MiniPlayerRequested;
 
@@ -49,6 +51,23 @@ public partial class MainWindow : Window
         if (Vm is { } vm)
         {
             vm.PickFolder = PickFolderAsync;
+            vm.PickSaveFile = async name =>
+            {
+                var file = await StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
+                {
+                    Title = "Export knowledge base", SuggestedFileName = name, DefaultExtension = "localfm-kb",
+                    FileTypeChoices = [BundleType],
+                });
+                return file?.TryGetLocalPath();
+            };
+            vm.PickOpenFile = async () =>
+            {
+                var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+                {
+                    Title = "Import knowledge base", AllowMultiple = false, FileTypeFilter = [BundleType, FilePickerFileTypes.All],
+                });
+                return files.Count > 0 ? files[0].TryGetLocalPath() : null;
+            };
             vm.OpenUrl = url =>
             {
                 // Only web links: the URLs come from online sources.

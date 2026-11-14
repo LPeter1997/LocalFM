@@ -6,6 +6,7 @@
              xmlns:ui="using:LocalFM.UI"
              x:Class="LocalFM.UI.Views.SourcesView"
              x:DataType="vm:SourcesViewModel">
+  <ScrollViewer>
   <StackPanel Margin="24,0,24,12" Spacing="14" MaxWidth="860" HorizontalAlignment="Left">
     <TextBlock Classes="h1" Text="Sources" />
     <TextBlock Classes="muted" TextWrapping="Wrap">
@@ -34,11 +35,27 @@
     </ItemsControl>
     <TextBlock Classes="h2" Text="Online metadata" Margin="0,14,0,0" />
     <TextBlock Classes="muted" TextWrapping="Wrap">
-      LocalFM works fully offline. When allowed, it asks free services (MusicBrainz, Cover Art Archive, iTunes, LRCLIB)
-      about your music: album and track details, covers and lyrics. Answers are stored locally, so each question is asked once.
+      LocalFM works fully offline. When allowed, it asks free services (MusicBrainz, Cover Art Archive, iTunes, LRCLIB,
+      Wikidata and Wikipedia) about your music: album and track details, covers, lyrics and artist profiles.
+      Answers are stored locally, so each question is asked once.
     </TextBlock>
     <CheckBox IsChecked="{Binding OnlineEnabled}">Use online services</CheckBox>
     <CheckBox IsChecked="{Binding AutoFetchLyrics}" IsEnabled="{Binding OnlineEnabled}">Look up lyrics automatically when a track starts</CheckBox>
+    <TextBlock Classes="h2" Text="Knowledge base file" Margin="0,14,0,0" />
+    <TextBlock Classes="muted" TextWrapping="Wrap">
+      Everything LocalFM knows about your music, in one file: corrected names, locks, album details, covers, artist
+      profiles, lyrics, playlists and (optionally) listening history. Not the music itself, and no folder paths.
+      Importing merges into this library: albums are recognised by their audio, so it works on another computer
+      with the same files, and local edits win.
+    </TextBlock>
+    <StackPanel Orientation="Horizontal" Spacing="8">
+      <Button Classes="ghost" Command="{Binding ExportBundleCommand}" IsEnabled="{Binding !BundleBusy}">Export…</Button>
+      <Button Classes="ghost" Command="{Binding ImportBundleCommand}" IsEnabled="{Binding !BundleBusy}">Import…</Button>
+      <CheckBox IsChecked="{Binding IncludeHistory}" VerticalAlignment="Center" Margin="8,0,0,0">Include listening history</CheckBox>
+    </StackPanel>
+    <TextBlock Text="{Binding BundleStatus}" Classes="muted small" TextWrapping="Wrap"
+               IsVisible="{Binding BundleStatus, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
     <TextBlock Classes="faint small"><Run Text="Library data: " /><Run Text="{Binding DataFolder}" /></TextBlock>
   </StackPanel>
+  </ScrollViewer>
 </UserControl>

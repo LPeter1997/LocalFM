@@ -333,4 +333,69 @@ public sealed partial class SourcesViewModel(MainViewModel main) : PageViewModel
     }
 
     [RelayCommand] private void RescanAll() => _ = Task.Run(() => Host.Scanner.ScanAllAsync());
+
+    // ------------------------------------------------------------------ knowledge base file
+
+    [ObservableProperty] private bool _includeHistory = true;
+    [ObservableProperty] private string? _bundleStatus;
+    [ObservableProperty] private bool _bundleBusy;
+
+    /// <summary>Writes everything LocalFM knows (not the music itself) to one file.</summary>
+    [RelayCommand]
+    private async Task ExportBundle()
+    {
+        if (Main.PickSaveFile is null || await Main.PickSaveFile($"LocalFM {DateTime.Now:yyyy-MM-dd}.localfm-kb") is not { } path) return;
+        BundleBusy = true;
+        BundleStatus = "Exporting…";
+        try
+        {
+            bool history = IncludeHistory;
+            var report = await Task.Run(() =>
+            {
+                string tmp = path + ".part";
+                Library.Exchange.ExportReport r;
+                using (var fs = File.Create(tmp))
+                    r = Library.Exchange.KnowledgeBundle.Export(Host.Db, Host.Images, fs, new Library.Exchange.ExportOptions(IncludeHistory: history));
+                File.Move(tmp, path, overwrite: true);
+                return r;
+            });
+            BundleStatus = $"Saved {report.Albums:N0} albums, {report.Tracks:N0} tracks and {report.Images:N0} images" +
+                           (history ? $" with {report.Plays:N0} plays" : "") + $" to {Path.GetFileName(path)}.";
+        }
+        catch (Exception ex)
+        {
+            Log.Error("KB", "Export failed", ex);
+            BundleStatus = $"Export failed: {ex.Message}";
+        }
+        finally { BundleBusy = false; }
+    }
+
+    /// <summary>Merges a knowledge base file into this library; its files attach when scans find matching audio.</summary>
+    [RelayCommand]
+    private async Task ImportBundle()
+    {
+        if (Main.PickOpenFile is null || await Main.PickOpenFile() is not { } path) return;
+        BundleBusy = true;
+        BundleStatus = "Importing…";
+        try
+        {
+            var report = await Task.Run(async () =>
+            {
+                using var zip = System.IO.Compression.ZipFile.OpenRead(path);
+                Library.Exchange.KnowledgeBundle.Validate(zip);
+                return await Host.Db.Writer.Run((c, t) => Library.Exchange.KnowledgeBundle.Import(new Tx(c, t), Host.Images, zip));
+            });
+            BundleStatus = report.Describe();
+            _ = Host.Player.RefreshMetadataAsync();
+            _ = Main.RefreshPlaylistsAsync();
+            if (report.FilesWaiting > 0) _ = Task.Run(() => Host.Scanner.ScanAllAsync());
+        }
+        catch (InvalidDataException ex) { BundleStatus = ex.Message; }
+        catch (Exception ex)
+        {
+            Log.Error("KB", "Import failed", ex);
+            BundleStatus = $"Import failed: {ex.Message}";
+        }
+        finally { BundleBusy = false; }
+    }
 }

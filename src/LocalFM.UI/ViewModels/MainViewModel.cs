@@ -113,6 +113,12 @@ public sealed partial class MainViewModel : ObservableObject
     /// <summary>Set by the window: shows a folder picker and returns the chosen local path.</summary>
     public Func<Task<string?>>? PickFolder { get; set; }
 
+    /// <summary>Set by the window: asks where to save a file (suggested name); returns a local path.</summary>
+    public Func<string, Task<string?>>? PickSaveFile { get; set; }
+
+    /// <summary>Set by the window: asks for a knowledge base file to open; returns a local path.</summary>
+    public Func<Task<string?>>? PickOpenFile { get; set; }
+
     /// <summary>Set by the window: opens a web link in the person's browser.</summary>
     public Action<string>? OpenUrl { get; set; }
 
