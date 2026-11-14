@@ -19,9 +19,8 @@
               </Panel>
             </Border>
             <TextBlock Grid.Column="1" Text="{Binding Name}" VerticalAlignment="Center" FontWeight="Medium" Margin="4,0" />
-            <TextBlock Grid.Column="2" Classes="muted small" VerticalAlignment="Center">
-              <Run Text="{Binding AlbumCount}" /><Run Text=" albums · " /><Run Text="{Binding TrackCount}" /><Run Text=" tracks" />
-            </TextBlock>
+            <TextBlock Grid.Column="2" Classes="muted small" VerticalAlignment="Center"
+                       Text="{Binding Converter={x:Static ui:Converters.ArtistCounts}}" />
           </Grid>
         </DataTemplate>
       </ListBox.ItemTemplate>

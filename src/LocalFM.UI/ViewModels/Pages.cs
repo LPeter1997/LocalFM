@@ -114,7 +114,9 @@ public sealed partial class AlbumDetailViewModel : PageViewModel
             Replace(Tracks, r.Tracks);
             MultiDisc = r.Tracks.Select(t => t.Disc).Distinct().Count() > 1;
             long ms = r.Tracks.Sum(t => t.DurationMs ?? 0);
-            Summary = $"{r.Tracks.Count} tracks · {Converters.Time(TimeSpan.FromMilliseconds(ms))}";
+            // Only the parts we know, so a missing year leaves no stray separators.
+            Summary = string.Join("  ·  ", new[] { Year, Converters.Count(r.Tracks.Count, "track") + " · " + Converters.Time(TimeSpan.FromMilliseconds(ms)) }
+                .Where(s => !string.IsNullOrEmpty(s)));
         });
 
     private void EnsureMatch()
@@ -179,7 +181,7 @@ public sealed partial class TracksViewModel(MainViewModel main) : PageViewModel(
     public override Task RefreshAsync() => Load(() => Host.Queries.Tracks(Main.SearchText), list =>
     {
         Replace(Tracks, list);
-        Summary = $"{list.Count} tracks";
+        Summary = Converters.Count(list.Count, "track");
     });
 
     [RelayCommand] private void PlayFrom(TrackInfo track) => Host.Player.PlayTracks(Tracks.ToList(), Tracks.IndexOf(track));
@@ -258,12 +260,15 @@ public sealed partial class QueueViewModel(MainViewModel main) : PageViewModel(m
         var items = Host.Player.Snapshot(out int current);
         Replace(Rows, items.Select((it, i) => new QueueRow(it, i, i == current, i < current)));
         long ms = items.Skip(Math.Max(0, current)).Sum(i => i.Track.DurationMs ?? 0);
-        Summary = $"{items.Count} tracks · {Converters.Time(TimeSpan.FromMilliseconds(ms))} remaining";
+        Summary = $"{Converters.Count(items.Count, "track")} · {Converters.Time(TimeSpan.FromMilliseconds(ms))} remaining";
         return Task.CompletedTask;
     }
 
     [RelayCommand] private void Play(QueueRow row) => Host.Player.PlayItem(row.Item.Id);
     [RelayCommand] private void Remove(QueueRow row) => Host.Player.RemoveItem(row.Item.Id);
+    /// <summary>Drag and drop in the list.</summary>
+    public void Move(int from, int to) { if (from != to) Host.Player.MoveItem(from, to); }
+
     [RelayCommand] private void MoveUp(QueueRow row) => Host.Player.MoveItem(row.Index, row.Index - 1);
     [RelayCommand] private void MoveDown(QueueRow row) => Host.Player.MoveItem(row.Index, row.Index + 1);
     [RelayCommand] private void Reshuffle() => Host.Player.Reshuffle();
@@ -289,7 +294,7 @@ public sealed partial class QueueViewModel(MainViewModel main) : PageViewModel(m
         await Host.Playlists.CreateAsync(name, recordings);
         PlaylistName = "";
         await Main.RefreshPlaylistsAsync();
-        Main.Notify($"Saved playlist “{name}” ({recordings.Count} tracks)");
+        Main.Notify($"Saved playlist “{name}” ({Converters.Count(recordings.Count, "track")})");
     }
 }
 

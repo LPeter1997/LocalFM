@@ -56,6 +56,8 @@
     <StreamGeometry x:Key="IcoExpand">M14 4h6v6M20 4l-7 7M10 20H4v-6M4 20l7-7</StreamGeometry>
     <StreamGeometry x:Key="IcoStats">M4 20h16M6.5 20v-6M11 20V8M15.5 20v-9M20 20V4.5</StreamGeometry>
     <StreamGeometry x:Key="IcoWave">M3 12h2M7 8v8M11 4v16M15 7v10M19 10v4M21 12h0</StreamGeometry>
+    <StreamGeometry x:Key="IcoVolumeMute">M4 9.5h3.5L12 6v12l-4.5-3.5H4zM16 9.5l5 5M21 9.5l-5 5</StreamGeometry>
+    <StreamGeometry x:Key="IcoPalette">M12 3.5a8.5 8.5 0 1 0 0 17c1.1 0 1.8-.7 1.8-1.6 0-.5-.2-.9-.5-1.2-.3-.3-.5-.7-.5-1.2 0-.9.8-1.6 1.7-1.6h2.1A4.4 4.4 0 0 0 21 10.5C21 6.6 17 3.5 12 3.5zM7.5 12.5h.01M9 8.5h.01M13.5 7h.01M17 9.5h.01</StreamGeometry>
     <StreamGeometry x:Key="IcoNote">M9 18V6l10-2v12M9 18a3 3 0 1 1-6 0 3 3 0 1 1 6 0M19 16a3 3 0 1 1-6 0 3 3 0 1 1 6 0</StreamGeometry>
   </Application.Resources>
 
@@ -200,6 +202,94 @@
       <Setter Property="Foreground" Value="{Binding $parent[ToggleButton].Foreground}" />
     </Style>
     <Style Selector="Border.editrow.focused"><Setter Property="Background" Value="{StaticResource Surface2}" /></Style>
+
+    <!-- Clickable text (player bar title and artist) -->
+    <Style Selector="TextBlock.link"><Setter Property="Cursor" Value="Hand" /></Style>
+    <Style Selector="TextBlock.link:pointerover"><Setter Property="TextDecorations" Value="Underline" /></Style>
+
+    <!-- Text boxes and drop-downs in the app's own look: soft surfaces, accent focus, rounded -->
+    <Style Selector="TextBox">
+      <Setter Property="Background" Value="{StaticResource Surface2}" />
+      <Setter Property="BorderBrush" Value="{StaticResource Line}" />
+      <Setter Property="CornerRadius" Value="8" />
+    </Style>
+    <Style Selector="TextBox:pointerover /template/ Border#PART_BorderElement">
+      <Setter Property="Background" Value="{StaticResource Surface3}" />
+      <Setter Property="BorderBrush" Value="{StaticResource Line}" />
+    </Style>
+    <Style Selector="TextBox:focus /template/ Border#PART_BorderElement">
+      <Setter Property="Background" Value="{StaticResource Surface2}" />
+      <Setter Property="BorderBrush" Value="{StaticResource Accent}" />
+      <Setter Property="BorderThickness" Value="1" />
+    </Style>
+    <Style Selector="ComboBox">
+      <Setter Property="Background" Value="{StaticResource Surface2}" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="CornerRadius" Value="18" />
+      <Setter Property="Padding" Value="14,7,8,7" />
+      <Setter Property="MinHeight" Value="34" />
+    </Style>
+    <Style Selector="ComboBox:pointerover /template/ Border#Background, ComboBox:pressed /template/ Border#Background">
+      <Setter Property="Background" Value="{StaticResource Surface3}" />
+      <Setter Property="BorderBrush" Value="Transparent" />
+    </Style>
+    <Style Selector="ComboBox /template/ Border#PopupBorder">
+      <Setter Property="Background" Value="{StaticResource Surface2}" />
+      <Setter Property="BorderBrush" Value="{StaticResource Line}" />
+      <Setter Property="CornerRadius" Value="10" />
+      <Setter Property="Padding" Value="4" />
+    </Style>
+    <Style Selector="ComboBoxItem">
+      <Setter Property="CornerRadius" Value="6" />
+    </Style>
+
+    <!-- Segmented choice (a ListBox of a few options, e.g. the visualizer) -->
+    <Style Selector="ListBox.segmented">
+      <Setter Property="Background" Value="{StaticResource Surface2}" />
+      <Setter Property="CornerRadius" Value="18" />
+      <Setter Property="Padding" Value="3" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+      <Setter Property="ScrollViewer.HorizontalScrollBarVisibility" Value="Disabled" />
+    </Style>
+    <Style Selector="ListBox.segmented ListBoxItem">
+      <Setter Property="CornerRadius" Value="15" />
+      <Setter Property="Padding" Value="13,5" />
+      <Setter Property="MinHeight" Value="0" />
+      <Setter Property="Foreground" Value="{StaticResource Muted}" />
+      <Setter Property="FontWeight" Value="Medium" />
+    </Style>
+    <Style Selector="ListBox.segmented ListBoxItem:pointerover /template/ ContentPresenter">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="Foreground" Value="{StaticResource Text}" />
+    </Style>
+    <Style Selector="ListBox.segmented ListBoxItem:selected /template/ ContentPresenter,
+                     ListBox.segmented ListBoxItem:selected:pointerover /template/ ContentPresenter">
+      <Setter Property="Background" Value="{StaticResource Surface3}" />
+      <Setter Property="Foreground" Value="{StaticResource Text}" />
+    </Style>
+
+    <!-- On/off chip (pill toggle) -->
+    <Style Selector="ToggleButton.chip">
+      <Setter Property="Background" Value="{StaticResource Surface2}" />
+      <Setter Property="Foreground" Value="{StaticResource Muted}" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="CornerRadius" Value="18" />
+      <Setter Property="Padding" Value="13,7" />
+      <Setter Property="FontWeight" Value="Medium" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+    <Style Selector="ToggleButton.chip:pointerover /template/ ContentPresenter">
+      <Setter Property="Background" Value="{StaticResource Surface3}" />
+      <Setter Property="Foreground" Value="{StaticResource Text}" />
+    </Style>
+    <Style Selector="ToggleButton.chip:checked /template/ ContentPresenter,
+                     ToggleButton.chip:checked:pointerover /template/ ContentPresenter">
+      <Setter Property="Background" Value="{StaticResource Surface3}" />
+      <Setter Property="Foreground" Value="{StaticResource Accent}" />
+    </Style>
+    <Style Selector="ToggleButton.chip:pressed /template/ ContentPresenter">
+      <Setter Property="Background" Value="{StaticResource Surface3}" />
+    </Style>
 
     <Style Selector="Slider.seek">
       <Setter Property="Foreground" Value="{StaticResource Accent}" />

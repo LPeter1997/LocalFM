@@ -86,7 +86,7 @@ public sealed partial class MainViewModel : ObservableObject
     private const string VisualizerKey = "ui.visualizer";
     private const string CoverColoursKey = "ui.coverTheme";
 
-    public IReadOnlyList<VisualizerMode> VisualizerModes { get; } = [VisualizerMode.Spectrum, VisualizerMode.Wave, VisualizerMode.Off];
+    public IReadOnlyList<VisualizerMode> VisualizerModes { get; } = [VisualizerMode.Spectrum, VisualizerMode.Mirror, VisualizerMode.Wave, VisualizerMode.Off];
 
     /// <summary>The large now-playing view with the visualizer.</summary>
     [ObservableProperty] private bool _nowPlayingOpen;
@@ -159,6 +159,7 @@ public sealed partial class MainViewModel : ObservableObject
 
     private void Show(PageViewModel page)
     {
+        NowPlayingOpen = false; // going somewhere means leaving the now-playing view
         CurrentPage = page;
         _ = page.RefreshAsync();
     }
@@ -191,6 +192,23 @@ public sealed partial class MainViewModel : ObservableObject
     private void ShowNowPlayingAlbum()
     {
         if (Host.Player.Current?.Track is { } t) ShowAlbumOf(t);
+    }
+
+    /// <summary>The artist name in the player bar: that artist's page (the album artist when the credit is a combination).</summary>
+    [RelayCommand]
+    private void ShowNowPlayingArtist()
+    {
+        if (Host.Player.Current?.Track is not { } t) return;
+        var album = Host.Queries.Album(t.ReleaseId);
+        foreach (var name in new[] { t.Artist, album?.Artist })
+        {
+            if (string.IsNullOrWhiteSpace(name)) continue;
+            if (Host.Queries.Artists(name).FirstOrDefault(a => string.Equals(a.Name, name, StringComparison.OrdinalIgnoreCase)) is { } artist)
+            {
+                ShowArtist(artist);
+                return;
+            }
+        }
     }
 
     /// <summary>The now-playing "fetch data" button: the playing album, with the MusicBrainz match open.</summary>

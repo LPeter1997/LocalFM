@@ -63,7 +63,9 @@
           <WrapPanel ItemSpacing="10" LineSpacing="8">
             <CheckBox IsChecked="{Binding PreventClipping}" VerticalAlignment="Center"
                       ToolTip.Tip="Lowers the overall level by the largest boost, so boosting never distorts">Prevent clipping</CheckBox>
-            <TextBox Text="{Binding NewPresetName}" PlaceholderText="Preset name" Width="170" CornerRadius="8" />
+            <TextBox Text="{Binding NewPresetName}" PlaceholderText="Preset name" Width="170">
+              <TextBox.KeyBindings><KeyBinding Gesture="Enter" Command="{Binding SavePresetCommand}" /></TextBox.KeyBindings>
+            </TextBox>
             <Button Classes="ghost" Command="{Binding SavePresetCommand}">Save as preset</Button>
             <Button Classes="ghost" Command="{Binding DeletePresetCommand}" IsVisible="{Binding CanDeletePreset}">Delete preset</Button>
           </WrapPanel>

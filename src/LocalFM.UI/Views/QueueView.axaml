@@ -15,7 +15,9 @@
       <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="6">
         <Button Classes="ghost" Command="{Binding ReshuffleCommand}" ToolTip.Tip="Shuffle what is up next">Shuffle upcoming</Button>
         <Button Classes="ghost" Command="{Binding ClearUpcomingCommand}">Clear upcoming</Button>
-        <TextBox Text="{Binding PlaylistName}" PlaceholderText="Playlist name" Width="160" CornerRadius="18" />
+        <TextBox Text="{Binding PlaylistName}" PlaceholderText="Playlist name" Width="160" CornerRadius="18" VerticalContentAlignment="Center">
+          <TextBox.KeyBindings><KeyBinding Gesture="Enter" Command="{Binding SaveQueueCommand}" /></TextBox.KeyBindings>
+        </TextBox>
         <Button Classes="ghost" Command="{Binding SaveQueueCommand}" ToolTip.Tip="Save the whole queue as a playlist">Save queue</Button>
         <Button Classes="ghost" Command="{Binding SaveSessionCommand}" ToolTip.Tip="Save everything played this session as a playlist">Save session</Button>
       </StackPanel>
@@ -38,7 +40,7 @@
             </StackPanel>
             <TextBlock Grid.Column="2" Text="{Binding Track.Album}" Classes="muted" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
             <TextBlock Grid.Column="3" Text="{Binding Track.DurationMs, Converter={x:Static ui:Converters.Duration}}" Classes="muted" VerticalAlignment="Center" HorizontalAlignment="Right" />
-            <StackPanel Grid.Column="4" Orientation="Horizontal" Margin="8,0,0,0">
+            <StackPanel Grid.Column="4" Classes="actions" Orientation="Horizontal" Spacing="2" Margin="14,0,0,0">
               <Button Classes="flat" Padding="4" ToolTip.Tip="Move up" Command="{Binding $parent[UserControl].((vm:QueueViewModel)DataContext).MoveUpCommand}" CommandParameter="{Binding}">
                 <Path Classes="icon" Data="{StaticResource IcoUp}" Width="14" Height="14" />
               </Button>
@@ -55,6 +57,10 @@
     </ListBox>
   </DockPanel>
   <UserControl.Styles>
+    <!-- Row buttons appear on the row under the pointer (or the selected one) -->
+    <Style Selector="ListBoxItem StackPanel.actions"><Setter Property="Opacity" Value="0" /></Style>
+    <Style Selector="ListBoxItem:pointerover StackPanel.actions, ListBoxItem:selected StackPanel.actions"><Setter Property="Opacity" Value="1" /></Style>
+    <Style Selector="ListBox.dragging ListBoxItem"><Setter Property="Cursor" Value="SizeNorthSouth" /></Style>
     <Style Selector="TextBlock.current"><Setter Property="Foreground" Value="{StaticResource Accent}" /><Setter Property="FontWeight" Value="SemiBold" /></Style>
   </UserControl.Styles>
 </UserControl>

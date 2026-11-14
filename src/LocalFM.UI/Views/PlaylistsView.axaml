@@ -7,10 +7,12 @@
              x:Class="LocalFM.UI.Views.PlaylistsView"
              x:DataType="vm:PlaylistsViewModel">
   <Grid ColumnDefinitions="260,*">
-    <DockPanel Margin="20,0,8,12">
-      <TextBlock DockPanel.Dock="Top" Classes="h1" Text="Playlists" Margin="4,0,0,12" />
+    <DockPanel Margin="24,0,8,12">
+      <TextBlock DockPanel.Dock="Top" Classes="h1" Text="Playlists" Margin="0,0,0,12" />
       <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto" Margin="0,0,0,8">
-        <TextBox Text="{Binding NewName}" PlaceholderText="New playlist name" CornerRadius="8" />
+        <TextBox Text="{Binding NewName}" PlaceholderText="New playlist name">
+          <TextBox.KeyBindings><KeyBinding Gesture="Enter" Command="{Binding CreateCommand}" /></TextBox.KeyBindings>
+        </TextBox>
         <Button Grid.Column="1" Classes="flat" Command="{Binding CreateCommand}" ToolTip.Tip="Create playlist" Margin="4,0,0,0">
           <Path Classes="icon" Data="{StaticResource IcoPlus}" />
         </Button>
@@ -21,7 +23,7 @@
             <Grid ColumnDefinitions="*,Auto">
               <StackPanel>
                 <TextBlock Text="{Binding Name}" FontWeight="Medium" TextTrimming="CharacterEllipsis" />
-                <TextBlock Classes="faint small"><Run Text="{Binding EntryCount}" /><Run Text=" tracks" /></TextBlock>
+                <TextBlock Classes="faint small" Text="{Binding EntryCount, Converter={x:Static ui:Converters.Tracks}}" />
               </StackPanel>
               <Button Grid.Column="1" Classes="flat" Padding="4" ToolTip.Tip="Delete playlist"
                       Command="{Binding $parent[UserControl].((vm:PlaylistsViewModel)DataContext).DeleteCommand}" CommandParameter="{Binding}">
@@ -32,6 +34,13 @@
         </ListBox.ItemTemplate>
       </ListBox>
     </DockPanel>
+    <StackPanel Grid.Column="1" VerticalAlignment="Center" HorizontalAlignment="Center" Spacing="8" MaxWidth="360"
+                IsVisible="{Binding Playlists.Count, Converter={x:Static ui:Converters.IsZero}}">
+      <Path Classes="icon" Data="{StaticResource IcoPlaylist}" Width="40" Height="40" Stroke="{StaticResource Faint}" HorizontalAlignment="Center" />
+      <TextBlock Classes="h2" Text="No playlists yet" HorizontalAlignment="Center" />
+      <TextBlock Classes="muted" TextWrapping="Wrap" TextAlignment="Center"
+                 Text="Name one on the left, save the queue from the Queue page, or right-click any track and add it to a playlist." />
+    </StackPanel>
     <DockPanel Grid.Column="1">
       <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Spacing="12" Margin="16,0,24,12"
                   IsVisible="{Binding Selected, Converter={x:Static ObjectConverters.IsNotNull}}">

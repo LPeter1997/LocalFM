@@ -42,7 +42,25 @@ public sealed partial class NowPlayingViewModel : ObservableObject
     public bool RepeatOn => Repeat != RepeatMode.Off;
     public bool RepeatOne => Repeat == RepeatMode.One;
 
-    partial void OnVolumeChanged(double value) => _player.Volume = (float)(value / 100);
+    private double _beforeMute = 70;
+
+    public bool Muted => Volume <= 0;
+
+    partial void OnVolumeChanged(double value)
+    {
+        _player.Volume = (float)(value / 100);
+        OnPropertyChanged(nameof(Muted));
+    }
+
+    /// <summary>Scroll wheel / keys: change the volume by <paramref name="delta"/> percent.</summary>
+    public void NudgeVolume(double delta) => Volume = Math.Clamp(Volume + delta, 0, 100);
+
+    [RelayCommand]
+    private void ToggleMute()
+    {
+        if (Volume > 0) { _beforeMute = Volume; Volume = 0; }
+        else Volume = _beforeMute > 0 ? _beforeMute : 50;
+    }
 
     partial void OnRepeatChanged(RepeatMode value)
     {

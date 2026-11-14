@@ -22,6 +22,24 @@ public partial class MainWindow : Window
         SeekSlider.AddHandler(PointerCaptureLostEvent, (_, _) => CommitSeek(), RoutingStrategies.Tunnel, handledEventsToo: true);
         AddHandler(KeyDownEvent, OnKeyDownTunnel, RoutingStrategies.Tunnel);
         MiniButton.Click += (_, _) => MiniPlayerRequested?.Invoke();
+        // Scroll over the volume icon or slider: 5% a notch (touchpads scroll in finer steps).
+        VolumeArea.AddHandler(PointerWheelChangedEvent, (_, e) =>
+        {
+            if (Vm is not { } vm) return;
+            vm.NowPlaying.NudgeVolume(e.Delta.Y * 5);
+            e.Handled = true;
+        }, RoutingStrategies.Tunnel);
+        // The mouse's back button goes back, like in a browser.
+        AddHandler(PointerPressedEvent, (_, e) =>
+        {
+            if (e.GetCurrentPoint(this).Properties.IsXButton1Pressed && Vm is { CanGoBack: true } vm)
+            {
+                vm.BackCommand.Execute(null);
+                e.Handled = true;
+            }
+        }, RoutingStrategies.Tunnel);
+        BarTitle.Tapped += (_, _) => Vm?.ShowNowPlayingAlbumCommand.Execute(null);
+        BarArtist.Tapped += (_, _) => Vm?.ShowNowPlayingArtistCommand.Execute(null);
         LyricsList.AddHandler(PointerPressedEvent, (_, e) =>
         {
             if ((e.Source as Control)?.DataContext is LyricLineViewModel line) Vm?.Lyrics.SeekTo(line);
@@ -120,6 +138,9 @@ public partial class MainWindow : Window
             case Key.MediaPlayPause: vm.NowPlaying.PlayPauseCommand.Execute(null); break;
             case Key.MediaNextTrack: vm.NowPlaying.NextCommand.Execute(null); break;
             case Key.MediaPreviousTrack: vm.NowPlaying.PreviousCommand.Execute(null); break;
+            case Key.Up when ctrl: vm.NowPlaying.NudgeVolume(5); break;
+            case Key.Down when ctrl: vm.NowPlaying.NudgeVolume(-5); break;
+            case Key.VolumeMute: vm.NowPlaying.ToggleMuteCommand.Execute(null); break;
             case Key.Right when ctrl: vm.NowPlaying.NextCommand.Execute(null); break;
             case Key.Left when ctrl: vm.NowPlaying.PreviousCommand.Execute(null); break;
             case Key.Right: vm.NowPlaying.SeekBy(5); break;

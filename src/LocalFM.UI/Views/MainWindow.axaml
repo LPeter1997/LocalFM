@@ -53,7 +53,8 @@
 
       <!-- Content -->
       <DockPanel Grid.Column="1">
-        <Grid DockPanel.Dock="Top" ColumnDefinitions="Auto,*,Auto" Margin="20,14,20,6">
+        <!-- Always the same height, so page titles sit at the same place with or without search -->
+        <Grid DockPanel.Dock="Top" ColumnDefinitions="Auto,*,Auto" Margin="20,14,20,6" MinHeight="36">
           <Button Classes="flat" Command="{Binding BackCommand}" IsVisible="{Binding CanGoBack}" Margin="0,0,8,0" ToolTip.Tip="Back (Alt+Left)">
             <Path Classes="icon" Data="{StaticResource IcoBack}" />
           </Button>
@@ -78,14 +79,20 @@
           </Border.Background>
         </Border>
         <Grid RowDefinitions="Auto,*,Auto" Margin="32,18,32,24">
-          <Grid ColumnDefinitions="*,Auto,Auto,Auto">
+          <!-- Closed with the same player-bar button that opened it (or V / Esc) -->
+          <Grid ColumnDefinitions="*,Auto,Auto">
             <TextBlock Classes="h2" Text="Now playing" VerticalAlignment="Center" />
-            <CheckBox Grid.Column="1" IsChecked="{Binding CoverColours}" Content="Colours from cover" Margin="0,0,16,0" VerticalAlignment="Center" />
-            <ComboBox Grid.Column="2" ItemsSource="{Binding VisualizerModes}" SelectedItem="{Binding VisualizerMode}" MinWidth="130"
-                      VerticalAlignment="Center" Margin="0,0,10,0" ToolTip.Tip="Visualizer" />
-            <Button Grid.Column="3" Classes="flat" Command="{Binding ToggleNowPlayingCommand}" ToolTip.Tip="Close (V or Esc)">
-              <Path Classes="icon" Data="{StaticResource IcoDown}" />
-            </Button>
+            <ToggleButton Grid.Column="1" Classes="chip" IsChecked="{Binding CoverColours}" Margin="0,0,10,0"
+                          ToolTip.Tip="Tint the app with colours from the album cover">
+              <StackPanel Orientation="Horizontal" Spacing="7">
+                <Path Classes="icon" Data="{StaticResource IcoPalette}" Width="16" Height="16" />
+                <TextBlock Text="Cover colours" VerticalAlignment="Center" />
+              </StackPanel>
+            </ToggleButton>
+            <ListBox Grid.Column="2" Classes="segmented" ItemsSource="{Binding VisualizerModes}" SelectedItem="{Binding VisualizerMode}"
+                     ToolTip.Tip="Visualizer">
+              <ListBox.ItemsPanel><ItemsPanelTemplate><StackPanel Orientation="Horizontal" /></ItemsPanelTemplate></ListBox.ItemsPanel>
+            </ListBox>
           </Grid>
           <Grid Grid.Row="1" ColumnDefinitions="Auto,*" Margin="0,16">
             <!-- Up to 420 px, shrinking with the window -->
@@ -104,7 +111,7 @@
               <TextBlock Text="{Binding NowPlaying.Album}" FontSize="15" Classes="muted" TextTrimming="CharacterEllipsis" />
             </StackPanel>
           </Grid>
-          <c:Visualizer Grid.Row="2" Height="170" Source="{Binding Host.Player}" Mode="{Binding VisualizerMode}"
+          <c:Visualizer Grid.Row="2" Height="200" Source="{Binding Host.Player}" Mode="{Binding VisualizerMode}"
                         Active="{Binding NowPlayingOpen}" BarBrush="{StaticResource Accent}" />
         </Grid>
       </Panel>
@@ -130,7 +137,7 @@
                     <c:KaraokeText Classes="lyric" Classes.current="{Binding IsCurrent}" Classes.past="{Binding IsPast}"
                                      Text="{Binding Text}" TextWrapping="Wrap" Tag="{Binding}"
                                      Words="{Binding Words}" Clock="{Binding Clock}" Live="{Binding IsCurrent}"
-                                     SungBrush="{StaticResource Accent}" />
+                                     UnsungBrush="{StaticResource Muted}" />
                   </DataTemplate>
                 </ItemsControl.ItemTemplate>
               </ItemsControl>
@@ -158,8 +165,10 @@
             </Border>
           </Button>
           <StackPanel Grid.Column="1" Margin="12,0,0,0" VerticalAlignment="Center" Spacing="2">
-            <TextBlock Text="{Binding Title}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
-            <TextBlock Text="{Binding Artist}" Classes="muted small" TextTrimming="CharacterEllipsis" />
+            <TextBlock x:Name="BarTitle" Classes="link" Text="{Binding Title}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"
+                       HorizontalAlignment="Left" ToolTip.Tip="Go to album" />
+            <TextBlock x:Name="BarArtist" Classes="muted small link" Text="{Binding Artist}" TextTrimming="CharacterEllipsis"
+                       HorizontalAlignment="Left" ToolTip.Tip="Go to artist" />
             <TextBlock Text="{Binding Album}" Classes="faint small" TextTrimming="CharacterEllipsis" />
           </StackPanel>
         </Grid>
@@ -213,8 +222,16 @@
           <Button Classes="flat" x:Name="MiniButton" ToolTip.Tip="Miniplayer (Ctrl+M)">
             <Path Classes="icon" Data="{StaticResource IcoMini}" />
           </Button>
-          <Path Classes="icon" Data="{StaticResource IcoVolume}" Stroke="{StaticResource Muted}" Margin="8,0,0,0" />
-          <Slider Width="120" Minimum="0" Maximum="100" Value="{Binding Volume}" Classes="seek" />
+          <!-- Scroll anywhere over the icon or slider to change the volume -->
+          <StackPanel x:Name="VolumeArea" Orientation="Horizontal" Background="Transparent" Margin="4,0,0,0">
+            <Button Classes="flat" Command="{Binding ToggleMuteCommand}" ToolTip.Tip="Mute (scroll to change volume)">
+              <Panel>
+                <Path Classes="icon" Data="{StaticResource IcoVolume}" IsVisible="{Binding !Muted}" />
+                <Path Classes="icon" Data="{StaticResource IcoVolumeMute}" IsVisible="{Binding Muted}" />
+              </Panel>
+            </Button>
+            <Slider Width="120" Minimum="0" Maximum="100" Value="{Binding Volume}" Classes="seek" VerticalAlignment="Center" />
+          </StackPanel>
         </StackPanel>
       </Grid>
     </Border>

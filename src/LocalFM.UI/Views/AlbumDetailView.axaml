@@ -22,10 +22,7 @@
         <TextBlock Classes="h1" FontSize="34" Text="{Binding Album.Title}" TextWrapping="Wrap" />
         <TextBlock>
           <Run Text="{Binding Album.Artist}" FontWeight="SemiBold" />
-          <Run Text="  ·  " Foreground="{StaticResource Faint}" />
-          <Run Text="{Binding Year}" Foreground="{StaticResource Muted}" />
-          <Run Text="  ·  " Foreground="{StaticResource Faint}" />
-          <Run Text="{Binding Summary}" Foreground="{StaticResource Muted}" />
+          <Run Text="  ·  " Foreground="{StaticResource Faint}" /><Run Text="{Binding Summary}" Foreground="{StaticResource Muted}" />
         </TextBlock>
         <WrapPanel Margin="0,10,0,0" ItemSpacing="8" LineSpacing="8">
           <Button Classes="primary" Command="{Binding PlayAllCommand}">Play</Button>
@@ -76,7 +73,7 @@
                   <Run Text="{Binding Date}" /><Run Text="  " /><Run Text="{Binding Country}" />
                 </TextBlock>
                 <TextBlock Grid.Column="2" Classes="muted small" VerticalAlignment="Center" TextTrimming="CharacterEllipsis">
-                  <Run Text="{Binding Format}" /><Run Text=" · " /><Run Text="{Binding TrackCount}" /><Run Text=" tracks" />
+                  <Run Text="{Binding Format}" /><Run Text=" · " /><Run Text="{Binding TrackCount, Converter={x:Static ui:Converters.Tracks}}" />
                 </TextBlock>
                 <TextBlock Grid.Column="3" Classes="faint small" VerticalAlignment="Center" TextTrimming="CharacterEllipsis">
                   <Run Text="{Binding Label}" /><Run Text="  " /><Run Text="{Binding CatalogNumber}" />

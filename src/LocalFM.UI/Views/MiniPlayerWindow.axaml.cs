@@ -17,6 +17,11 @@ public partial class MiniPlayerWindow : Window
         {
             if (e.GetCurrentPoint(this).Properties.IsLeftButtonPressed) BeginMoveDrag(e);
         };
+        // Scroll anywhere on the miniplayer to change the volume.
+        PointerWheelChanged += (_, e) =>
+        {
+            if (DataContext is NowPlayingViewModel vm) { vm.NudgeVolume(e.Delta.Y * 5); e.Handled = true; }
+        };
         KeyDown += (_, e) =>
         {
             if (DataContext is not NowPlayingViewModel vm) return;
