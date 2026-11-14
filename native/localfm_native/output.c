@@ -65,6 +65,12 @@ struct lfm_output {
     lfm_eq_state     eq_st, eq_st_old;
     int32_t          eq_xfade_left, eq_xfade_len;
 
+    /* visualizer tap: the last LFM_TAP_FRAMES frames as heard (after EQ and pause/seek fades, before
+     * volume, so the picture does not shrink with the volume knob). Written by the consumer only;
+     * readers copy without locking and may see a torn window, which only costs one visual frame. */
+    float            tap[LFM_TAP_FRAMES * LFM_CHANNELS];
+    _Atomic int64_t  tap_pos;
+
     int32_t     has_device;
     ma_context  context;
     int32_t     has_context;
@@ -301,6 +307,22 @@ LFM_API int64_t lfm_output_read_index(lfm_output* o)
 }
 
 LFM_API int64_t lfm_output_underruns(lfm_output* o) { return atomic_load(&o->underruns); }
+
+LFM_API int64_t lfm_output_tap(lfm_output* o, float* out, int32_t frames)
+{
+    if (!o || frames <= 0) return 0;
+    if (frames > LFM_TAP_FRAMES) frames = LFM_TAP_FRAMES;
+    int64_t end = atomic_load_explicit(&o->tap_pos, memory_order_acquire);
+    int64_t start = end - frames;
+    for (int32_t i = 0; i < frames; i++) {
+        int64_t k = start + i;
+        if (k < 0) { out[i * 2] = out[i * 2 + 1] = 0.0f; continue; }
+        const float* t = o->tap + (k & (LFM_TAP_FRAMES - 1)) * LFM_CHANNELS;
+        out[i * 2] = t[0];
+        out[i * 2 + 1] = t[1];
+    }
+    return end;
+}
 LFM_API void lfm_output_set_volume(lfm_output* o, float linear) { atomic_store(&o->volume, linear); }
 LFM_API void lfm_output_set_paused(lfm_output* o, int32_t paused) { atomic_store(&o->paused, paused); }
 
@@ -325,7 +347,9 @@ LFM_API void lfm_output_render(lfm_output* o, float* out, int32_t frames)
     }
 
     int32_t starved_now = 0;
-    for (int32_t i = 0; i < frames; i++) {
+    int64_t tp = atomic_load_explicit(&o->tap_pos, memory_order_relaxed);
+    for (int32_t i = 0; i < frames; i++, tp++) {
+        float* t = o->tap + (tp & (LFM_TAP_FRAMES - 1)) * LFM_CHANNELS;
         float target = (paused || o->skipping) ? 0.0f : 1.0f;
         if (o->env < target) { o->env += o->env_step; if (o->env > 1.0f) o->env = 1.0f; }
         else if (o->env > target) { o->env -= o->env_step; if (o->env < 0.0f) o->env = 0.0f; }
@@ -336,6 +360,7 @@ LFM_API void lfm_output_render(lfm_output* o, float* out, int32_t frames)
         }
         if (o->env <= 0.0f && (paused || o->skipping)) {
             out[i * 2] = out[i * 2 + 1] = 0.0f;
+            t[0] = t[1] = 0.0f;
             continue; /* hold position */
         }
 
@@ -359,13 +384,17 @@ LFM_API void lfm_output_render(lfm_output* o, float* out, int32_t frames)
             }
             out[i * 2] = l * g;
             out[i * 2 + 1] = rr * g;
+            t[0] = l * o->env;
+            t[1] = rr * o->env;
             r++;
             o->starving = 0;
         } else {
             out[i * 2] = out[i * 2 + 1] = 0.0f;
+            t[0] = t[1] = 0.0f;
             if (!o->starving) { o->starving = 1; starved_now = 1; }
         }
     }
+    atomic_store_explicit(&o->tap_pos, tp, memory_order_release);
     atomic_store_explicit(&o->read_idx, r, memory_order_release);
     if (starved_now) atomic_fetch_add(&o->underruns, 1);
 }

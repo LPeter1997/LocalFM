@@ -83,6 +83,9 @@ public static unsafe partial class NativeMethods
     public static partial void OutputSetPaused(nint output, int paused);
     [LibraryImport(Lib, EntryPoint = "lfm_output_set_eq")]
     public static partial void OutputSetEq(nint output, EqBand* bands, int count, float preampDb);
+    [LibraryImport(Lib, EntryPoint = "lfm_output_tap")]
+    public static partial long OutputTap(nint output, float* frames, int count);
+    public const int TapFrames = 4096;
     [LibraryImport(Lib, EntryPoint = "lfm_output_render")]
     public static partial void OutputRender(nint output, float* frames, int count);
 

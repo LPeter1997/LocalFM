@@ -46,6 +46,16 @@ public sealed unsafe class AudioOutput : IDisposable
     public void SetPaused(bool paused) => NativeMethods.OutputSetPaused(Handle, paused ? 1 : 0);
 
     /// <summary>Applies an equalizer on the audio thread (heard within one device period). Empty = flat.</summary>
+    /// <summary>
+    /// Copies the most recently heard frames (interleaved stereo, before volume) into <paramref name="interleaved"/>.
+    /// Lock-free; returns the total number of frames rendered so far.
+    /// </summary>
+    public long ReadTap(Span<float> interleaved)
+    {
+        int frames = Math.Min(interleaved.Length / 2, NativeMethods.TapFrames);
+        fixed (float* p = interleaved) return NativeMethods.OutputTap(Handle, p, frames);
+    }
+
     public void SetEq(ReadOnlySpan<EqBand> bands, float preampDb)
     {
         fixed (EqBand* p = bands) NativeMethods.OutputSetEq(Handle, p, bands.Length, preampDb);

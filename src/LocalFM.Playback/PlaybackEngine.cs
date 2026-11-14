@@ -127,6 +127,11 @@ public sealed class PlaybackEngine : IDisposable
     /// <summary>Sets the equalizer. It runs on the audio thread, so a change is heard right away. Empty = flat.</summary>
     public void SetEqualizer(ReadOnlySpan<EqBand> bands, float preampDb) => _out.SetEq(bands, preampDb);
 
+    /// <summary>The audio just heard, for visualizations (see <see cref="AudioOutput.ReadTap"/>). Any thread.</summary>
+    public long ReadVisualization(Span<float> interleaved) => _out.ReadTap(interleaved);
+
+    public int OutputSampleRate => SampleRate;
+
     public IReadOnlyList<IAudioProcessor> Processors
     {
         get => _processors;

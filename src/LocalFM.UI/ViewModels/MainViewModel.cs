@@ -7,6 +7,8 @@ using CommunityToolkit.Mvvm.Input;
 using LocalFM.Core;
 using LocalFM.Library;
 
+using LocalFM.UI.Controls;
+
 namespace LocalFM.UI.ViewModels;
 
 public sealed record NavItem(string Name, Geometry? Icon, PageViewModel Page);
@@ -24,6 +26,14 @@ public sealed partial class MainViewModel : ObservableObject
         Host = host;
         Actions = new TrackActions(this);
         NowPlaying = new NowPlayingViewModel(host.Player);
+        Theme = new AccentTheme();
+        _visualizerMode = Enum.TryParse<VisualizerMode>(host.History.Get(VisualizerKey), out var mode) ? mode : VisualizerMode.Spectrum;
+        _coverColours = host.History.Get(CoverColoursKey) != "0";
+        if (!_coverColours) Theme.SetEnabled(false);
+        NowPlaying.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(NowPlayingViewModel.CoverPath)) _ = Theme.CoverChangedAsync(NowPlaying.CoverPath);
+        };
         Lyrics = new LyricsViewModel(host);
         Albums = new AlbumsViewModel(this);
         Queue = new QueueViewModel(this);
@@ -71,6 +81,28 @@ public sealed partial class MainViewModel : ObservableObject
     public AppHost Host { get; }
     public TrackActions Actions { get; }
     public NowPlayingViewModel NowPlaying { get; }
+    public AccentTheme Theme { get; }
+
+    private const string VisualizerKey = "ui.visualizer";
+    private const string CoverColoursKey = "ui.coverTheme";
+
+    public IReadOnlyList<VisualizerMode> VisualizerModes { get; } = [VisualizerMode.Spectrum, VisualizerMode.Wave, VisualizerMode.Off];
+
+    /// <summary>The large now-playing view with the visualizer.</summary>
+    [ObservableProperty] private bool _nowPlayingOpen;
+    [ObservableProperty] private VisualizerMode _visualizerMode;
+    /// <summary>Tint the app with the playing album's colours.</summary>
+    [ObservableProperty] private bool _coverColours;
+
+    [RelayCommand] private void ToggleNowPlaying() => NowPlayingOpen = !NowPlayingOpen;
+
+    partial void OnVisualizerModeChanged(VisualizerMode value) => _ = Host.History.SetAsync(VisualizerKey, value.ToString());
+
+    partial void OnCoverColoursChanged(bool value)
+    {
+        Theme.SetEnabled(value);
+        _ = Host.History.SetAsync(CoverColoursKey, value ? "1" : "0");
+    }
     public LyricsViewModel Lyrics { get; }
     public AlbumsViewModel Albums { get; }
     public QueueViewModel Queue { get; }

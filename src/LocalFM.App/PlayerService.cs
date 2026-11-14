@@ -251,6 +251,10 @@ public sealed class PlayerService : IDisposable
     public bool GaplessAlbums { get; set; } = true;
 
     /// <summary>Applies just the equalizer (cheap; for slider drags).</summary>
+    /// <summary>Latest heard audio for visualizations (interleaved stereo); never blocks playback.</summary>
+    public long ReadVisualization(Span<float> interleaved) => _engine.ReadVisualization(interleaved);
+    public int SampleRate => _engine.SampleRate;
+
     public void ApplyEqualizer(SoundSettings s) => _engine.SetEqualizer(s.Bands(), s.EffectivePreampDb);
 
     /// <summary>Applies equalizer, crossfade and loudness settings. The EQ is heard at once; the rest from the next track.</summary>

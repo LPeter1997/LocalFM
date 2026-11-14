@@ -83,6 +83,12 @@ typedef struct lfm_eq_band {
 /* count 0 (or all gains 0 and preamp 0) = flat, which costs nothing. Thread-safe against itself. */
 LFM_API void lfm_output_set_eq(lfm_output* o, const lfm_eq_band* bands, int32_t count, float preamp_db);
 
+/* Visualizer tap: copies the most recent `frames` frames (<= LFM_TAP_FRAMES, interleaved stereo) as heard,
+ * before volume. Lock-free and safe from any thread; returns the total frames rendered so far, so a caller
+ * can tell whether anything new arrived. */
+#define LFM_TAP_FRAMES 4096
+LFM_API int64_t lfm_output_tap(lfm_output* o, float* out, int32_t frames);
+
 /* Consumer side: what the device callback calls. Exposed for offline rendering/tests. */
 LFM_API void lfm_output_render(lfm_output* o, float* out, int32_t frames);
 
