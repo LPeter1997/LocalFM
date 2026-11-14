@@ -1,0 +1,60 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:LocalFM.UI.ViewModels"
+             xmlns:lib="using:LocalFM.Library"
+             xmlns:c="using:LocalFM.UI.Controls"
+             xmlns:ui="using:LocalFM.UI"
+             x:Class="LocalFM.UI.Views.QueueView"
+             x:DataType="vm:QueueViewModel">
+  <DockPanel>
+    <Grid DockPanel.Dock="Top" ColumnDefinitions="Auto,*,Auto" Margin="24,0,24,12">
+      <StackPanel Orientation="Horizontal" Spacing="16">
+        <TextBlock Classes="h1" Text="Queue" />
+        <TextBlock Classes="muted" Text="{Binding Summary}" VerticalAlignment="Center" Margin="0,6,0,0" />
+      </StackPanel>
+      <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="6">
+        <Button Classes="ghost" Command="{Binding ReshuffleCommand}" ToolTip.Tip="Shuffle what is up next">Shuffle upcoming</Button>
+        <Button Classes="ghost" Command="{Binding ClearUpcomingCommand}">Clear upcoming</Button>
+        <TextBox Text="{Binding PlaylistName}" PlaceholderText="Playlist name" Width="160" CornerRadius="18" />
+        <Button Classes="ghost" Command="{Binding SaveQueueCommand}" ToolTip.Tip="Save the whole queue as a playlist">Save queue</Button>
+        <Button Classes="ghost" Command="{Binding SaveSessionCommand}" ToolTip.Tip="Save everything played this session as a playlist">Save session</Button>
+      </StackPanel>
+    </Grid>
+    <ListBox x:Name="List" Classes="rows" ItemsSource="{Binding Rows}" Margin="16,0,16,8">
+      <ListBox.ItemTemplate>
+        <DataTemplate x:DataType="vm:QueueRow">
+          <Grid ColumnDefinitions="44,2*,1.4*,64,Auto" Opacity="{Binding Opacity}">
+            <Panel>
+              <Border Width="36" Height="36" CornerRadius="4" ClipToBounds="True" Background="{StaticResource Surface3}" HorizontalAlignment="Left">
+                <c:CoverImage Path="{Binding Track.CoverPath}" DecodeWidth="72" />
+              </Border>
+              <Border Width="36" Height="36" CornerRadius="4" Background="#A0000000" HorizontalAlignment="Left" IsVisible="{Binding IsCurrent}">
+                <Path Classes="icon fill" Data="{StaticResource IcoPlay}" Width="14" Height="14" Fill="{StaticResource Accent}" />
+              </Border>
+            </Panel>
+            <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="4,0,12,0">
+              <TextBlock Text="{Binding Track.Title}" TextTrimming="CharacterEllipsis" Classes.current="{Binding IsCurrent}" />
+              <TextBlock Text="{Binding Track.Artist}" Classes="muted small" TextTrimming="CharacterEllipsis" />
+            </StackPanel>
+            <TextBlock Grid.Column="2" Text="{Binding Track.Album}" Classes="muted" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+            <TextBlock Grid.Column="3" Text="{Binding Track.DurationMs, Converter={x:Static ui:Converters.Duration}}" Classes="muted" VerticalAlignment="Center" HorizontalAlignment="Right" />
+            <StackPanel Grid.Column="4" Orientation="Horizontal" Margin="8,0,0,0">
+              <Button Classes="flat" Padding="4" ToolTip.Tip="Move up" Command="{Binding $parent[UserControl].((vm:QueueViewModel)DataContext).MoveUpCommand}" CommandParameter="{Binding}">
+                <Path Classes="icon" Data="{StaticResource IcoUp}" Width="14" Height="14" />
+              </Button>
+              <Button Classes="flat" Padding="4" ToolTip.Tip="Move down" Command="{Binding $parent[UserControl].((vm:QueueViewModel)DataContext).MoveDownCommand}" CommandParameter="{Binding}">
+                <Path Classes="icon" Data="{StaticResource IcoDown}" Width="14" Height="14" />
+              </Button>
+              <Button Classes="flat" Padding="4" ToolTip.Tip="Remove" Command="{Binding $parent[UserControl].((vm:QueueViewModel)DataContext).RemoveCommand}" CommandParameter="{Binding}">
+                <Path Classes="icon" Data="{StaticResource IcoTrash}" Width="14" Height="14" />
+              </Button>
+            </StackPanel>
+          </Grid>
+        </DataTemplate>
+      </ListBox.ItemTemplate>
+    </ListBox>
+  </DockPanel>
+  <UserControl.Styles>
+    <Style Selector="TextBlock.current"><Setter Property="Foreground" Value="{StaticResource Accent}" /><Setter Property="FontWeight" Value="SemiBold" /></Style>
+  </UserControl.Styles>
+</UserControl>

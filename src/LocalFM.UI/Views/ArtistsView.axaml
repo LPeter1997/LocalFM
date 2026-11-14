@@ -1,0 +1,27 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:LocalFM.UI.ViewModels"
+             xmlns:lib="using:LocalFM.Library"
+             xmlns:c="using:LocalFM.UI.Controls"
+             xmlns:ui="using:LocalFM.UI"
+             x:Class="LocalFM.UI.Views.ArtistsView"
+             x:DataType="vm:ArtistsViewModel">
+  <DockPanel>
+    <TextBlock DockPanel.Dock="Top" Classes="h1" Text="Artists" Margin="24,0,24,12" />
+    <ListBox x:Name="List" Classes="rows" ItemsSource="{Binding Artists}" Margin="16,0,16,8">
+      <ListBox.ItemTemplate>
+        <DataTemplate x:DataType="lib:ArtistSummary">
+          <Grid ColumnDefinitions="44,*,Auto">
+            <Border Width="36" Height="36" CornerRadius="18" Background="{StaticResource Surface3}">
+              <Path Classes="icon" Data="{StaticResource IcoArtist}" Width="16" Height="16" Stroke="{StaticResource Muted}" />
+            </Border>
+            <TextBlock Grid.Column="1" Text="{Binding Name}" VerticalAlignment="Center" FontWeight="Medium" Margin="4,0" />
+            <TextBlock Grid.Column="2" Classes="muted small" VerticalAlignment="Center">
+              <Run Text="{Binding AlbumCount}" /><Run Text=" albums · " /><Run Text="{Binding TrackCount}" /><Run Text=" tracks" />
+            </TextBlock>
+          </Grid>
+        </DataTemplate>
+      </ListBox.ItemTemplate>
+    </ListBox>
+  </DockPanel>
+</UserControl>

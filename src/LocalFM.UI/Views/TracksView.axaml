@@ -1,0 +1,32 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:LocalFM.UI.ViewModels"
+             xmlns:lib="using:LocalFM.Library"
+             xmlns:c="using:LocalFM.UI.Controls"
+             xmlns:ui="using:LocalFM.UI"
+             x:Class="LocalFM.UI.Views.TracksView"
+             x:DataType="vm:TracksViewModel">
+  <DockPanel>
+    <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Spacing="16" Margin="24,0,24,12">
+      <TextBlock Classes="h1" Text="Tracks" />
+      <TextBlock Classes="muted" Text="{Binding Summary}" VerticalAlignment="Center" Margin="0,6,0,0" />
+    </StackPanel>
+    <ListBox x:Name="List" Classes="rows" ItemsSource="{Binding Tracks}" Margin="16,0,16,8">
+      <ListBox.ItemTemplate>
+        <DataTemplate x:DataType="lib:TrackInfo">
+          <Grid ColumnDefinitions="44,2*,1.4*,64">
+            <Border Width="36" Height="36" CornerRadius="4" ClipToBounds="True" Background="{StaticResource Surface3}" HorizontalAlignment="Left">
+              <c:CoverImage Path="{Binding CoverPath}" DecodeWidth="72" />
+            </Border>
+            <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="4,0,12,0">
+              <TextBlock Text="{Binding Title}" TextTrimming="CharacterEllipsis" />
+              <TextBlock Text="{Binding Artist}" Classes="muted small" TextTrimming="CharacterEllipsis" />
+            </StackPanel>
+            <TextBlock Grid.Column="2" Text="{Binding Album}" Classes="muted" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" Margin="0,0,12,0" />
+            <TextBlock Grid.Column="3" Text="{Binding DurationMs, Converter={x:Static ui:Converters.Duration}}" Classes="muted" VerticalAlignment="Center" HorizontalAlignment="Right" />
+          </Grid>
+        </DataTemplate>
+      </ListBox.ItemTemplate>
+    </ListBox>
+  </DockPanel>
+</UserControl>

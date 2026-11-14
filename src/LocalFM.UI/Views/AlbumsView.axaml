@@ -1,0 +1,60 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:LocalFM.UI.ViewModels"
+             xmlns:lib="using:LocalFM.Library"
+             xmlns:c="using:LocalFM.UI.Controls"
+             xmlns:ui="using:LocalFM.UI"
+             x:Class="LocalFM.UI.Views.AlbumsView"
+             x:DataType="vm:AlbumsViewModel">
+  <DockPanel>
+    <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Spacing="16" Margin="24,0,24,12">
+      <TextBlock Classes="h1" Text="{Binding Title}" VerticalAlignment="Center" />
+      <TextBlock Classes="muted" Text="{Binding Summary}" VerticalAlignment="Center" Margin="0,6,0,0" />
+      <Button Classes="primary" Command="{Binding PlayAllCommand}" IsVisible="{Binding IsArtistPage}" VerticalAlignment="Center">Play all</Button>
+    </StackPanel>
+    <Panel>
+      <ScrollViewer>
+        <ItemsControl ItemsSource="{Binding Albums}" Margin="16,0,16,16">
+          <ItemsControl.ItemsPanel>
+            <ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate>
+          </ItemsControl.ItemsPanel>
+          <ItemsControl.ItemTemplate>
+            <DataTemplate x:DataType="lib:AlbumSummary">
+              <Button Classes="flat albumcard" Width="184" Margin="4" Padding="8" HorizontalContentAlignment="Stretch"
+                      Command="{Binding $parent[ItemsControl].((vm:AlbumsViewModel)DataContext).OpenCommand}" CommandParameter="{Binding}">
+                <StackPanel Spacing="8">
+                  <Border Width="168" Height="168" CornerRadius="8" ClipToBounds="True" Background="{StaticResource Surface3}">
+                    <Panel>
+                      <Path Classes="icon" Data="{StaticResource IcoAlbum}" Width="48" Height="48" Stroke="{StaticResource Faint}" StrokeThickness="1.2" />
+                      <c:CoverImage Path="{Binding CoverPath}" DecodeWidth="336" />
+                      <Button Classes="play" Width="40" Height="40" CornerRadius="20" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="8"
+                              Background="{StaticResource Accent}" Foreground="White" ToolTip.Tip="Play album"
+                              Command="{Binding $parent[ItemsControl].((vm:AlbumsViewModel)DataContext).PlayCommand}" CommandParameter="{Binding}">
+                        <Path Classes="icon fill" Data="{StaticResource IcoPlay}" Width="16" Height="16" Margin="2,0,0,0" />
+                      </Button>
+                    </Panel>
+                  </Border>
+                  <StackPanel Spacing="1">
+                    <TextBlock Text="{Binding Title}" FontWeight="SemiBold" Foreground="{StaticResource Text}" TextTrimming="CharacterEllipsis" />
+                    <TextBlock Classes="muted small" TextTrimming="CharacterEllipsis">
+                      <Run Text="{Binding Artist}" /><Run Text="  " /><Run Text="{Binding Date, Converter={x:Static ui:Converters.Year}}" Foreground="{StaticResource Faint}" />
+                    </TextBlock>
+                  </StackPanel>
+                </StackPanel>
+              </Button>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+      </ScrollViewer>
+      <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="8" IsVisible="{Binding !Albums.Count}">
+        <TextBlock Classes="h2" HorizontalAlignment="Center">No albums yet</TextBlock>
+        <TextBlock Classes="muted" HorizontalAlignment="Center">Add a music folder under Sources; scanning runs in the background.</TextBlock>
+      </StackPanel>
+    </Panel>
+  </DockPanel>
+  <UserControl.Styles>
+    <!-- the card's play button only shows on hover -->
+    <Style Selector="Button.albumcard Button.play"><Setter Property="Opacity" Value="0" /></Style>
+    <Style Selector="Button.albumcard:pointerover Button.play"><Setter Property="Opacity" Value="1" /></Style>
+  </UserControl.Styles>
+</UserControl>
