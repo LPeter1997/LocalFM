@@ -21,6 +21,7 @@ public partial class MainWindow : Window
         SeekSlider.AddHandler(PointerReleasedEvent, (_, _) => CommitSeek(), RoutingStrategies.Tunnel, handledEventsToo: true);
         SeekSlider.AddHandler(PointerCaptureLostEvent, (_, _) => CommitSeek(), RoutingStrategies.Tunnel, handledEventsToo: true);
         AddHandler(KeyDownEvent, OnKeyDownTunnel, RoutingStrategies.Tunnel);
+        MiniButton.Click += (_, _) => MiniPlayerRequested?.Invoke();
         LyricsList.AddHandler(PointerPressedEvent, (_, e) =>
         {
             if ((e.Source as Control)?.DataContext is LyricLineViewModel line) Vm?.Lyrics.SeekTo(line);
@@ -38,6 +39,9 @@ public partial class MainWindow : Window
     }
 
     private MainViewModel? Vm => DataContext as MainViewModel;
+
+    /// <summary>The person asked to switch to the miniplayer.</summary>
+    public event Action? MiniPlayerRequested;
 
     protected override void OnDataContextChanged(EventArgs e)
     {
@@ -92,6 +96,7 @@ public partial class MainWindow : Window
             case Key.Right: vm.NowPlaying.SeekBy(5); break;
             case Key.Left: vm.NowPlaying.SeekBy(-5); break;
             case Key.L: vm.ToggleLyricsCommand.Execute(null); break;
+            case Key.M when ctrl: MiniPlayerRequested?.Invoke(); break;
             default: return;
         }
         e.Handled = true;
@@ -108,6 +113,7 @@ public partial class MainWindow : Window
                 await Task.Delay(800);
                 if (page is "album" or "match" && vm.Albums.Albums.FirstOrDefault() is { } a) vm.ShowAlbum(a, openMatch: page == "match");
                 else if (page == "edit" && vm.Albums.Albums.FirstOrDefault() is { } e) vm.EditAlbum(e.ReleaseId);
+                else if (page == "mini") MiniPlayerRequested?.Invoke();
                 else if (vm.Nav.FirstOrDefault(n => n.Name.StartsWith(page, StringComparison.OrdinalIgnoreCase)) is { } nav) vm.Navigate(nav);
             }
             if (Environment.GetEnvironmentVariable("LOCALFM_SNAPSHOT_PLAY") == "1" && Vm is { } v2)
@@ -118,9 +124,12 @@ public partial class MainWindow : Window
             if (Environment.GetEnvironmentVariable("LOCALFM_SNAPSHOT_LYRICS") == "1" && Vm is { } v3) v3.Lyrics.IsOpen = true;
             int wait = int.TryParse(Environment.GetEnvironmentVariable("LOCALFM_SNAPSHOT_WAIT"), out int w) ? w : 2500;
             await Task.Delay(wait); // let pages, covers and lookups finish
-            var root = (Visual?)this.GetVisualDescendants().OfType<Avalonia.Controls.Primitives.VisualLayerManager>().FirstOrDefault() ?? (Visual)Content!;
+            // The miniplayer replaces this window when it is open.
+            Window shown = (Application.Current?.ApplicationLifetime as Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime)?
+                .Windows.FirstOrDefault(w => w is MiniPlayerWindow && w.IsVisible) ?? this;
+            var root = (Visual?)shown.GetVisualDescendants().OfType<Avalonia.Controls.Primitives.VisualLayerManager>().FirstOrDefault() ?? (Visual)shown.Content!;
             var visual = ElementComposition.GetElementVisual(root)!;
-            using Bitmap bmp = await visual.Compositor.CreateCompositionVisualSnapshot(visual, RenderScaling);
+            using Bitmap bmp = await visual.Compositor.CreateCompositionVisualSnapshot(visual, shown.RenderScaling);
             bmp.Save(path, PngBitmapEncoderOptions.Default);
             Console.WriteLine($"snapshot {path}");
         }
@@ -128,6 +137,11 @@ public partial class MainWindow : Window
         {
             Console.Error.WriteLine($"snapshot failed: {ex}");
         }
-        Dispatcher.UIThread.Post(Close);
+        Dispatcher.UIThread.Post(() =>
+        {
+            foreach (var w in (Application.Current?.ApplicationLifetime as Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime)?.Windows.ToList() ?? [])
+                if (w != this) w.Close();
+            Close();
+        });
     }
 }

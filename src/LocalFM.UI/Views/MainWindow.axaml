@@ -158,6 +158,9 @@
                   Command="{Binding $parent[Window].((vm:MainViewModel)DataContext).ToggleLyricsCommand}">
             <Path Classes="icon" Data="{StaticResource IcoLyrics}" />
           </Button>
+          <Button Classes="flat" x:Name="MiniButton" ToolTip.Tip="Miniplayer (Ctrl+M)">
+            <Path Classes="icon" Data="{StaticResource IcoMini}" />
+          </Button>
           <Path Classes="icon" Data="{StaticResource IcoVolume}" Stroke="{StaticResource Muted}" Margin="8,0,0,0" />
           <Slider Width="120" Minimum="0" Maximum="100" Value="{Binding Volume}" Classes="seek" />
         </StackPanel>

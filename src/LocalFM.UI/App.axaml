@@ -52,6 +52,8 @@
     <StreamGeometry x:Key="IcoLock">M6.5 11h11v9h-11zM8.5 11V8a3.5 3.5 0 0 1 7 0v3</StreamGeometry>
     <StreamGeometry x:Key="IcoUnlock">M6.5 11h11v9h-11zM8.5 11V8a3.5 3.5 0 0 1 6.8-1.2</StreamGeometry>
     <StreamGeometry x:Key="IcoSliders">M6 4v5M6 13v7M12 4v9M12 17v3M18 4v3M18 11v9M4 11h4M10 15h4M16 9h4</StreamGeometry>
+    <StreamGeometry x:Key="IcoMini">M4 5h16v14H4zM12 12h6v5h-6z</StreamGeometry>
+    <StreamGeometry x:Key="IcoExpand">M14 4h6v6M20 4l-7 7M10 20H4v-6M4 20l7-7</StreamGeometry>
     <StreamGeometry x:Key="IcoNote">M9 18V6l10-2v12M9 18a3 3 0 1 1-6 0 3 3 0 1 1 6 0M19 16a3 3 0 1 1-6 0 3 3 0 1 1 6 0</StreamGeometry>
   </Application.Resources>
 
