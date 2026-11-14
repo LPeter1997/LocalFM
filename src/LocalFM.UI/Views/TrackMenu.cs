@@ -34,6 +34,7 @@ public static class TrackMenu
             menu.Items.Add(playlists);
             menu.Items.Add(new Separator());
             menu.Items.Add(Item("Go to album", () => a.ShowAlbumCommand.Execute(track)));
+            menu.Items.Add(Item("Edit…", () => a.EditCommand.Execute(track)));
             if (remove is not null) menu.Items.Add(Item(removeLabel, () => remove(track)));
             menu.Open(target);
             e.Handled = true;

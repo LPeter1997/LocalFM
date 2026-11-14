@@ -78,6 +78,7 @@ public sealed partial class MatchViewModel : ObservableObject
                      (result.TracksUnmatched > 0 ? $", {result.TracksUnmatched} not matched (left as they were)" : "") +
                      (result.CoverStored ? ", cover saved" : "") + ".";
             await _afterApply();
+            _ = _host.Player.RefreshMetadataAsync();
         }
         catch (Exception ex)
         {

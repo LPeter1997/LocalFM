@@ -38,6 +38,12 @@
               <TextBlock Text="Find metadata" />
             </StackPanel>
           </Button>
+          <Button Classes="ghost" Command="{Binding EditCommand}" ToolTip.Tip="Edit titles, artists and numbers by hand">
+            <StackPanel Orientation="Horizontal" Spacing="6">
+              <Path Classes="icon" Data="{StaticResource IcoEdit}" Width="15" Height="15" />
+              <TextBlock Text="Edit" />
+            </StackPanel>
+          </Button>
         </WrapPanel>
         <TextBlock Text="{Binding CoverStatus}" Classes="muted small" IsVisible="{Binding CoverStatus, Converter={x:Static ObjectConverters.IsNotNull}}" />
       </StackPanel>

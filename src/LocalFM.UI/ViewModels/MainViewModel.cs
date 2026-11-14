@@ -4,6 +4,7 @@ using Avalonia.Media;
 using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using LocalFM.Core;
 using LocalFM.Library;
 
 namespace LocalFM.UI.ViewModels;
@@ -34,6 +35,7 @@ public sealed partial class MainViewModel : ObservableObject
             new("Tracks", Icon("IcoTracks"), new TracksViewModel(this)),
             new("Playlists", Icon("IcoPlaylist"), new PlaylistsViewModel(this)),
             new("Queue", Icon("IcoQueue"), Queue),
+            new("Tidy up", Icon("IcoMagic"), new TidyViewModel(this)),
             new("Sources", Icon("IcoFolder"), Sources),
         ];
         _selectedNav = Nav[0];
@@ -135,6 +137,7 @@ public sealed partial class MainViewModel : ObservableObject
 
     public void ShowAlbum(AlbumSummary album, bool openMatch = false) => Push(new AlbumDetailViewModel(this, album, openMatch));
     public void ShowArtist(ArtistSummary artist) => Push(new AlbumsViewModel(this, artist));
+    public void EditAlbum(Ulid releaseId, Ulid? focusTrack = null) => Push(new AlbumEditorViewModel(this, releaseId, focusTrack));
 
     public void ShowAlbumOf(TrackInfo track, bool openMatch = false)
     {

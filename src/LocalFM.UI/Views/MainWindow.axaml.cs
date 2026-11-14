@@ -107,7 +107,8 @@ public partial class MainWindow : Window
             {
                 await Task.Delay(800);
                 if (page is "album" or "match" && vm.Albums.Albums.FirstOrDefault() is { } a) vm.ShowAlbum(a, openMatch: page == "match");
-                else if (vm.Nav.FirstOrDefault(n => n.Name.Equals(page, StringComparison.OrdinalIgnoreCase)) is { } nav) vm.Navigate(nav);
+                else if (page == "edit" && vm.Albums.Albums.FirstOrDefault() is { } e) vm.EditAlbum(e.ReleaseId);
+                else if (vm.Nav.FirstOrDefault(n => n.Name.StartsWith(page, StringComparison.OrdinalIgnoreCase)) is { } nav) vm.Navigate(nav);
             }
             if (Environment.GetEnvironmentVariable("LOCALFM_SNAPSHOT_PLAY") == "1" && Vm is { } v2)
             {

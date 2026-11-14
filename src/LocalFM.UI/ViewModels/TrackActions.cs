@@ -12,6 +12,7 @@ public sealed partial class TrackActions(MainViewModel main)
     [RelayCommand] private void PlayNext(TrackInfo t) => main.Host.Player.PlayNext([t]);
     [RelayCommand] private void Enqueue(TrackInfo t) => main.Host.Player.Enqueue([t]);
     [RelayCommand] private void ShowAlbum(TrackInfo t) => main.ShowAlbumOf(t);
+    [RelayCommand] private void Edit(TrackInfo t) => main.EditAlbum(t.ReleaseId, t.TrackId);
 
     public async Task AddToPlaylist(TrackInfo t, PlaylistSummary p)
     {

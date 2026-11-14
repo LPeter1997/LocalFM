@@ -1,0 +1,74 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:LocalFM.UI.ViewModels"
+             xmlns:v="using:LocalFM.UI.Views"
+             x:Class="LocalFM.UI.Views.AlbumEditorView"
+             x:DataType="vm:AlbumEditorViewModel">
+  <DockPanel Margin="24,0,24,0">
+    <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto">
+      <StackPanel Spacing="4">
+        <TextBlock Classes="h1" Text="Edit album" />
+        <TextBlock Classes="muted small" TextWrapping="Wrap"
+                   Text="What you change here is locked, so online lookups never undo it. Click a lock to change that." />
+      </StackPanel>
+      <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Top">
+        <Button Classes="ghost" Command="{Binding SuggestFixesCommand}" ToolTip.Tip="Remove '(Official Video)', '- Topic', remaster notes and similar">
+          <StackPanel Orientation="Horizontal" Spacing="6">
+            <Path Classes="icon" Data="{StaticResource IcoMagic}" Width="15" Height="15" />
+            <TextBlock Text="Suggest fixes" />
+          </StackPanel>
+        </Button>
+        <Button Classes="ghost" Command="{Binding CancelCommand}">Cancel</Button>
+        <Button Classes="primary" Command="{Binding SaveCommand}" IsEnabled="{Binding !Busy}">Save</Button>
+      </StackPanel>
+    </Grid>
+    <TextBlock DockPanel.Dock="Top" Text="{Binding Status}" Classes="small" Foreground="{StaticResource Accent}" Margin="0,8,0,0"
+               IsVisible="{Binding Status, Converter={x:Static ObjectConverters.IsNotNull}}" TextWrapping="Wrap" />
+
+    <ScrollViewer Margin="0,14,0,0">
+      <StackPanel Spacing="14" Margin="0,0,8,24">
+        <ItemsControl ItemsSource="{Binding AlbumFields}">
+          <ItemsControl.ItemsPanel>
+            <ItemsPanelTemplate><UniformGrid Columns="3" /></ItemsPanelTemplate>
+          </ItemsControl.ItemsPanel>
+          <ItemsControl.ItemTemplate>
+            <DataTemplate x:DataType="vm:EditField">
+              <StackPanel Spacing="4" Margin="0,0,14,10">
+                <TextBlock Classes="small">
+                  <Run Text="{Binding Label}" FontWeight="SemiBold" />
+                  <Run Text="  " /><Run Text="{Binding Source}" Foreground="{StaticResource Faint}" />
+                </TextBlock>
+                <v:FieldBox />
+              </StackPanel>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+
+        <Grid ColumnDefinitions="*,Auto">
+          <TextBlock Classes="h2" Text="Tracks" VerticalAlignment="Center" />
+          <Button Grid.Column="1" Classes="ghost" FontSize="12" Command="{Binding AlbumArtistForAllCommand}">Album artist for all tracks</Button>
+        </Grid>
+        <Grid ColumnDefinitions="80,80,*,*" Margin="10,0">
+          <TextBlock Classes="faint small" Text="DISC" />
+          <TextBlock Grid.Column="1" Classes="faint small" Text="#" />
+          <TextBlock Grid.Column="2" Classes="faint small" Text="TITLE" />
+          <TextBlock Grid.Column="3" Classes="faint small" Text="ARTIST" />
+        </Grid>
+        <ItemsControl ItemsSource="{Binding Tracks}">
+          <ItemsControl.ItemTemplate>
+            <DataTemplate x:DataType="vm:TrackEditRow">
+              <Border CornerRadius="8" Padding="10,4" Classes.focused="{Binding Focused}" Classes="editrow">
+                <Grid ColumnDefinitions="80,80,*,*">
+                  <v:FieldBox DataContext="{Binding Disc}" Margin="0,0,8,0" />
+                  <v:FieldBox Grid.Column="1" DataContext="{Binding Position}" Margin="0,0,8,0" />
+                  <v:FieldBox Grid.Column="2" DataContext="{Binding Title}" Margin="0,0,8,0" />
+                  <v:FieldBox Grid.Column="3" DataContext="{Binding Artist}" />
+                </Grid>
+              </Border>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+      </StackPanel>
+    </ScrollViewer>
+  </DockPanel>
+</UserControl>

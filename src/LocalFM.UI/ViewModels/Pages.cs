@@ -135,6 +135,8 @@ public sealed partial class AlbumDetailViewModel : PageViewModel
         await RefreshAsync();
     }
 
+    [RelayCommand] private void Edit() => Main.EditAlbum(Album.ReleaseId);
+
     [RelayCommand] private void PlayAll() => Host.Player.PlayTracks(Tracks.ToList());
 
     [RelayCommand]
