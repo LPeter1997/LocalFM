@@ -1,0 +1,5 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <ProjectReference Include="..\LocalFM.Library\LocalFM.Library.csproj" />
+  </ItemGroup>
+</Project>

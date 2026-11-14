@@ -1,0 +1,7 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <ProjectReference Include="..\LocalFM.Playback\LocalFM.Playback.csproj" />
+    <ProjectReference Include="..\LocalFM.Library\LocalFM.Library.csproj" />
+    <ProjectReference Include="..\LocalFM.Metadata\LocalFM.Metadata.csproj" />
+  </ItemGroup>
+</Project>
