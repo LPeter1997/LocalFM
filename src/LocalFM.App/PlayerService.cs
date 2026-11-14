@@ -62,8 +62,13 @@ public sealed class PlayerService : IDisposable
             _volume = Math.Clamp(value, 0f, 1f);
             _engine.Volume = Perceptual(_volume);
             _dirty = true;
+            VolumeChanged?.Invoke(_volume);
         }
     }
+
+    /// <summary>Raised after an explicit position change (seek or restart), with the new position.</summary>
+    public event Action<TimeSpan>? Seeked;
+    public event Action<float>? VolumeChanged;
 
     /// <summary>Raised when the current item, playback state, or queue content changes.</summary>
     public event Action? Changed;
@@ -105,6 +110,16 @@ public sealed class PlayerService : IDisposable
         }
     }
 
+    public void Play()
+    {
+        if (_engine.State != PlaybackState.Playing) PlayPause();
+    }
+
+    public void Pause()
+    {
+        if (_engine.State == PlaybackState.Playing) _engine.Pause();
+    }
+
     public void Next()
     {
         lock (_gate)
@@ -126,6 +141,7 @@ public sealed class PlayerService : IDisposable
             if (_engine.State != PlaybackState.Stopped && _engine.Position > TimeSpan.FromSeconds(3))
             {
                 _engine.Seek(TimeSpan.Zero);
+                Seeked?.Invoke(TimeSpan.Zero);
                 return;
             }
             var prev = Queue.PeekPrevious();
@@ -141,9 +157,11 @@ public sealed class PlayerService : IDisposable
         {
             lock (_gate) if (Queue.Current is { } c) _resume = (c, position);
             Changed?.Invoke();
+            Seeked?.Invoke(position);
             return;
         }
         _engine.Seek(position);
+        Seeked?.Invoke(position);
     }
 
     public void Stop() => _engine.Stop();

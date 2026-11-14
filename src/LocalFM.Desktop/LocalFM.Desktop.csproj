@@ -1,0 +1,9 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Operating-system integration: media keys and "now playing" (MPRIS on Linux; SMTC/MPNowPlaying later). -->
+  <ItemGroup>
+    <PackageReference Include="Tmds.DBus.Protocol" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\LocalFM.App\LocalFM.App.csproj" />
+  </ItemGroup>
+</Project>
