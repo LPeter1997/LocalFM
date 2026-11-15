@@ -249,12 +249,15 @@ public sealed class VibeService : IAsyncDisposable
         if (_follower is { } f)
         {
             _follower = null;
+            Log.Info(Area, "Leaving the vibe: handing playback back");
             await f.DisposeAsync().ConfigureAwait(false);
         }
         if (_client is { } c)
         {
             _client = null;
+            Log.Info(Area, "Leaving the vibe: closing the connection");
             await c.DisposeAsync().ConfigureAwait(false);
+            Log.Info(Area, "Left the vibe");
         }
     }
 

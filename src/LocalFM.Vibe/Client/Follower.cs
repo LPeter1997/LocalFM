@@ -292,6 +292,7 @@ public sealed class Follower : IFollowSource, IRangeSource, IAsyncDisposable
         _cts.Cancel();
         try { await _loop.WaitAsync(TimeSpan.FromSeconds(1)).ConfigureAwait(false); } catch { }
         _player.LeaveFollowMode();
+        Log.Info(Area, "Leaving the vibe: own queue back, clearing the cache");
         _cache.Dispose();
     }
 }

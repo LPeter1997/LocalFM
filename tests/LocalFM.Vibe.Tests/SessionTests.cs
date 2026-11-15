@@ -192,7 +192,9 @@ public sealed class SessionTests : IDisposable
         await watch;
         Assert.False(stopped, "the music stopped while reconnecting");
         Assert.Equal(VibeRole.Listening, service.Role);
-        await Task.Delay(1500); // a fresh clock estimate, then the usual tolerance
+        // A fresh clock estimate, then (after the correction cooldown) the usual tolerance.
+        var until = DateTime.UtcNow.AddSeconds(5);
+        while (Math.Abs(Offset(host, listener).TotalMilliseconds) > 80 && DateTime.UtcNow < until) await Task.Delay(100);
         Assert.InRange(Offset(host, listener).TotalMilliseconds, -80, 80);
     }
 

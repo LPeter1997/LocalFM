@@ -240,7 +240,15 @@ public partial class MainWindow : Window
                 if (v2.Albums.Albums.FirstOrDefault() is { } first) v2.Albums.PlayCommand.Execute(first);
             }
             if (Environment.GetEnvironmentVariable("LOCALFM_SNAPSHOT_LYRICS") == "1" && Vm is { } v3) v3.Lyrics.IsOpen = true;
-            if (Environment.GetEnvironmentVariable("LOCALFM_SNAPSHOT_VIBE") == "1" && Vm is { } v5) v5.Vibe.IsOpen = true;
+            if (Environment.GetEnvironmentVariable("LOCALFM_SNAPSHOT_VIBE") is "1" or "leave" && Vm is { } v5)
+            {
+                v5.Vibe.IsOpen = true;
+                if (Environment.GetEnvironmentVariable("LOCALFM_SNAPSHOT_VIBE") == "leave")
+                {
+                    await Task.Delay(4000); // joined and playing
+                    v5.Vibe.StopCommand.Execute(null);
+                }
+            }
             if (Environment.GetEnvironmentVariable("LOCALFM_SNAPSHOT_NOWPLAYING") is { Length: > 0 } np && Vm is { } v4)
             {
                 v4.NowPlayingOpen = true;
