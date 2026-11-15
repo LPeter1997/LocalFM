@@ -1,0 +1,64 @@
+# The audio-only FFmpeg LocalFM ships (native/ffmpeg/build.sh), built once per RID and cached until the script
+# changes. Callers get it as the artifact ffmpeg-<rid>: a tarball of the install prefix (symlinks kept).
+name: ffmpeg
+
+on:
+  workflow_call:
+    inputs:
+      targets:
+        description: 'JSON list of {"os": runner, "rid": RID}'
+        type: string
+        required: true
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(inputs.targets) }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    env:
+      RID: ${{ matrix.rid }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/ffmpeg-${{ matrix.rid }}.tar.gz
+          key: ffmpeg-${{ matrix.rid }}-${{ hashFiles('native/ffmpeg/build.sh') }}
+
+      - name: Build (Linux, macOS)
+        if: steps.cache.outputs.cache-hit != 'true' && runner.os != 'Windows'
+        shell: bash
+        run: |
+          if [ "$RUNNER_OS" = Linux ]; then sudo apt-get update && sudo apt-get install -y nasm; else brew install nasm; fi
+          native/ffmpeg/build.sh "$RID" "$RUNNER_TEMP/ffmpeg"
+          tar -C "$RUNNER_TEMP/ffmpeg" -czf "$RUNNER_TEMP/ffmpeg-$RID.tar.gz" .
+
+      # MSVC (cl.exe, link.exe) from the developer prompt; configure and make from MSYS2, which inherits PATH.
+      - if: steps.cache.outputs.cache-hit != 'true' && runner.os == 'Windows'
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: ${{ matrix.rid == 'win-arm64' && 'arm64' || 'x64' }}
+      - if: steps.cache.outputs.cache-hit != 'true' && runner.os == 'Windows'
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: MSYS
+          path-type: inherit
+          install: make diffutils nasm pkgconf tar xz
+      - name: Build (Windows)
+        if: steps.cache.outputs.cache-hit != 'true' && runner.os == 'Windows'
+        shell: msys2 {0}
+        run: |
+          # MSYS2's coreutils link.exe would shadow MSVC's linker.
+          rm -f /usr/bin/link.exe
+          temp=$(cygpath -u "$RUNNER_TEMP")
+          native/ffmpeg/build.sh "$RID" "$temp/ffmpeg"
+          tar -C "$temp/ffmpeg" -czf "$temp/ffmpeg-$RID.tar.gz" .
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ffmpeg-${{ matrix.rid }}
+          path: ${{ runner.temp }}/ffmpeg-${{ matrix.rid }}.tar.gz
+          if-no-files-found: error

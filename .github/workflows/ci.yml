@@ -1,0 +1,101 @@
+# Tests on all three OSes against the bundled FFmpeg, the AOT publish with its size budget, and a screenshot of
+# the published app on each OS (docs/release.md).
+name: ci
+
+on:
+  push:
+    branches: [master]
+    paths-ignore: ["docs/**", "**.md"]
+  pull_request:
+    paths-ignore: ["docs/**", "**.md"]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ffmpeg:
+    uses: ./.github/workflows/ffmpeg.yml
+    with:
+      targets: '[{"os":"ubuntu-22.04","rid":"linux-x64"},{"os":"windows-latest","rid":"win-x64"},{"os":"macos-latest","rid":"osx-arm64"}]'
+
+  test:
+    needs: ffmpeg
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: ubuntu-22.04, rid: linux-x64 }
+          - { os: windows-latest, rid: win-x64 }
+          - { os: macos-latest, rid: osx-arm64 }
+    runs-on: ${{ matrix.os }}
+    # A hung test otherwise holds the runner for the 6-hour default.
+    timeout-minutes: 60
+    defaults:
+      run:
+        shell: bash
+    env:
+      RID: ${{ matrix.rid }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+      - uses: ./.github/actions/native
+        with:
+          rid: ${{ matrix.rid }}
+
+      # The ffmpeg command line makes the test fixtures (the app itself uses the bundled libraries).
+      - name: ffmpeg CLI for fixtures
+        run: |
+          case "$RUNNER_OS" in
+            Linux) sudo apt-get install -y ffmpeg xvfb ;;
+            macOS) brew install ffmpeg ;;
+            Windows) choco install ffmpeg -y --no-progress ;;
+          esac
+
+      # --blame-hang names the test that hangs and stops the run instead of waiting for the job timeout.
+      - name: Tests
+        run: |
+          run=""
+          [ "$RUNNER_OS" = Linux ] && run="xvfb-run -a"
+          $run dotnet test LocalFM.slnx --logger "console;verbosity=minimal" --blame-hang-timeout 10m --blame-hang-dump-type none
+
+      # A real publish: AOT and trim warnings only show there.
+      - name: AOT publish
+        run: dotnet publish src/LocalFM.UI -c Release -r "$RID" -o "$RUNNER_TEMP/publish" --nologo
+      - run: ./check-size.sh "$RUNNER_TEMP/publish" "$RID"
+
+      # The published app on a one-song library, rendered to a PNG by its snapshot mode (no audio device needed).
+      # The first run adds the folder and scans it; the second plays the song and takes the screenshot.
+      - name: Screenshot
+        timeout-minutes: 5
+        env:
+          LOCALFM_OUTPUT: "null"
+        run: |
+          music="$RUNNER_TEMP/music"
+          mkdir -p "$music"
+          ffmpeg -loglevel error -f lavfi -i "sine=frequency=440:duration=30" -ac 2 -metadata title="Smoke Test" \
+            -metadata artist="LocalFM CI" -metadata album="Release Check" "$music/smoke.flac"
+          export LOCALFM_HOME="$RUNNER_TEMP/home"
+          app() { # <snapshot.png> [args]
+            png=$1
+            shift
+            case "$RUNNER_OS" in
+              Linux) LOCALFM_SNAPSHOT="$png" xvfb-run -a -s "-screen 0 1600x1000x24" "$RUNNER_TEMP/publish/LocalFM" "$@" ;;
+              macOS) LOCALFM_SNAPSHOT="$png" "$RUNNER_TEMP/publish/LocalFM" "$@" ;;
+              # A GUI-subsystem exe: Start-Process waits for it.
+              Windows) LOCALFM_SNAPSHOT="$(cygpath -w "$png")" pwsh -NoProfile -Command \
+                "Start-Process -Wait -FilePath '$(cygpath -w "$RUNNER_TEMP/publish/LocalFM.exe")' $([ $# -gt 0 ] && printf -- "-ArgumentList '%s','%s'" "$1" "$(cygpath -w "$2")")" ;;
+            esac
+          }
+          LOCALFM_SNAPSHOT_WAIT=5000 app "$RUNNER_TEMP/scan.png" --add-folder "$music"
+          LOCALFM_SNAPSHOT_PLAY=1 LOCALFM_SNAPSHOT_WAIT=3000 app "$RUNNER_TEMP/screenshot-$RID.png"
+          ls -la "$RUNNER_TEMP/screenshot-$RID.png"
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: screenshot-${{ matrix.rid }}
+          path: ${{ runner.temp }}/screenshot-${{ matrix.rid }}.png
+          if-no-files-found: warn

@@ -1,0 +1,29 @@
+# Unpacks the cached FFmpeg (the ffmpeg workflow's artifact) to $FFMPEG_PREFIX and builds localfm_native against
+# it into native/out/<rid>/, where LocalFM.Native picks it up for tests and publishes.
+name: native
+description: Bundled FFmpeg and localfm_native for one RID
+inputs:
+  rid:
+    required: true
+runs:
+  using: composite
+  steps:
+    - uses: actions/download-artifact@v4
+      with:
+        name: ffmpeg-${{ inputs.rid }}
+        path: ${{ runner.temp }}
+    - name: Unpack FFmpeg, build localfm_native
+      shell: bash
+      env:
+        RID: ${{ inputs.rid }}
+      run: |
+        prefix="$RUNNER_TEMP/ffmpeg"
+        [ "$RUNNER_OS" = Windows ] && prefix=$(cygpath -m "$prefix")
+        mkdir -p "$prefix"
+        tar -C "$prefix" -xzf "$RUNNER_TEMP/ffmpeg-$RID.tar.gz"
+        echo "FFMPEG_PREFIX=$prefix" >> "$GITHUB_ENV"
+        case "$RUNNER_OS" in
+          Linux) sudo apt-get update && sudo apt-get install -y ninja-build ;;
+        esac
+        native/build.sh "$RID" "$prefix"
+        ls -la "native/out/$RID"

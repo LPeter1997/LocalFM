@@ -43,7 +43,10 @@ if ($Previous) { Copy-Item -Recurse -Force (Join-Path $Previous "*") $releases }
 
 # Native code: the library and the FFmpeg it ships with.
 if ($FfmpegPrefix) {
-    Invoke-Checked { bash native/build.sh $Rid ($FfmpegPrefix -replace '\\', '/') } "native/build.sh"
+    # Git Bash: a plain "bash" can be WSL's.
+    $bash = Join-Path $env:ProgramFiles "Git\bin\bash.exe"
+    if (-not (Test-Path $bash)) { $bash = "bash" }
+    Invoke-Checked { & $bash native/build.sh $Rid ($FfmpegPrefix -replace '\\', '/') } "native/build.sh"
 } elseif (-not (Test-Path "native\out\$Rid\FFmpeg-COPYING.LGPLv2.1.txt")) {
     throw "native\out\$Rid has no bundled FFmpeg: build one with native/ffmpeg/build.sh (MSYS2) and pass -FfmpegPrefix"
 }
