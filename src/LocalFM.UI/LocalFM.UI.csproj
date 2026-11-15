@@ -25,6 +25,13 @@
   <ItemGroup>
     <InternalsVisibleTo Include="LocalFM.UI.Tests" />
   </ItemGroup>
+  <!-- NuGet's native assets bring their own symbols on Windows (libSkiaSharp.pdb alone is 82 MB); the publish folder is
+       packaged as is, so no .pdb goes into it. -->
+  <Target Name="DropPublishedPdbs" AfterTargets="ComputeResolvedFilesToPublishList">
+    <ItemGroup>
+      <ResolvedFileToPublish Remove="@(ResolvedFileToPublish)" Condition="'%(Extension)' == '.pdb'" />
+    </ItemGroup>
+  </Target>
   <ItemGroup>
     <AvaloniaResource Include="Assets\icon.png" />
   </ItemGroup>

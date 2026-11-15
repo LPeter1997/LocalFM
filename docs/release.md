@@ -51,8 +51,9 @@ until `build.sh` changes (`.github/workflows/ffmpeg.yml`, `.github/actions/nativ
 - **Flatpak:** the distro tarball on `org.freedesktop.Platform` 26.08: PulseAudio, network (metadata, lyrics, vibes),
   the home folder and removable media, the MPRIS name and the tray. The system's yt-dlp cannot run inside it; the
   Import page says to locate yt-dlp's single-file `yt-dlp_linux` instead.
-- **Size budget:** `check-size.sh <publish-dir> <rid>` against `size-budget.txt` (linux-x64: 55.6 MB measured
-  2026-11-15 with FFmpeg, budget 60 MB). The AppImage is 29 MB, the tarball 24 MB.
+- **Size budget:** `check-size.sh <publish-dir> <rid>` against `size-budget.txt` (measured 2026-11-15 with FFmpeg: linux-x64
+  55.6 MB, osx-arm64 54.9 MB, win-x64 ~63 MB once SkiaSharp's 100 MB of native .pdb files were dropped from the
+  publish; budgets 60/60/70 MB). `check-size.sh` lists the largest files, so a jump points at its cause. The AppImage is 29 MB, the tarball 24 MB.
 - **Icons:** `src/LocalFM.UI/Assets/icon.svg` → `icon.png` (512 px) is the only icon; `tools/LocalFM.IconGen` writes
   the `.ico` and `.icns` at build time.
 

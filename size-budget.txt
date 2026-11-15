@@ -3,3 +3,5 @@
 # checked: add its line once it has been measured.
 # rid          publish-folder-MB
 linux-x64      60
+win-x64        70
+osx-arm64      60
