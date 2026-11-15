@@ -34,9 +34,42 @@ public sealed class AlbumScout(MetadataService svc, Database db, History kv)
                 .ConfigureAwait(false);
             done += songs.Count;
             progress?.Report(new Progress(done, total));
-            foreach (var s in Suggest(AlbumFinder.Assign(guesses)))
+            foreach (var s in Suggest(AlbumFinder.Assign(guesses), guesses))
                 if (!AlbumChecks.IsDismissed(kv, s)) found.Report(s);
         }
+    }
+
+    /// <summary>
+    /// Matches matched albums again where some songs are not confirmed: songs a scan added to an album after it
+    /// was matched (same album tags) were never compared with the release. Usually answered from the cache.
+    /// Returns how many songs are now confirmed.
+    /// </summary>
+    public async Task<int> SettleAsync(CancellationToken ct = default)
+    {
+        if (!svc.OnlineEnabled) return 0;
+        List<Ulid> albums;
+        using (var c = db.Open())
+            albums = c.Query("""
+                SELECT DISTINCT m.release_id FROM track t JOIN medium m ON m.id = t.medium_id
+                JOIN external_id e ON e.entity_type = 'release' AND e.entity_id = m.release_id AND e.provider = 'musicbrainz'
+                WHERE NOT EXISTS (SELECT 1 FROM external_id x WHERE x.entity_type = 'track' AND x.entity_id = t.id AND x.provider = 'musicbrainz')
+                  AND EXISTS (SELECT 1 FROM audio_file f WHERE f.track_id = t.id AND f.missing = 0)
+                """, r => r.Id(0));
+        int confirmed = 0;
+        foreach (var album in albums)
+        {
+            ct.ThrowIfCancellationRequested();
+            try
+            {
+                if (await svc.ReapplyMatchAsync(album, ct).ConfigureAwait(false) is { Applied: true } r)
+                    confirmed += r.TracksMatched;
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                Log.Warn("Tidy", $"Matching album {album} again failed: {ex.Message}");
+            }
+        }
+        return confirmed;
     }
 
     /// <summary>Songs not confirmed by MusicBrainz, whose album was not chosen by hand.</summary>
@@ -54,8 +87,14 @@ public sealed class AlbumScout(MetadataService svc, Database db, History kv)
     }
 
     /// <summary>Turns placements into suggestions about where the songs are now.</summary>
-    internal List<AlbumSuggestion> Suggest(IReadOnlyList<AlbumGuess> placements)
+    /// <param name="all">Every album the songs are on: a song is never moved off an album it is on.</param>
+    internal List<AlbumSuggestion> Suggest(IReadOnlyList<AlbumGuess> placements, IReadOnlyList<AlbumGuess>? all = null)
     {
+        var groupsOf = (all ?? placements).SelectMany(g => g.Songs.Select(s => (Song: s, g.GroupMbid, g.LocalReleaseId)))
+            .ToLookup(x => x.Song);
+        // The song's album is (an edition of) one MusicBrainz lists it on: it is where it belongs.
+        bool AlreadyHome(Ulid song, LocalAlbum album) => groupsOf[song].Any(x =>
+            x.LocalReleaseId == album.Id || (album.GroupMbid is not null && x.GroupMbid == album.GroupMbid));
         var list = new List<AlbumSuggestion>();
         using var c = db.Open();
         LocalAlbum? Album(Ulid trackId) => c.QuerySingle("""
@@ -68,7 +107,8 @@ public sealed class AlbumScout(MetadataService svc, Database db, History kv)
 
         foreach (var p in placements)
         {
-            var where = p.Songs.Select(s => (Song: s, Album: Album(s))).Where(x => x.Album is not null).ToList();
+            var where = p.Songs.Select(s => (Song: s, Album: Album(s))).Where(x => x.Album is not null && !AlreadyHome(x.Song, x.Album)).ToList();
+            if (where.Count == 0) continue;
             // Already where they belong.
             if (where.All(x => x.Album!.Id == p.LocalReleaseId || (x.Album.GroupMbid is not null && x.Album.GroupMbid == p.GroupMbid))) continue;
             var songs = where.Where(x => x.Album!.Id != p.LocalReleaseId).Select(x => x.Song).ToList();

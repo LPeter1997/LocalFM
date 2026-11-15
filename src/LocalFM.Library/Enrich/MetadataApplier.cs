@@ -329,7 +329,7 @@ public sealed class MetadataApplier(ImageStore images)
 
     private static bool SimilarTitle(string a, string b)
     {
-        string ka = Normalize.Key(a), kb = Normalize.Key(b);
+        string ka = Edit.Cleanup.SongKey(a), kb = Edit.Cleanup.SongKey(b);
         return ka.Length > 0 && (ka == kb || ka.StartsWith(kb + " ", StringComparison.Ordinal) || kb.StartsWith(ka + " ", StringComparison.Ordinal));
     }
 

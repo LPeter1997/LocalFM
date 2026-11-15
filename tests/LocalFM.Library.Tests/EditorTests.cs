@@ -25,8 +25,21 @@ public class EditorTests
     [InlineData("Live - Wire", "AC/DC", null)]                        // a dash that is not "artist - title"
     [InlineData("Under Pressure (Lyrics)", "Queen", "Under Pressure")]
     [InlineData("Paranoid Android", "Radiohead", null)]
+    [InlineData("House Of The Rising Sun [4K HD]", "The Animals", "House Of The Rising Sun")]
+    [InlineData("Africa (Official HD Video) [1080p 60fps]", "Toto", "Africa")]
+    [InlineData("1080p", "X", null)]                                   // a title that only looks like a tag
     public void Cleans_titles(string input, string artist, string? expected) =>
         Assert.Equal(expected, Cleanup.CleanTitle(input, artist)?.Text);
+
+    [Theory]
+    [InlineData("House Of The Rising Sun [4K HD]", "The House of the Rising Sun")]
+    [InlineData("Sweet Child o’ Mine (Official Music Video)", "Sweet Child O' Mine")]
+    [InlineData("The Zoo", "Zoo")]
+    public void Song_keys_ignore_video_tags_and_a_leading_the(string a, string b) =>
+        Assert.Equal(Cleanup.SongKey(a), Cleanup.SongKey(b));
+
+    [Fact]
+    public void Song_key_keeps_a_title_that_is_only_the() => Assert.Equal("the", Cleanup.SongKey("The"));
 
     [Theory]
     [InlineData("Guns N' Roses - Civil War", "anbj0991", "Guns N’ Roses", "Civil War")]

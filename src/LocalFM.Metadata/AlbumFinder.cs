@@ -17,18 +17,18 @@ public sealed record SongQuery(Ulid TrackId, string Title, string? Artist, long?
 
 /// <summary>
 /// "Which album is this song on?" Looks each song up on MusicBrainz (title + artist, cached, rate-limited), keeps
-/// the recordings that really are that song (title and length), and groups the releases they appear on by album
+/// the official recordings that really are that song (title and length), and groups the releases they appear on by album
 /// (release group). Then <see cref="Assign"/> gives every song one album, keeping songs of one album together and
 /// preferring the original studio album over compilations and live records.
 /// </summary>
 public sealed class AlbumFinder(MusicBrainz mb, Database db)
 {
-    private const int MinScore = 85;
-    private static readonly TimeSpan LengthSlack = TimeSpan.FromSeconds(10);
-
     /// <summary>Kinds of release that are rarely where a song "belongs" (still used when nothing else has it).</summary>
     private static readonly HashSet<string> SecondaryKinds = new(StringComparer.OrdinalIgnoreCase)
-        { "Compilation", "Live", "DJ-mix", "Mixtape/Street", "Remix", "Demo", "Interview", "Spokenword", "Audio drama" };
+        { "Compilation", "Live", "Soundtrack", "DJ-mix", "Mixtape/Street", "Remix", "Demo", "Interview", "Spokenword", "Audio drama" };
+
+    /// <summary>Releases that are not where a song lives: unofficial ones and stand-ins.</summary>
+    private static readonly HashSet<string> SkippedStatuses = new(StringComparer.OrdinalIgnoreCase) { "Bootleg", "Pseudo-Release", "Withdrawn", "Cancelled" };
 
     /// <summary>The local tracks as queries: their title, credited artist and the file's real length.</summary>
     public List<SongQuery> Describe(IEnumerable<Ulid> trackIds)
@@ -71,31 +71,67 @@ public sealed class AlbumFinder(MusicBrainz mb, Database db)
         return Group(perSong);
     }
 
-    /// <summary>The releases a song is on (only recordings that match its title and, when known, its length).</summary>
+    /// <summary>
+    /// The official releases a song is on: recordings with the same title and about the same length (a video edit
+    /// may be a minute shorter than the album version, so the tolerance is the one applying a release uses).
+    /// Tries, in order: the cleaned title and artist; "Artist - Song" from the title (uploads credited to a
+    /// channel); artist and title swapped (tags filled the wrong way round). Each first near the song's length,
+    /// then at any length.
+    /// </summary>
     public async Task<List<RecordingRelease>> ReleasesOfAsync(SongQuery song, CancellationToken ct = default)
     {
         string title = Cleanup.CleanTitle(song.Title, song.Artist, remasterNotes: true)?.Text ?? song.Title;
         string? artist = song.Artist is null ? null : Cleanup.CleanArtist(song.Artist)?.Text ?? song.Artist;
-        var hits = await mb.SearchRecordingsAsync(title, artist, ct).ConfigureAwait(false);
-        var found = Matching(hits, title, song.LengthMs);
-        // "Artist - Song" uploads credited to a channel: look up the song by the artist in its title.
-        if (found.Count == 0 && Cleanup.SplitArtistTitle(song.Title, song.Artist, null) is { } split)
+        var tries = new List<(string Title, string? Artist)> { (title, artist) };
+        if (Cleanup.SplitArtistTitle(song.Title, song.Artist, null) is { } split) tries.Add((split.Title, split.Artist));
+        if (artist is { Length: > 0 }) tries.Add((artist, title));
+
+        var found = new List<RecordingRelease>();
+        var (usedTitle, usedArtist) = tries[0];
+        foreach (var (t, a) in tries.Distinct())
         {
-            hits = await mb.SearchRecordingsAsync(split.Title, split.Artist, ct).ConfigureAwait(false);
-            found = Matching(hits, split.Title, song.LengthMs);
+            if (song.LengthMs is { } len)
+                found = Matching(await mb.SearchRecordingsAsync(t, a, (len, Slack(len)), ct).ConfigureAwait(false), t, len);
+            if (found.Count == 0)
+                found = Matching(await mb.SearchRecordingsAsync(t, a, null, ct).ConfigureAwait(false), t, song.LengthMs);
+            if (found.Count > 0) { (usedTitle, usedArtist) = (t, a); break; }
+        }
+
+        // Only on compilations (or nowhere): the song may have come out as a single that its recording does not list.
+        if (!found.Any(r => !IsSecondary(r)) && usedArtist is { Length: > 0 })
+        {
+            string key = Cleanup.SongKey(usedTitle);
+            found.AddRange((await mb.SearchSinglesAsync(usedTitle, usedArtist, ct).ConfigureAwait(false))
+                .Where(r => !IsSecondary(r) && SameArtist(r.Artist, usedArtist))
+                .Where(r => r.Title.Split(" / ").Any(side => Cleanup.SongKey(side) == key)));
         }
         return found;
     }
 
+    /// <summary>How far a recording's length may be from the song's: the loose rule of applying a release.</summary>
+    private static long Slack(long ms) => Math.Max(30_000, ms / 4);
+
     private static List<RecordingRelease> Matching(List<RecordingHit> hits, string title, long? lengthMs)
     {
-        string key = Normalize.Key(title);
+        string key = Cleanup.SongKey(title);
         return hits
-            .Where(h => h.Score >= MinScore)
-            .Where(h => Normalize.Key(h.Title) == key || Normalize.Key(Cleanup.CleanTitle(h.Title, null)?.Text ?? h.Title) == key)
-            .Where(h => lengthMs is null || h.LengthMs is null || Math.Abs(h.LengthMs.Value - lengthMs.Value) <= LengthSlack.TotalMilliseconds)
-            .SelectMany(h => h.Releases)
+            .Where(h => Cleanup.SongKey(h.Title) == key)
+            .Where(h => lengthMs is not { } l || h.LengthMs is not { } hl || Math.Abs(hl - l) <= Slack(Math.Max(hl, l)))
+            .SelectMany(h => h.Releases.Select(r => SameArtist(r.Artist, h.Artist) ? r : r with { SecondaryTypes = [.. r.SecondaryTypes, "Compilation"] }))
+            .Where(r => r.Status is null || !SkippedStatuses.Contains(r.Status))
             .ToList();
+    }
+
+    /// <summary>
+    /// Whether a release is the song's artist's own. A various-artists record ("Old Favorite Pops" by Herman's
+    /// Hermits / The Animals / …) is a compilation in all but name. "Slash" and "Slash feat. Myles Kennedy" are
+    /// the same artist here.
+    /// </summary>
+    private static bool SameArtist(string release, string song)
+    {
+        string a = Normalize.Key(release), b = Normalize.Key(song);
+        return a.Length == 0 || b.Length == 0 || a == b
+               || a.StartsWith(b + " ", StringComparison.Ordinal) || b.StartsWith(a + " ", StringComparison.Ordinal);
     }
 
     /// <summary>Groups releases into albums (release groups) and picks the edition to use for each.</summary>
@@ -126,14 +162,27 @@ public sealed class AlbumFinder(MusicBrainz mb, Database db)
                 : edition.GroupId is not null && localGroups.TryGetValue(edition.GroupId, out var lg) ? lg : null;
             string? year = a.Releases.Select(r => r.Date).Where(d => d is { Length: >= 4 }).Select(d => d![..4]).Order().FirstOrDefault();
             guesses.Add(new AlbumGuess(edition.Id, edition.GroupId, edition.Title, edition.Artist, year, edition.TrackCount,
-                edition.PrimaryType, IsSecondary(edition), a.Songs.OrderBy(s => order[s]).ToList(), local));
+                edition.PrimaryType, IsSecondary(edition), a.Songs.OrderBy(s => order[s]).ToList(), local)
+                { Editions = a.Releases.Select(r => r.Id).Distinct().Count() });
         }
         return guesses
             .OrderByDescending(g => g.Songs.Count)
             .ThenBy(Tier)
             .ThenByDescending(g => g.LocalReleaseId is not null)
+            .ThenByDescending(g => g.Editions)
             .ThenBy(g => g.Year ?? "9999")
             .ToList();
+    }
+
+    /// <summary>
+    /// The guesses in the order to show them: the albums the songs are placed on (see <see cref="Assign"/>) first,
+    /// then the other albums they are on.
+    /// </summary>
+    public static List<AlbumGuess> Rank(IReadOnlyList<AlbumGuess> guesses)
+    {
+        var placed = Assign(guesses).Select(p => p.ReleaseMbid).ToList();
+        return placed.Select(id => guesses.First(g => g.ReleaseMbid == id))
+            .Concat(guesses.Where(g => !placed.Contains(g.ReleaseMbid))).ToList();
     }
 
     /// <summary>
@@ -155,6 +204,7 @@ public sealed class AlbumFinder(MusicBrainz mb, Database db)
                     .Where(x => x.Songs.Count > 0)
                     .OrderByDescending(x => x.Songs.Count)
                     .ThenByDescending(x => x.Guess.LocalReleaseId is not null)
+                    .ThenByDescending(x => x.Guess.Editions) // the song's real home is on many editions
                     .ThenBy(x => x.Guess.Year ?? "9999")
                     .FirstOrDefault();
                 if (best.Guess is null) break;

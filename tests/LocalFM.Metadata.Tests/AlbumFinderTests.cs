@@ -203,6 +203,46 @@ public class AlbumFinderTests
     }
 
     /// <summary>Progress&lt;T&gt; posts to the thread pool; tests want the callback inline.</summary>
+    [SkippableFact]
+    public async Task A_song_a_scan_adds_to_a_matched_album_is_confirmed_not_moved()
+    {
+        Skip.IfNot(TempLibrary.HaveFfmpeg, "ffmpeg CLI needed");
+        using var lib = new TempLibrary();
+        var (svc, _) = Service(lib);
+        lib.MakeTrack("ds/Sultans of Swing.mp3", new() { ["title"] = "Sultans of Swing", ["artist"] = Ds, ["album"] = Ds }, seconds: 0.3);
+        await Scan(lib);
+        var album = lib.Queries.Albums().Single().ReleaseId;
+        await svc.ApplyReleaseAsync(album, "rel-ds", fetchCover: false);
+
+        // Later another song of the album arrives: the scan puts it on the album, but nothing compared it with the release.
+        lib.MakeTrack("ds/Down to the Waterline.mp3", new() { ["title"] = "Down to the Waterline", ["artist"] = Ds, ["album"] = Ds }, seconds: 0.3);
+        await Scan(lib);
+        Assert.Equal(AlbumIssue.NotOnAlbum, Assert.Single(AlbumChecks.FindOffline(lib.Db)).Kind);
+
+        Assert.Equal(2, await svc.Scout.SettleAsync());
+        Assert.Empty(AlbumChecks.FindOffline(lib.Db));
+        var found = new List<AlbumSuggestion>();
+        await svc.Scout.RunAsync(new SyncProgress<AlbumSuggestion>(found.Add));
+        Assert.Empty(found);
+        var (title, songs) = Assert.Single(Albums(lib));
+        Assert.Equal(Ds, title);
+        Assert.Equal(["Down to the Waterline", "Sultans of Swing"], songs);
+    }
+
+    [SkippableFact]
+    public async Task A_song_with_title_and_artist_swapped_is_still_found()
+    {
+        Skip.IfNot(TempLibrary.HaveFfmpeg, "ffmpeg CLI needed");
+        using var lib = new TempLibrary();
+        var (svc, _) = Service(lib);
+        lib.MakeTrack("swapped.mp3", new() { ["title"] = Ds, ["artist"] = "Sultans of Swing" }, seconds: 0.3);
+        await lib.ScanAsync();
+        await lib.Db.Writer.Run((c, t) => new Tx(c, t).Exec("UPDATE audio_file SET duration_ms = 348000"));
+
+        var placed = AlbumFinder.Assign(await svc.Albums.FindAsync(svc.Albums.DescribeAlbum(lib.Queries.Albums().Single().ReleaseId)));
+        Assert.Equal(Ds, Assert.Single(placed).Title);
+    }
+
     private sealed class SyncProgress<T>(Action<T> report) : IProgress<T>
     {
         public void Report(T value) => report(value);

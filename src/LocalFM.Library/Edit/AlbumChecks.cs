@@ -17,7 +17,11 @@ public sealed record AlbumGuess(
     string? PrimaryType,
     bool Secondary,
     IReadOnlyList<Ulid> Songs,
-    Ulid? LocalReleaseId);
+    Ulid? LocalReleaseId)
+{
+    /// <summary>How many releases of this album have the songs: the album a song really is from has many.</summary>
+    public int Editions { get; init; } = 1;
+}
 
 public enum AlbumIssue { NotOnAlbum, SameAlbumTwice, BelongTogether, BelongsElsewhere, AlbumFound }
 

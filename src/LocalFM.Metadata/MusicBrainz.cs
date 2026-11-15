@@ -21,17 +21,53 @@ public sealed class MusicBrainz(CachedHttp http)
         return doc.RootElement.Arr("releases").Select(ParseCandidate).ToList();
     }
 
-    /// <summary>Recordings (songs) by title and artist, each with the releases it appears on.</summary>
-    public async Task<List<RecordingHit>> SearchRecordingsAsync(string title, string? artist, CancellationToken ct = default)
+    /// <summary>
+    /// Recordings (songs) by title and artist, each with the releases it appears on. Only recordings with an
+    /// official release are asked for, and with <paramref name="around"/> only those of about that length: famous
+    /// songs have hundreds of live and bootleg recordings, and the studio one (on the most releases) scores low,
+    /// so without these filters it falls out of the results.
+    /// </summary>
+    /// <param name="around">The song's length and how far off a recording may be.</param>
+    public async Task<List<RecordingHit>> SearchRecordingsAsync(string title, string? artist, (long Ms, long Slack)? around = null,
+        CancellationToken ct = default)
     {
         var q = new StringBuilder($"recording:\"{Escape(title)}\"");
         if (!string.IsNullOrWhiteSpace(artist)) q.Append($" AND artist:\"{Escape(artist)}\"");
-        string url = $"{Base}recording/?query={Uri.EscapeDataString(q.ToString())}&fmt=json&limit=50";
+        q.Append(" AND status:official");
+        if (around is { } a) q.Append($" AND dur:[{Math.Max(0, a.Ms - a.Slack)} TO {a.Ms + a.Slack}]");
+        string url = $"{Base}recording/?query={Uri.EscapeDataString(q.ToString())}&fmt=json&limit=100";
         var res = await http.GetAsync(Provider, url, TimeSpan.FromDays(7), ct: ct).ConfigureAwait(false);
         if (!res.Ok) return [];
         using var doc = JsonDocument.Parse(res.Body);
         return ParseRecordings(doc.RootElement);
     }
+
+    /// <summary>
+    /// Singles by title and artist, as releases (the first official one of each). A song released only as a
+    /// single (the 1960s way) often is not listed under its recording in the search index, but the single is easy
+    /// to find by name.
+    /// </summary>
+    public async Task<List<RecordingRelease>> SearchSinglesAsync(string title, string? artist, CancellationToken ct = default)
+    {
+        var q = new StringBuilder($"releasegroup:\"{Escape(title)}\" AND primarytype:single");
+        if (!string.IsNullOrWhiteSpace(artist)) q.Append($" AND artist:\"{Escape(artist)}\"");
+        string url = $"{Base}release-group/?query={Uri.EscapeDataString(q.ToString())}&fmt=json&limit=25";
+        var res = await http.GetAsync(Provider, url, TimeSpan.FromDays(7), ct: ct).ConfigureAwait(false);
+        if (!res.Ok) return [];
+        using var doc = JsonDocument.Parse(res.Body);
+        return ParseSingles(doc.RootElement);
+    }
+
+    public static List<RecordingRelease> ParseSingles(JsonElement root) =>
+        root.Arr("release-groups").Select(g =>
+        {
+            var official = g.Arr("releases").FirstOrDefault(r => string.Equals(r.Str("status"), "Official", StringComparison.OrdinalIgnoreCase));
+            if (official.ValueKind != JsonValueKind.Object || official.Str("id") is not { } id) return null;
+            return new RecordingRelease(id, g.Str("title") ?? "", ReleaseData.CreditText(Credit(g)), g.Str("first-release-date"), "Official",
+                g.Str("id"), g.Str("primary-type"),
+                g.TryGetProperty("secondary-types", out var st) ? st.EnumerateArray().Select(x => x.GetString()!).Where(x => x is not null).ToList() : [],
+                0, 1);
+        }).OfType<RecordingRelease>().ToList();
 
     public static List<RecordingHit> ParseRecordings(JsonElement root) =>
         root.Arr("recordings").Select(r =>

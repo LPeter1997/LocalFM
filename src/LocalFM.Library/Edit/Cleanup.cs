@@ -26,6 +26,16 @@ public static partial class Cleanup
         return s == name.Trim() || s.Length == 0 ? null : new Result(s, reasons);
     }
 
+    /// <summary>
+    /// A song title reduced to what identifies the song: video tags and remaster notes removed, normalized, and
+    /// without a leading "The" ("House Of The Rising Sun [4K HD]" and "The House of the Rising Sun" are one song).
+    /// </summary>
+    public static string SongKey(string title)
+    {
+        string key = Normalize.Key(CleanTitle(title, null)?.Text ?? title);
+        return key.StartsWith("the ", StringComparison.Ordinal) && key.Length > 4 ? key[4..] : key;
+    }
+
     public static Result? CleanTitle(string title, string? artist, bool remasterNotes = true)
     {
         var reasons = new List<string>();
@@ -163,7 +173,7 @@ public static partial class Cleanup
     [GeneratedRegex(@"(?<=\p{L})VEVO$")]
     private static partial Regex VevoSuffix();
 
-    [GeneratedRegex(@"\s*[\(\[]\s*(?:official\s+)?(?:music\s+|lyrics?\s+|audio\s+|hd\s+|hq\s+|4k\s+)?(?:video|audio|visuali[sz]er|lyrics?|clip|videoclip)(?:\s+(?:hd|hq|4k))?\s*[\)\]]|\s*[\(\[]\s*(?:hd|hq|4k|explicit)\s*[\)\]]",
+    [GeneratedRegex(@"\s*[\(\[]\s*(?:official\s+)?(?:music\s+|lyrics?\s+|audio\s+|hd\s+|hq\s+|4k\s+)?(?:video|audio|visuali[sz]er|lyrics?|clip|videoclip)(?:\s+(?:hd|hq|4k))?\s*[\)\]]|\s*[\(\[]\s*(?:hd|hq|uhd|full\s+hd|4k|8k|\d{3,4}p|\d{2}\s?fps|high\s+quality|explicit|remastered\s+in\s+4k)(?:[\s,/+|-]+(?:hd|hq|uhd|full\s+hd|4k|8k|\d{3,4}p|\d{2}\s?fps|high\s+quality|explicit))*\s*[\)\]]",
         RegexOptions.IgnoreCase)]
     private static partial Regex VideoTag();
 
