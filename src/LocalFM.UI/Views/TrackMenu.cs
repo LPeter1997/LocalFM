@@ -35,7 +35,12 @@ public static class TrackMenu
             menu.Items.Add(new Separator());
             menu.Items.Add(Item("Go to album", () => a.ShowAlbumCommand.Execute(track)));
             menu.Items.Add(Item("Edit…", () => a.EditCommand.Execute(track)));
-            menu.Items.Add(Item("Move to album…", () => a.MoveCommand.Execute(track)));
+            // Right-clicking one of several selected songs moves them all (songs of one album).
+            var selected = list.SelectedItems?.OfType<TrackInfo>().ToList() ?? [];
+            if (selected.Count > 1 && selected.Contains(track) && selected.All(t => t.ReleaseId == track.ReleaseId))
+                menu.Items.Add(Item($"Move {selected.Count} songs to album…", () => a.MoveMany(selected)));
+            else
+                menu.Items.Add(Item("Move to album…", () => a.MoveCommand.Execute(track)));
             if (remove is not null) menu.Items.Add(Item(removeLabel, () => remove(track)));
             menu.Open(target);
             e.Handled = true;

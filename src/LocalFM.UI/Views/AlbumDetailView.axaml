@@ -69,10 +69,32 @@
             IsVisible="{Binding Move, Converter={x:Static ObjectConverters.IsNotNull}}">
       <StackPanel DataContext="{Binding Move}" x:DataType="vm:MoveViewModel" Spacing="10">
         <TextBlock Text="{Binding Heading}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+        <!-- Online: the albums MusicBrainz says the songs are on -->
+        <TextBlock Classes="muted small" Text="{Binding OnlineHeading}" />
+        <TextBlock Text="{Binding OnlineStatus}" Classes="faint small" TextWrapping="Wrap"
+                   IsVisible="{Binding OnlineStatus, Converter={x:Static ObjectConverters.IsNotNull}}" />
+        <ListBox x:Name="MoveOnline" Classes="rows" ItemsSource="{Binding Online}" SelectedItem="{Binding SelectedOnline}" MaxHeight="180"
+                 IsVisible="{Binding Online.Count}">
+          <ListBox.ItemTemplate>
+            <DataTemplate x:DataType="vm:AlbumGuessRow">
+              <Grid ColumnDefinitions="*,Auto,Auto">
+                <StackPanel VerticalAlignment="Center">
+                  <TextBlock Text="{Binding Title}" FontWeight="Medium" TextTrimming="CharacterEllipsis" />
+                  <TextBlock Classes="muted small" Text="{Binding Artist}" TextTrimming="CharacterEllipsis" />
+                </StackPanel>
+                <TextBlock Grid.Column="1" Classes="small" Text="in your library" Foreground="{StaticResource Accent}" Margin="10,0"
+                           VerticalAlignment="Center" IsVisible="{Binding InLibrary}" />
+                <TextBlock Grid.Column="2" Classes="muted small" VerticalAlignment="Center" Text="{Binding Facts}" />
+              </Grid>
+            </DataTemplate>
+          </ListBox.ItemTemplate>
+        </ListBox>
+        <!-- In the library -->
+        <TextBlock Classes="muted small" Text="In your library" Margin="0,4,0,0" />
         <TextBox x:Name="MoveSearch" Text="{Binding Search}" PlaceholderText="Search albums by title or artist" />
         <TextBlock Text="{Binding Status}" Classes="muted small" TextWrapping="Wrap"
                    IsVisible="{Binding Status, Converter={x:Static ObjectConverters.IsNotNull}}" />
-        <ListBox x:Name="MoveResults" Classes="rows" ItemsSource="{Binding Results}" SelectedItem="{Binding Selected}" MaxHeight="240"
+        <ListBox x:Name="MoveResults" Classes="rows" ItemsSource="{Binding Results}" SelectedItem="{Binding Selected}" MaxHeight="200"
                  IsVisible="{Binding Results.Count}">
           <ListBox.ItemTemplate>
             <DataTemplate x:DataType="lib:AlbumSummary">
@@ -93,25 +115,73 @@
             </DataTemplate>
           </ListBox.ItemTemplate>
         </ListBox>
-        <StackPanel Orientation="Horizontal" Spacing="8">
+        <Grid ColumnDefinitions="Auto,Auto,*,Auto,Auto">
           <Button Classes="primary" Command="{Binding ApplyCommand}" IsEnabled="{Binding !Busy}">Move to selected album</Button>
-          <Button Classes="ghost" Command="{Binding CancelCommand}">Cancel</Button>
-        </StackPanel>
+          <Button Grid.Column="1" Classes="ghost" Margin="8,0,0,0" Command="{Binding CancelCommand}">Cancel</Button>
+          <TextBox x:Name="NewAlbumBox" Grid.Column="3" Text="{Binding NewAlbumName}" PlaceholderText="Or a new album…" Width="200">
+            <TextBox.KeyBindings><KeyBinding Gesture="Enter" Command="{Binding CreateNewCommand}" /></TextBox.KeyBindings>
+          </TextBox>
+          <Button Grid.Column="4" Classes="ghost" Margin="8,0,0,0" Command="{Binding CreateNewCommand}" IsEnabled="{Binding !Busy}">Create</Button>
+        </Grid>
       </StackPanel>
     </Border>
     <Border DockPanel.Dock="Top" Margin="24,0,24,12" Padding="14" CornerRadius="10" Background="{StaticResource Surface}"
             IsVisible="{Binding MatchOpen}">
       <StackPanel DataContext="{Binding Match}" x:DataType="vm:MatchViewModel" Spacing="10">
-        <Grid ColumnDefinitions="*,*,Auto,Auto" >
-          <TextBox Text="{Binding Title}" PlaceholderText="Album title" Margin="0,0,8,0" />
-          <TextBox Grid.Column="1" Text="{Binding Artist}" PlaceholderText="Artist (optional)" Margin="0,0,8,0" />
+        <Grid ColumnDefinitions="Auto,*,Auto">
+          <ListBox Classes="segmented" ItemsSource="{Binding Modes}" SelectedIndex="{Binding Mode}">
+            <ListBox.ItemsPanel><ItemsPanelTemplate><StackPanel Orientation="Horizontal" /></ItemsPanelTemplate></ListBox.ItemsPanel>
+          </ListBox>
+          <CheckBox Grid.Column="2" IsChecked="{Binding FetchCover}" Margin="12,0,0,0">Download cover</CheckBox>
+        </Grid>
+        <Grid ColumnDefinitions="*,*,Auto" IsVisible="{Binding ByTitle}">
+          <TextBox Text="{Binding Title}" PlaceholderText="Album title" Margin="0,0,8,0">
+            <TextBox.KeyBindings><KeyBinding Gesture="Enter" Command="{Binding SearchCommand}" /></TextBox.KeyBindings>
+          </TextBox>
+          <TextBox Grid.Column="1" Text="{Binding Artist}" PlaceholderText="Artist (optional)" Margin="0,0,8,0">
+            <TextBox.KeyBindings><KeyBinding Gesture="Enter" Command="{Binding SearchCommand}" /></TextBox.KeyBindings>
+          </TextBox>
           <Button Grid.Column="2" Classes="ghost" Command="{Binding SearchCommand}" IsEnabled="{Binding !Busy}">Search</Button>
-          <CheckBox Grid.Column="3" IsChecked="{Binding FetchCover}" Margin="12,0,0,0">Download cover</CheckBox>
         </Grid>
         <StackPanel Orientation="Horizontal" Spacing="8">
           <ProgressBar IsIndeterminate="True" Width="80" IsVisible="{Binding Busy}" VerticalAlignment="Center" />
           <TextBlock Text="{Binding Status}" Classes="muted small" VerticalAlignment="Center" TextWrapping="Wrap" />
+          <Button Classes="ghost" FontSize="12" Command="{Binding FindTheirAlbumsCommand}" IsVisible="{Binding HasStrays}">Find their albums</Button>
         </StackPanel>
+
+        <!-- By songs -->
+        <StackPanel Spacing="10" IsVisible="{Binding BySongs}">
+          <Border CornerRadius="8" Background="{StaticResource Surface2}" Padding="12,8" IsVisible="{Binding CanSort}">
+            <Grid ColumnDefinitions="*,Auto">
+              <TextBlock Text="{Binding SortSummary}" TextWrapping="Wrap" VerticalAlignment="Center" />
+              <Button Grid.Column="1" Classes="primary" Margin="12,0,0,0" Command="{Binding SortAllCommand}" IsEnabled="{Binding !Busy}">Sort them</Button>
+            </Grid>
+          </Border>
+          <ListBox x:Name="GuessList" Classes="rows" ItemsSource="{Binding Guesses}" SelectedItem="{Binding SelectedGuess}" MaxHeight="260"
+                   IsVisible="{Binding Guesses.Count}">
+            <ListBox.ItemTemplate>
+              <DataTemplate x:DataType="vm:AlbumGuessRow">
+                <Grid ColumnDefinitions="*,Auto,Auto,Auto">
+                  <StackPanel VerticalAlignment="Center">
+                    <TextBlock Text="{Binding Title}" FontWeight="Medium" TextTrimming="CharacterEllipsis" />
+                    <TextBlock Classes="muted small" Text="{Binding Artist}" TextTrimming="CharacterEllipsis" />
+                  </StackPanel>
+                  <TextBlock Grid.Column="1" Classes="small" Text="in your library" Foreground="{StaticResource Accent}" Margin="10,0"
+                             VerticalAlignment="Center" IsVisible="{Binding InLibrary}" />
+                  <TextBlock Grid.Column="2" Classes="muted small" VerticalAlignment="Center" Text="{Binding Facts}" Margin="10,0" />
+                  <TextBlock Grid.Column="3" Classes="small" FontWeight="SemiBold" VerticalAlignment="Center" Text="{Binding Coverage}" />
+                </Grid>
+              </DataTemplate>
+            </ListBox.ItemTemplate>
+          </ListBox>
+          <StackPanel Orientation="Horizontal" Spacing="8">
+            <Button Classes="primary" Command="{Binding ApplyGuessCommand}" IsEnabled="{Binding !Busy}">Put on selected album</Button>
+            <Button Classes="ghost" Command="{Binding FindBySongsCommand}" IsEnabled="{Binding !Busy}">Look again</Button>
+          </StackPanel>
+        </StackPanel>
+
+        <!-- By album title -->
+        <StackPanel Spacing="10" IsVisible="{Binding ByTitle}">
         <ListBox Classes="rows" ItemsSource="{Binding Candidates}" SelectedItem="{Binding Selected}" MaxHeight="260"
                  IsVisible="{Binding Candidates.Count}">
           <ListBox.ItemTemplate>
@@ -146,9 +216,10 @@
           <TextBlock Classes="faint small" VerticalAlignment="Center" TextWrapping="Wrap"
                      Text="Fields you have edited by hand are never overwritten." />
         </StackPanel>
+        </StackPanel>
       </StackPanel>
     </Border>
-    <ListBox x:Name="List" Classes="rows" ItemsSource="{Binding Tracks}" Margin="16,0,16,8">
+    <ListBox x:Name="List" Classes="rows" ItemsSource="{Binding Tracks}" Margin="16,0,16,8" SelectionMode="Multiple">
       <ListBox.ItemTemplate>
         <DataTemplate x:DataType="lib:TrackInfo">
           <Grid ColumnDefinitions="44,*,Auto,64">

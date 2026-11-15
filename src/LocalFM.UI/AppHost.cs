@@ -59,6 +59,10 @@ public sealed class AppHost : IDisposable
     public PlayerService Player { get; }
     public string? StartupWarning { get; }
 
+    private readonly CancellationTokenSource _shutdown = new();
+    /// <summary>Cancelled when the app closes: long background work (online checks) stops with it.</summary>
+    public CancellationToken ShutdownToken => _shutdown.Token;
+
     /// <summary>Restores the queue and starts background scanning/watching of all sources.</summary>
     public void Start(IReadOnlyList<string>? addFolders = null)
     {
@@ -79,6 +83,7 @@ public sealed class AppHost : IDisposable
 
     public void Dispose()
     {
+        _shutdown.Cancel();
         Import.Dispose();
         Watcher.Dispose();
         Player.Dispose();

@@ -198,15 +198,20 @@ public sealed partial class MainViewModel : ObservableObject
         if (Host.Queries.Album(track.ReleaseId) is { } album) ShowAlbum(album, openMatch);
     }
 
-    /// <summary>Opens the track's album with the "move to another album" panel for that track.</summary>
-    public void MoveTrack(TrackInfo track)
+    /// <summary>Opens the songs' album with the "move to another album" panel for them (songs of one album).</summary>
+    public void MoveTracks(IReadOnlyList<TrackInfo> tracks)
     {
-        if (CurrentPage is AlbumDetailViewModel open && open.Album.ReleaseId == track.ReleaseId) { open.OpenMove(track); return; }
-        if (Host.Queries.Album(track.ReleaseId) is not { } album) return;
+        if (tracks.Count == 0) return;
+        var release = tracks[0].ReleaseId;
+        tracks = tracks.Where(t => t.ReleaseId == release).ToList();
+        if (CurrentPage is AlbumDetailViewModel open && open.Album.ReleaseId == release) { open.OpenMove(tracks); return; }
+        if (Host.Queries.Album(release) is not { } album) return;
         var page = new AlbumDetailViewModel(this, album);
         Push(page);
-        page.OpenMove(track);
+        page.OpenMove(tracks);
     }
+
+    public void MoveTrack(TrackInfo track) => MoveTracks([track]);
 
     [RelayCommand]
     private void ShowNowPlayingAlbum()

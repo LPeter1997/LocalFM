@@ -131,8 +131,19 @@ public sealed partial class AlbumDetailViewModel : PageViewModel
         var known = Host.Queries.ArtistNames().GroupBy(Normalize.Key).ToDictionary(g => g.Key, g => g.First());
         var (title, artist) = Library.Edit.Cleanup.SplitArtistTitle(Album.Title, Album.Artist, n => known.GetValueOrDefault(Normalize.Key(n)))
             is { } split ? (split.Title, split.Artist) : (Album.Title, Album.Artist);
-        Match = new MatchViewModel(Host, Album.ReleaseId, title, artist, AfterMatch);
-        Match.SearchCommand.Execute(null);
+        Match = new MatchViewModel(Host, Album.ReleaseId, title, artist, AfterMatch, AfterSort);
+        // An album without a real name is best found through its songs.
+        string key = Normalize.Key(Album.Title);
+        Match.Start(bySongs: key == Normalize.Key("[Unknown Album]") || key == Normalize.Key("Singles"));
+    }
+
+    /// <summary>Songs were sorted into their albums: stay here if this album still exists, else go where they went.</summary>
+    private async Task AfterSort(Metadata.SortReport report)
+    {
+        if (report.Moved > 0) Main.Notify($"Moved {Converters.Count(report.Moved, "song")} to {(report.Albums.Count == 1 ? "its album" : $"{report.Albums.Count} albums")}");
+        if (Host.Queries.Album(Album.ReleaseId) is not null) { await RefreshAsync(); return; }
+        if (report.Albums.Select(Host.Queries.Album).FirstOrDefault(a => a is not null) is { } next) Main.ReplaceWithAlbum(next);
+        else Main.BackCommand.Execute(null);
     }
 
     private async Task AfterMatch(Library.Enrich.ApplyResult result)
@@ -141,21 +152,24 @@ public sealed partial class AlbumDetailViewModel : PageViewModel
         else await RefreshAsync();
     }
 
-    /// <summary>Opens the panel for moving one track to another album.</summary>
-    public void OpenMove(TrackInfo track)
+    /// <summary>Opens the panel for moving songs to another album.</summary>
+    public void OpenMove(IReadOnlyList<TrackInfo> tracks)
     {
+        if (tracks.Count == 0) return;
         MatchOpen = false;
-        Move = new MoveViewModel(Host, track, AfterMove, () => Move = null);
+        Move = new MoveViewModel(Host, tracks, AfterMove, () => Move = null);
     }
 
-    private async Task AfterMove(TrackInfo track, AlbumSummary target)
+    private async Task AfterMove(string where, IReadOnlyList<Ulid> albums)
     {
+        int n = Move?.Tracks.Count ?? 0;
+        string what = Move?.Tracks is [var one] ? $"“{one.Title}”" : Converters.Count(n, "song");
         Move = null;
-        await RefineFromMatch(target.ReleaseId);
+        foreach (var a in albums) await RefineFromMatch(a);
         _ = Host.Player.RefreshMetadataAsync();
-        Main.Notify($"Moved “{track.Title}” to {target.Title}");
-        if (Host.Queries.Album(Album.ReleaseId) is null) Main.ReplaceWithAlbum(Host.Queries.Album(target.ReleaseId) ?? target);
-        else await RefreshAsync();
+        Main.Notify($"Moved {what} {where}");
+        if (Host.Queries.Album(Album.ReleaseId) is not null) await RefreshAsync();
+        else if (albums.Select(Host.Queries.Album).FirstOrDefault(a => a is not null) is { } next) Main.ReplaceWithAlbum(next);
     }
 
     /// <summary>Songs moved onto a matched album take its numbering and credits (from the cached lookup).
@@ -475,61 +489,141 @@ public sealed partial class SourcesViewModel(MainViewModel main) : PageViewModel
     }
 }
 
-/// <summary>Picks another album for a track and moves it there (e.g. a song that ended up on a second copy of its album).</summary>
+/// <summary>
+/// Picks another album for one or more songs and moves them there: an album the songs are on according to
+/// MusicBrainz (made if it is not in the library yet), an album already in the library, or a new one.
+/// </summary>
 public sealed partial class MoveViewModel : ObservableObject
 {
     private readonly AppHost _host;
-    private readonly Func<TrackInfo, AlbumSummary, Task> _moved;
+    private readonly Func<string, IReadOnlyList<Ulid>, Task> _moved;
     private readonly Action _close;
     private int _query;
 
-    public MoveViewModel(AppHost host, TrackInfo track, Func<TrackInfo, AlbumSummary, Task> moved, Action close)
+    /// <param name="moved">Called with a description ("to Brothers in Arms") and the albums the songs ended up on.</param>
+    public MoveViewModel(AppHost host, IReadOnlyList<TrackInfo> tracks, Func<string, IReadOnlyList<Ulid>, Task> moved, Action close)
     {
         _host = host;
         _moved = moved;
         _close = close;
-        Track = track;
-        _search = track.Album ?? "";
+        Tracks = tracks;
+        _search = tracks[0].Album ?? "";
+        _newAlbumName = "";
         _ = Find();
+        _ = FindOnline();
     }
 
-    public TrackInfo Track { get; }
-    public string Heading => $"Move “{Track.Title}” to another album";
+    public IReadOnlyList<TrackInfo> Tracks { get; }
+    public string Heading => Tracks.Count == 1 ? $"Move “{Tracks[0].Title}” to another album" : $"Move {Tracks.Count} songs to another album";
+    public string OnlineHeading => Tracks.Count == 1 ? "Albums with this song" : "Albums with these songs";
     public ObservableCollection<AlbumSummary> Results { get; } = new();
+    public ObservableCollection<AlbumGuessRow> Online { get; } = new();
 
     [ObservableProperty] private string _search;
     [ObservableProperty] private AlbumSummary? _selected;
+    [ObservableProperty] private AlbumGuessRow? _selectedOnline;
+    [ObservableProperty] private string _newAlbumName;
     [ObservableProperty] private bool _busy;
     [ObservableProperty] private string? _status;
+    [ObservableProperty] private string? _onlineStatus;
 
     partial void OnSearchChanged(string value) => _ = Find();
+
+    // One choice at a time across the two lists.
+    partial void OnSelectedChanged(AlbumSummary? value) { if (value is not null) SelectedOnline = null; }
+    partial void OnSelectedOnlineChanged(AlbumGuessRow? value) { if (value is not null) Selected = null; }
+
+    private Ulid CurrentAlbum => Tracks[0].ReleaseId;
 
     private async Task Find()
     {
         int query = ++_query;
         string text = Search;
-        var list = await Task.Run(() => _host.Queries.Albums(text).Where(a => a.ReleaseId != Track.ReleaseId).Take(60).ToList());
+        var list = await Task.Run(() => _host.Queries.Albums(text).Where(a => a.ReleaseId != CurrentAlbum).Take(60).ToList());
         if (query != _query) return; // a newer search is on its way
+        bool hadSelection = Selected is not null;
         Results.Clear();
         foreach (var a in list) Results.Add(a);
-        Selected = Results.FirstOrDefault();
-        Status = list.Count == 0 ? "No other album matches. Try part of the title or the artist." : null;
+        if (hadSelection || SelectedOnline is null) Selected = Results.FirstOrDefault();
+        Status = list.Count == 0 ? "No other album in your library matches. Try part of the title or the artist." : null;
+    }
+
+    private async Task FindOnline()
+    {
+        if (!_host.Metadata.OnlineEnabled) { OnlineStatus = "Online lookups are off (Sources page)."; return; }
+        OnlineStatus = "Looking up the albums on MusicBrainz…";
+        try
+        {
+            var ids = Tracks.Select(t => t.TrackId).ToList();
+            var guesses = await Task.Run(async () =>
+            {
+                var songs = _host.Metadata.Albums.Describe(ids);
+                return await _host.Metadata.Albums.FindAsync(songs);
+            });
+            foreach (var g in guesses.Where(g => g.LocalReleaseId != CurrentAlbum).Take(12)) Online.Add(new AlbumGuessRow(g, Tracks.Count));
+            OnlineStatus = Online.Count == 0 ? "MusicBrainz knows no other album with this song." : null;
+            // The original album is the likely answer; prefer it over the first local search hit.
+            if (Online.Count > 0 && Online[0].Guess is { Secondary: false }) SelectedOnline = Online[0];
+        }
+        catch (Exception ex)
+        {
+            OnlineStatus = "The lookup failed.";
+            Log.Warn("Album", $"Song lookup for a move failed: {ex.Message}");
+        }
     }
 
     [RelayCommand]
     private async Task Apply()
     {
-        if (Selected is not { } target || Busy) return;
+        if (Busy) return;
+        var ids = Tracks.Select(t => t.TrackId).ToList();
         Busy = true;
         try
         {
-            await _host.Db.Writer.Run((c, t) => Library.Edit.MetadataEditor.MoveTracks(new Tx(c, t), [Track.TrackId], target.ReleaseId));
-            await _moved(Track, target);
+            if (SelectedOnline is { } online)
+            {
+                Status = "Moving and fetching the album…";
+                var report = await Task.Run(() => _host.Metadata.Organizer.SortAsync([online.Guess with { Songs = ids }]));
+                await _moved($"to {online.Title}", report.Albums);
+            }
+            else if (Selected is { } target)
+            {
+                await _host.Db.Writer.Run((c, t) => Library.Edit.MetadataEditor.MoveTracks(new Tx(c, t), ids, target.ReleaseId));
+                await _moved($"to {target.Title}", [target.ReleaseId]);
+            }
         }
         catch (Exception ex)
         {
             Status = $"Moving failed: {ex.Message}";
             Log.Error("Album", "Move failed", ex);
+        }
+        finally { Busy = false; }
+    }
+
+    /// <summary>Moves the songs to a new album with the typed name (by the songs' artist).</summary>
+    [RelayCommand]
+    private async Task CreateNew()
+    {
+        string name = NewAlbumName.Trim();
+        if (name.Length == 0 || Busy) return;
+        var ids = Tracks.Select(t => t.TrackId).ToList();
+        string? artist = Tracks[0].Artist;
+        Busy = true;
+        try
+        {
+            var album = await _host.Db.Writer.Run((c, t) =>
+            {
+                var tx = new Tx(c, t);
+                var id = Library.Edit.MetadataEditor.NewAlbum(tx, name, artist);
+                Library.Edit.MetadataEditor.MoveTracks(tx, ids, id);
+                return id;
+            });
+            await _moved($"to the new album {name}", [album]);
+        }
+        catch (Exception ex)
+        {
+            Status = $"Moving failed: {ex.Message}";
+            Log.Error("Album", "Move to a new album failed", ex);
         }
         finally { Busy = false; }
     }

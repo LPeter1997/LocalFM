@@ -14,6 +14,7 @@ public sealed partial class TrackActions(MainViewModel main)
     [RelayCommand] private void ShowAlbum(TrackInfo t) => main.ShowAlbumOf(t);
     [RelayCommand] private void Edit(TrackInfo t) => main.EditAlbum(t.ReleaseId, t.TrackId);
     [RelayCommand] private void Move(TrackInfo t) => main.MoveTrack(t);
+    public void MoveMany(IReadOnlyList<TrackInfo> tracks) => main.MoveTracks(tracks);
 
     public async Task AddToPlaylist(TrackInfo t, PlaylistSummary p)
     {

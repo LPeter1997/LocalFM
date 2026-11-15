@@ -198,6 +198,16 @@ public partial class MainWindow : Window
                 if (page is "album" or "match" && vm.Albums.Albums.FirstOrDefault() is { } a) vm.ShowAlbum(a, openMatch: page == "match");
                 else if (page.StartsWith("album:", StringComparison.Ordinal)
                          && vm.Albums.Albums.FirstOrDefault(x => x.Title == page[6..]) is { } named) vm.ShowAlbum(named);
+                else if (page.StartsWith("match:", StringComparison.Ordinal)
+                         && vm.Albums.Albums.FirstOrDefault(x => x.Title == page[6..]) is { } toMatch) vm.ShowAlbum(toMatch, openMatch: true);
+                else if (page.StartsWith("move:", StringComparison.Ordinal)
+                         && vm.Albums.Albums.FirstOrDefault(x => x.Title == page[5..]) is { } moveFrom)
+                    vm.MoveTracks(vm.Host.Queries.AlbumTracks(moveFrom.ReleaseId).Take(2).ToList());
+                else if (page == "tidy-albums" && vm.Nav.FirstOrDefault(n => n.Page is TidyViewModel) is { } tidy)
+                {
+                    vm.Navigate(tidy);
+                    ((TidyViewModel)tidy.Page).Tab = 1;
+                }
                 else if (page == "move" && vm.Albums.Albums.FirstOrDefault() is { } m
                          && vm.Host.Queries.AlbumTracks(m.ReleaseId).FirstOrDefault() is { } first) vm.MoveTrack(first);
                 else if (page == "edit" && vm.Albums.Albums.FirstOrDefault() is { } e) vm.EditAlbum(e.ReleaseId);

@@ -19,6 +19,10 @@ public partial class AlbumDetailView : UserControl
         MoveSearch.KeyDown += (_, e) => MoveKey(e, fromSearch: true);
         MoveResults.KeyDown += (_, e) => MoveKey(e, fromSearch: false);
         MoveResults.DoubleTapped += (_, _) => _vm?.Move?.ApplyCommand.Execute(null);
+        MoveOnline.KeyDown += (_, e) => MoveKey(e, fromSearch: false);
+        MoveOnline.DoubleTapped += (_, _) => _vm?.Move?.ApplyCommand.Execute(null);
+        NewAlbumBox.KeyDown += (_, e) => { if (e.Key == Key.Escape) { _vm?.Move?.CancelCommand.Execute(null); e.Handled = true; } };
+        GuessList.DoubleTapped += (_, _) => _vm?.Match?.ApplyGuessCommand.Execute(null);
 
         DataContextChanged += (_, _) =>
         {

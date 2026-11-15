@@ -1,43 +1,89 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:LocalFM.UI.ViewModels"
+             xmlns:c="using:LocalFM.UI.Controls"
              x:Class="LocalFM.UI.Views.TidyView"
              x:DataType="vm:TidyViewModel">
+  <UserControl.Styles>
+    <Style Selector="Border.albumrow Button.hover"><Setter Property="Opacity" Value="0" /></Style>
+    <Style Selector="Border.albumrow:pointerover Button.hover"><Setter Property="Opacity" Value="1" /></Style>
+  </UserControl.Styles>
   <DockPanel Margin="24,0,24,0">
     <StackPanel DockPanel.Dock="Top" Spacing="10" MaxWidth="900" HorizontalAlignment="Left">
       <TextBlock Classes="h1" Text="Tidy up" />
-      <TextBlock Classes="muted" TextWrapping="Wrap">
+      <ListBox Classes="segmented" ItemsSource="{Binding Tabs}" SelectedIndex="{Binding Tab}" HorizontalAlignment="Left">
+        <ListBox.ItemsPanel><ItemsPanelTemplate><StackPanel Orientation="Horizontal" /></ItemsPanelTemplate></ListBox.ItemsPanel>
+      </ListBox>
+      <TextBlock Classes="muted" TextWrapping="Wrap" IsVisible="{Binding NamesTab}">
         Names that look damaged: video-channel artists ("Scorpions - Topic"), "(Official Video)", the artist repeated in the
         title, "+" instead of spaces, remaster notes. Nothing changes until you apply. Fields you locked are skipped, and
         MusicBrainz may still improve what is fixed here.
+      </TextBlock>
+      <TextBlock Classes="muted" TextWrapping="Wrap" IsVisible="{Binding AlbumsTab}">
+        Songs on an album they are not on, songs of one album spread over several, and albums that are in your library
+        twice. Songs MusicBrainz has not confirmed yet are looked up in the background. Songs you moved by hand are left alone.
       </TextBlock>
       <StackPanel Orientation="Horizontal" Spacing="8">
         <Button Classes="primary" Command="{Binding ApplySelectedCommand}">Apply selected</Button>
         <Button Classes="ghost" Command="{Binding SelectAllCommand}">Select all</Button>
         <Button Classes="ghost" Command="{Binding SelectNoneCommand}">Select none</Button>
-        <Button Classes="ghost" Command="{Binding ScanCommand}">Look again</Button>
+        <Button Classes="ghost" Command="{Binding ScanCommand}" IsVisible="{Binding NamesTab}">Look again</Button>
+        <Button Classes="ghost" Command="{Binding CheckAlbumsCommand}" IsVisible="{Binding AlbumsTab}">Check again</Button>
       </StackPanel>
-      <TextBlock Text="{Binding Status}" Classes="muted small" />
+      <TextBlock Text="{Binding Status}" Classes="muted small" IsVisible="{Binding NamesTab}" />
+      <StackPanel Orientation="Horizontal" Spacing="8" IsVisible="{Binding AlbumsTab}">
+        <ProgressBar IsIndeterminate="True" Width="60" VerticalAlignment="Center" IsVisible="{Binding Checking}" />
+        <TextBlock Text="{Binding AlbumStatus}" Classes="muted small" VerticalAlignment="Center" TextWrapping="Wrap" />
+      </StackPanel>
     </StackPanel>
-    <ListBox Classes="rows" ItemsSource="{Binding Suggestions}" Margin="-10,8,0,8">
-      <ListBox.ItemTemplate>
-        <DataTemplate x:DataType="vm:SuggestionViewModel">
-          <Grid ColumnDefinitions="Auto,64,*,28,*,1.1*">
-            <CheckBox IsChecked="{Binding Selected}" VerticalAlignment="Center" MinWidth="0" Margin="0,0,6,0" />
-            <Border Grid.Column="1" CornerRadius="5" Background="{StaticResource Surface3}" Padding="6,2" HorizontalAlignment="Left" VerticalAlignment="Center">
-              <TextBlock Text="{Binding Suggestion.Kind}" Classes="small" />
+    <Panel>
+      <ListBox Classes="rows" ItemsSource="{Binding Suggestions}" Margin="-10,8,0,8" IsVisible="{Binding NamesTab}">
+        <ListBox.ItemTemplate>
+          <DataTemplate x:DataType="vm:SuggestionViewModel">
+            <Grid ColumnDefinitions="Auto,64,*,28,*,1.1*">
+              <CheckBox IsChecked="{Binding Selected}" VerticalAlignment="Center" MinWidth="0" Margin="0,0,6,0" />
+              <Border Grid.Column="1" CornerRadius="5" Background="{StaticResource Surface3}" Padding="6,2" HorizontalAlignment="Left" VerticalAlignment="Center">
+                <TextBlock Text="{Binding Suggestion.Kind}" Classes="small" />
+              </Border>
+              <TextBlock Grid.Column="2" Text="{Binding Suggestion.Current}" Classes="muted" TextDecorations="Strikethrough"
+                         VerticalAlignment="Center" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding Suggestion.Current}" />
+              <TextBlock Grid.Column="3" Text="→" Classes="faint" HorizontalAlignment="Center" VerticalAlignment="Center" />
+              <TextBlock Grid.Column="4" Text="{Binding Suggestion.Suggested}" FontWeight="SemiBold" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+              <StackPanel Grid.Column="5" VerticalAlignment="Center" Margin="12,0,0,0">
+                <TextBlock Text="{Binding Suggestion.Reason}" Classes="small" TextTrimming="CharacterEllipsis" />
+                <TextBlock Text="{Binding Suggestion.Context}" Classes="faint small" TextTrimming="CharacterEllipsis" />
+              </StackPanel>
+            </Grid>
+          </DataTemplate>
+        </ListBox.ItemTemplate>
+      </ListBox>
+      <ListBox Classes="rows" ItemsSource="{Binding AlbumSuggestions}" Margin="-10,8,0,8" IsVisible="{Binding AlbumsTab}">
+        <ListBox.ItemTemplate>
+          <DataTemplate x:DataType="vm:AlbumSuggestionViewModel">
+            <Border Classes="albumrow" Background="Transparent">
+              <Grid ColumnDefinitions="Auto,96,*,Auto">
+                <CheckBox IsChecked="{Binding Selected}" VerticalAlignment="Center" MinWidth="0" Margin="0,0,6,0" IsEnabled="{Binding !Busy}" />
+                <Border Grid.Column="1" CornerRadius="5" Background="{StaticResource Surface3}" Padding="6,2" HorizontalAlignment="Left" VerticalAlignment="Center">
+                  <TextBlock Text="{Binding Suggestion.KindLabel}" Classes="small" />
+                </Border>
+                <StackPanel Grid.Column="2" VerticalAlignment="Center">
+                  <TextBlock Text="{Binding Suggestion.Summary}" FontWeight="Medium" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding Suggestion.Summary}" />
+                  <TextBlock Text="{Binding Suggestion.Detail}" Classes="muted small" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding Suggestion.Detail}" />
+                </StackPanel>
+                <StackPanel Grid.Column="3" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center" Margin="12,0,0,0">
+                  <ProgressBar IsIndeterminate="True" Width="40" IsVisible="{Binding Busy}" VerticalAlignment="Center" />
+                  <Button Classes="ghost hover" FontSize="12" IsEnabled="{Binding !Busy}"
+                          Command="{Binding $parent[UserControl].((vm:TidyViewModel)DataContext).ApplyAlbumCommand}" CommandParameter="{Binding}">Apply</Button>
+                  <Button Classes="flat hover" ToolTip.Tip="Dismiss: keep things as they are" IsEnabled="{Binding !Busy}"
+                          Command="{Binding $parent[UserControl].((vm:TidyViewModel)DataContext).DismissAlbumCommand}" CommandParameter="{Binding}">
+                    <c:Icon Classes="icon" Data="{StaticResource IcoClose}" Width="16" Height="16" />
+                  </Button>
+                </StackPanel>
+              </Grid>
             </Border>
-            <TextBlock Grid.Column="2" Text="{Binding Suggestion.Current}" Classes="muted" TextDecorations="Strikethrough"
-                       VerticalAlignment="Center" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding Suggestion.Current}" />
-            <TextBlock Grid.Column="3" Text="→" Classes="faint" HorizontalAlignment="Center" VerticalAlignment="Center" />
-            <TextBlock Grid.Column="4" Text="{Binding Suggestion.Suggested}" FontWeight="SemiBold" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
-            <StackPanel Grid.Column="5" VerticalAlignment="Center" Margin="12,0,0,0">
-              <TextBlock Text="{Binding Suggestion.Reason}" Classes="small" TextTrimming="CharacterEllipsis" />
-              <TextBlock Text="{Binding Suggestion.Context}" Classes="faint small" TextTrimming="CharacterEllipsis" />
-            </StackPanel>
-          </Grid>
-        </DataTemplate>
-      </ListBox.ItemTemplate>
-    </ListBox>
+          </DataTemplate>
+        </ListBox.ItemTemplate>
+      </ListBox>
+    </Panel>
   </DockPanel>
 </UserControl>
