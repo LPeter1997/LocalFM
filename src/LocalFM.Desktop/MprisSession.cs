@@ -184,9 +184,10 @@ public sealed class MprisSession : IPathMethodHandler, IDisposable
         try
         {
             Dictionary<string, VariantValue> changed;
+            // Read the player before taking our lock: the player may be raising this event under its own.
+            var props = Snapshot(out var fp);
             lock (_gate)
             {
-                var props = Snapshot(out var fp);
                 changed = props.Where(p => !_published.TryGetValue(p.Key, out var old) || old != fp[p.Key])
                                .ToDictionary(p => p.Key, p => p.Value);
                 _published = fp;

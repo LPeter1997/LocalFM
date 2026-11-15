@@ -80,4 +80,44 @@ public class PlayerTests
         Assert.InRange(player2.Position.TotalSeconds, 0.8, 2.0);
         Assert.Equal(0.5f, player2.Volume);
     }
+
+    private sealed class LocalFollow : IFollowSource
+    {
+        public TrackHandle Handle(QueueItem item, float gain) => new(item.Track.Path, item.Id, gain);
+    }
+
+    /// <summary>
+    /// Changed handlers read the player under locks of their own (MPRIS does). If the player raised Changed while
+    /// holding its gate, such a handler and another thread would deadlock (leaving a vibe froze the app this way).
+    /// </summary>
+    [SkippableFact]
+    public async Task Changed_is_never_raised_while_the_player_is_locked()
+    {
+        Skip.IfNot(TempLibrary.HaveFfmpeg);
+        using var lib = new TempLibrary();
+        for (int i = 1; i <= 3; i++) lib.MakeTrack($"{i}.flac", Tags($"T{i}", i), seconds: 3);
+        await lib.ScanAsync();
+        var tracks = lib.Queries.AlbumTracks(lib.Queries.Albums().Single().ReleaseId);
+        using var engine = new PlaybackEngine(OutputMode.Null);
+        using var player = new PlayerService(engine, new History(lib.Db), lib.Queries);
+        int locked = 0;
+        player.Changed += () =>
+        {
+            // Another thread must be able to read the player while the handler runs.
+            if (!Task.Run(() => player.Current).Wait(TimeSpan.FromMilliseconds(500))) Interlocked.Increment(ref locked);
+        };
+
+        player.PlayTracks(tracks, 0);
+        player.Enqueue(tracks);
+        player.PlayNext([tracks[2]]);
+        player.MoveItem(1, 2);
+        player.SetShuffle(true);
+        player.ClearUpcoming();
+        player.EnterFollowMode(new LocalFollow());
+        player.FollowSetQueue(tracks.Select(QueueItem.For).ToList());
+        player.LeaveFollowMode();
+        await Task.Delay(1000); // deferred events
+
+        Assert.Equal(0, locked);
+    }
 }

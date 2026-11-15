@@ -235,7 +235,15 @@ public sealed class PlayerService : IDisposable
     {
         _dirty = true;
         UpdateNext();
-        Changed?.Invoke();
+        RaiseChanged();
+    }
+
+    /// <summary>Never raises <see cref="Changed"/> while holding the gate: handlers read the player (taking the gate)
+    /// under locks of their own (MPRIS), and the two lock orders would deadlock.</summary>
+    private void RaiseChanged()
+    {
+        if (_gate.IsHeldByCurrentThread) ThreadPool.QueueUserWorkItem(static p => p.Changed?.Invoke(), this, preferLocal: false);
+        else Changed?.Invoke();
     }
 
     /// <summary>Tells the engine what follows the current item (it pre-opens it for gapless playback).</summary>
