@@ -51,10 +51,7 @@ jobs:
     needs: check
     uses: ./.github/workflows/ffmpeg.yml
     with:
-      targets: >-
-        [{"os":"ubuntu-22.04","rid":"linux-x64"},{"os":"ubuntu-22.04-arm","rid":"linux-arm64"},
-         {"os":"windows-latest","rid":"win-x64"},{"os":"windows-11-arm","rid":"win-arm64"},
-         {"os":"macos-latest","rid":"osx-arm64"},{"os":"macos-15-intel","rid":"osx-x64"}]
+      targets: '[{"os":"ubuntu-22.04","rid":"linux-x64"},{"os":"ubuntu-22.04-arm","rid":"linux-arm64"},{"os":"windows-latest","rid":"win-x64"},{"os":"windows-11-arm","rid":"win-arm64"},{"os":"macos-latest","rid":"osx-arm64"},{"os":"macos-15-intel","rid":"osx-x64"}]'
 
   build:
     needs: ffmpeg
@@ -79,8 +76,8 @@ jobs:
       # A step's own env is not visible to its `if`, so the secret's presence is decided here.
       HAS_MACOS_CERT: ${{ secrets.MACOS_CERTIFICATE_P12 != '' }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v6
         with:
           global-json-file: global.json
       # localfm_native and FFmpeg in native/out/<rid>/ (package.sh rebuilds it from FFMPEG_PREFIX; package.ps1 reuses it).
@@ -152,7 +149,7 @@ jobs:
       - name: Size budget
         run: ./check-size.sh "$OUT/publish" "$RID"
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: release-${{ matrix.rid }}
           path: out/releases/
@@ -164,8 +161,8 @@ jobs:
     env:
       HAS_WINGET_TOKEN: ${{ secrets.WINGET_TOKEN != '' }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/download-artifact@v4
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
         with:
           pattern: release-*
           path: artifacts
@@ -175,7 +172,7 @@ jobs:
         run: |
           rm -rf artifacts/manifests
           packaging/fill.sh "$VERSION" artifacts
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: manifests
           path: artifacts/manifests/

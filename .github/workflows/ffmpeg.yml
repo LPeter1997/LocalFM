@@ -21,9 +21,9 @@ jobs:
     env:
       RID: ${{ matrix.rid }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - id: cache
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ${{ runner.temp }}/ffmpeg-${{ matrix.rid }}.tar.gz
           key: ffmpeg-${{ matrix.rid }}-${{ hashFiles('native/ffmpeg/build.sh') }}
@@ -57,7 +57,7 @@ jobs:
           native/ffmpeg/build.sh "$RID" "$temp/ffmpeg"
           tar -C "$temp/ffmpeg" -czf "$temp/ffmpeg-$RID.tar.gz" .
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: ffmpeg-${{ matrix.rid }}
           path: ${{ runner.temp }}/ffmpeg-${{ matrix.rid }}.tar.gz

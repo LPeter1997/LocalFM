@@ -38,8 +38,8 @@ jobs:
     env:
       RID: ${{ matrix.rid }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v6
         with:
           global-json-file: global.json
       - uses: ./.github/actions/native
@@ -94,7 +94,7 @@ jobs:
           LOCALFM_SNAPSHOT_PLAY=1 LOCALFM_SNAPSHOT_WAIT=3000 app "$RUNNER_TEMP/screenshot-$RID.png"
           ls -la "$RUNNER_TEMP/screenshot-$RID.png"
       - if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: screenshot-${{ matrix.rid }}
           path: ${{ runner.temp }}/screenshot-${{ matrix.rid }}.png
