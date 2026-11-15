@@ -102,7 +102,7 @@ public sealed class MprisSession : IPathMethodHandler, IDisposable
         ["CanRaise"] = true,
         ["HasTrackList"] = false,
         ["Identity"] = "LocalFM",
-        ["DesktopEntry"] = "localfm",
+        ["DesktopEntry"] = LocalFM.Core.AppInfo.AppId,
         ["SupportedUriSchemes"] = VariantValue.Array(new[] { "file" }),
         ["SupportedMimeTypes"] = VariantValue.Array(Array.Empty<string>()),
     };

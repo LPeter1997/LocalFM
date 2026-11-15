@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Build-time tool (ported from CheeseGit): LocalFM.UI runs it to turn Assets/icon.png into the Windows .ico and
+       the macOS .icns, so the PNG stays the only raster icon in the repository. Not part of the solution: the UI
+       project builds it, and a second build from the solution could race with that one in the same obj folder. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <AssemblyName>localfm-icongen</AssemblyName>
+    <IsAotCompatible>false</IsAotCompatible>
+    <!-- Referenced only to be built, so a self-contained publish may reference this framework-dependent tool. -->
+    <ShouldBeValidatedAsExecutableReference>false</ShouldBeValidatedAsExecutableReference>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- The version Avalonia.Skia uses, so the restore needs nothing new. -->
+    <PackageReference Include="SkiaSharp" />
+    <PackageReference Include="SkiaSharp.NativeAssets.Linux" />
+  </ItemGroup>
+</Project>

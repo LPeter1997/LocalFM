@@ -1,0 +1,8 @@
+<!-- The LocalFM icon: the accent tile with the app's note glyph (IcoNote in App.axaml). icon.png is rendered from
+     this at 512 px (see docs/release.md); the .ico and .icns are generated from icon.png at build time. -->
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 64 64">
+  <rect x="2" y="2" width="60" height="60" rx="14" fill="#E0567A"/>
+  <path transform="translate(9.2 9.2) scale(1.9)" fill="none" stroke="#FFFFFF" stroke-width="1.8"
+        stroke-linecap="round" stroke-linejoin="round"
+        d="M9 18V6l10-2v12M9 18a3 3 0 1 1-6 0 3 3 0 1 1 6 0M19 16a3 3 0 1 1-6 0 3 3 0 1 1 6 0"/>
+</svg>

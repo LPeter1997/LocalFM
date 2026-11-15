@@ -3,23 +3,27 @@
     <ProjectReference Include="..\LocalFM.Core\LocalFM.Core.csproj" />
   </ItemGroup>
 
-  <!-- localfm_native is built with CMake (native/CMakeLists.txt). On Linux it is built automatically when
-       missing; on Windows/macOS run CMake once with -DFFMPEG_ROOT=... (see README). -->
+  <!-- localfm_native is built with CMake (native/CMakeLists.txt) into native/out/<rid>/, next to the FFmpeg it ships
+       with (native/build.sh for packages and CI). Everything in that folder is copied beside the app. A Linux dev
+       build without a RID builds it automatically when missing, against the system's FFmpeg. -->
   <PropertyGroup>
-    <NativeLinuxLib>$(NativeOutDir)linux-x64/liblocalfm_native.so</NativeLinuxLib>
+    <NativeRid>$(RuntimeIdentifier)</NativeRid>
+    <NativeRid Condition="'$(NativeRid)' == ''">$(NETCoreSdkPortableRuntimeIdentifier)</NativeRid>
+    <NativeRidDir>$(NativeOutDir)$(NativeRid)/</NativeRidDir>
+    <NativeLinuxLib>$(NativeRidDir)liblocalfm_native.so</NativeLinuxLib>
   </PropertyGroup>
 
   <Target Name="BuildNativeIfMissing" BeforeTargets="AssignTargetPaths"
-          Condition="$([MSBuild]::IsOSPlatform('Linux')) And !Exists('$(NativeLinuxLib)')">
+          Condition="$([MSBuild]::IsOSPlatform('Linux')) And '$(NativeRid)' == '$(NETCoreSdkPortableRuntimeIdentifier)' And !Exists('$(NativeLinuxLib)')">
     <Exec Command="&quot;$(RepoRoot)native/build-linux.sh&quot;" />
   </Target>
 
   <!-- Items are added inside a target so a library built moments ago is picked up. -->
   <Target Name="IncludeNativeLibs" AfterTargets="BuildNativeIfMissing" BeforeTargets="AssignTargetPaths">
     <ItemGroup>
-      <None Include="$(NativeLinuxLib)" Condition="Exists('$(NativeLinuxLib)')" Link="liblocalfm_native.so" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
-      <None Include="$(NativeOutDir)win-x64/localfm_native.dll" Condition="Exists('$(NativeOutDir)win-x64/localfm_native.dll')" Link="localfm_native.dll" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
-      <None Include="$(NativeOutDir)osx/liblocalfm_native.dylib" Condition="Exists('$(NativeOutDir)osx/liblocalfm_native.dylib')" Link="liblocalfm_native.dylib" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+      <NativeFile Include="$(NativeRidDir)*" Exclude="$(NativeRidDir)*.pdb;$(NativeRidDir)*.lib;$(NativeRidDir)*.exp;$(NativeRidDir)*.dbg" />
+      <None Include="@(NativeFile)" Link="%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     </ItemGroup>
+    <Warning Condition="'@(NativeFile)' == ''" Text="No native library for $(NativeRid) in $(NativeRidDir): build it with native/build.sh (see docs/release.md)." />
   </Target>
 </Project>

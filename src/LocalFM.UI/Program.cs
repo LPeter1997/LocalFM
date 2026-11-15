@@ -35,6 +35,6 @@ internal static class Program
         AppBuilder.Configure<App>()
             .UsePlatformDetect()
             .WithInterFont()
-            .With(new X11PlatformOptions { WmClass = "localfm", OverlayPopups = SnapshotPath is not null })
+            .With(new X11PlatformOptions { WmClass = LocalFM.Core.AppInfo.AppId, OverlayPopups = SnapshotPath is not null })
             .LogToTrace();
 }

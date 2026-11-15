@@ -9,6 +9,10 @@
     <!-- Trim/AOT warnings are bugs: a reflection surprise at runtime is worse than a build break. -->
     <WarningsAsErrors>$(WarningsAsErrors);IL2026;IL2046;IL2057;IL2067;IL2070;IL2072;IL2075;IL2087;IL2091;IL2104;IL3050;IL3051;IL3053;nullable</WarningsAsErrors>
     <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+    <!-- The release version; package.sh / package.ps1 pass -p:Version. -->
+    <Version>0.1.0</Version>
+    <!-- Linux app id: desktop file, metainfo, Flatpak, macOS bundle id, WM_CLASS and the MPRIS DesktopEntry. -->
+    <LocalFMAppId>io.github.LPeter1997.LocalFM</LocalFMAppId>
     <RepoRoot>$(MSBuildThisFileDirectory)</RepoRoot>
     <NativeOutDir>$(RepoRoot)native/out/</NativeOutDir>
   </PropertyGroup>

@@ -42,3 +42,9 @@ cmake -S native -B native/build -DFFMPEG_ROOT=/path/to/ffmpeg-shared && cmake --
 - `LOCALFM_HOME` — data folder (default: `~/.local/share/LocalFM`): `library.db`, `images/`
 - `LOCALFM_OUTPUT=null` — silent real-time output (headless runs)
 - `LOCALFM_SNAPSHOT=out.png` (+ `LOCALFM_SNAPSHOT_PAGE=albums|album|artists|tracks|playlists|queue|sources`, `LOCALFM_SNAPSHOT_PLAY=1`) — render the window to PNG and exit
+
+## Licence
+
+LocalFM is released under the [MIT licence](LICENSE). Packages ship an audio-only build of
+[FFmpeg](https://ffmpeg.org), licensed under the LGPL 2.1 (`native/third_party/ffmpeg/COPYING.LGPLv2.1`), as separate
+shared libraries.

@@ -179,34 +179,17 @@ public sealed class DesktopShell : IDisposable
         _ = _host.History.SetAsync(CloseToTrayKey, on ? "1" : "0");
     }
 
-    /// <summary>The app icon (accent tile with a note), drawn once so no image asset is needed.</summary>
+    /// <summary>The app icon (Assets/icon.png, rendered from icon.svg).</summary>
     private static WindowIcon? MakeIcon()
     {
         try
         {
-            var app = Application.Current!;
-            var accent = app.TryGetResource("AccentColor", null, out var c) && c is Color col ? col : Color.Parse("#7C5CFF");
-            var note = app.TryGetResource("IcoNote", null, out var g) && g is Geometry geo ? geo : null;
-            const int size = 64;
-            var bmp = new RenderTargetBitmap(new PixelSize(size, size));
-            using (var ctx = bmp.CreateDrawingContext())
-            {
-                ctx.DrawRectangle(new SolidColorBrush(accent), null, new RoundedRect(new Rect(2, 2, size - 4, size - 4), 14));
-                if (note is not null)
-                {
-                    // The icon geometry is drawn on a 24-unit grid.
-                    using (ctx.PushTransform(Matrix.CreateScale(1.9, 1.9) * Matrix.CreateTranslation(9.2, 9.2)))
-                        ctx.DrawGeometry(null, new Pen(Brushes.White, 1.8, lineCap: PenLineCap.Round, lineJoin: PenLineJoin.Round), note);
-                }
-            }
-            using var ms = new MemoryStream();
-            bmp.Save(ms, PngBitmapEncoderOptions.Default);
-            ms.Position = 0;
-            return new WindowIcon(ms);
+            using var stream = Avalonia.Platform.AssetLoader.Open(new Uri("avares://LocalFM/Assets/icon.png"));
+            return new WindowIcon(stream);
         }
         catch (Exception ex)
         {
-            Log.Warn("Shell", $"Icon not drawn: {ex.Message}");
+            Log.Warn("Shell", $"No icon: {ex.Message}");
             return null;
         }
     }

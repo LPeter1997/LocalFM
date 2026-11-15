@@ -17,9 +17,45 @@
     <PackageReference Include="CommunityToolkit.Mvvm" />
   </ItemGroup>
   <ItemGroup>
+    <AvaloniaResource Include="Assets\icon.png" />
+  </ItemGroup>
+  <ItemGroup>
     <ProjectReference Include="..\LocalFM.App\LocalFM.App.csproj" />
     <ProjectReference Include="..\LocalFM.Desktop\LocalFM.Desktop.csproj" />
     <ProjectReference Include="..\LocalFM.Ingest\LocalFM.Ingest.csproj" />
     <ProjectReference Include="..\LocalFM.Vibe\LocalFM.Vibe.csproj" />
   </ItemGroup>
+
+  <!-- The Windows icon (exe resource, Setup.exe, shortcuts) and the macOS one (vpk's .app bundle) are generated
+       from Assets/icon.png (ported from CheeseGit). Avalonia also embeds ApplicationIcon as the default window icon,
+       so it must exist before GenerateAvaloniaResources. Fixed paths so the package scripts can hand them to vpk. -->
+  <PropertyGroup>
+    <AppIconFile>$(MSBuildProjectDirectory)/obj/LocalFM.ico</AppIconFile>
+    <AppIcnsFile>$(MSBuildProjectDirectory)/obj/LocalFM.icns</AppIcnsFile>
+    <ApplicationIcon>$(AppIconFile)</ApplicationIcon>
+    <!-- The SDK sets DOTNET_HOST_PATH to the dotnet that runs the build; PATH may not have one. -->
+    <DotnetHost>$(DOTNET_HOST_PATH)</DotnetHost>
+    <DotnetHost Condition="'$(DotnetHost)' == ''">dotnet</DotnetHost>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- Built for the build machine (not the publish RID, whose Skia would be the target's), and not referenced,
+         so nothing of it reaches the output. -->
+    <ProjectReference Include="$(RepoRoot)tools\LocalFM.IconGen\LocalFM.IconGen.csproj" ReferenceOutputAssembly="false"
+                      Private="false" GlobalPropertiesToRemove="RuntimeIdentifier;SelfContained;PublishAot" />
+  </ItemGroup>
+  <Target Name="BuildIconGen" DependsOnTargets="ResolveProjectReferences">
+    <!-- Unreferenced outputs are left out of _ResolvedProjectReferencePaths: ask the reference for its path with the
+         properties ResolveProjectReferences built it with, so this reuses that build. -->
+    <MSBuild Projects="@(_MSBuildProjectReferenceExistent)" Condition="'%(_MSBuildProjectReferenceExistent.Filename)' == 'LocalFM.IconGen'"
+             Targets="GetTargetPath"
+             Properties="%(_MSBuildProjectReferenceExistent.SetConfiguration); %(_MSBuildProjectReferenceExistent.SetPlatform); %(_MSBuildProjectReferenceExistent.SetTargetFramework)"
+             RemoveProperties="%(_MSBuildProjectReferenceExistent.GlobalPropertiesToRemove)$(_GlobalPropertiesToRemoveFromProjectReferences)">
+      <Output TaskParameter="TargetOutputs" PropertyName="IconGenDll" />
+    </MSBuild>
+    <Error Condition="'$(IconGenDll)' == ''" Text="LocalFM.IconGen did not build." />
+  </Target>
+  <Target Name="GenerateAppIcon" DependsOnTargets="BuildIconGen" BeforeTargets="GenerateAvaloniaResources;CoreCompile"
+          Inputs="Assets/icon.png;$(IconGenDll)" Outputs="$(AppIconFile);$(AppIcnsFile)">
+    <Exec Command="&quot;$(DotnetHost)&quot; &quot;$(IconGenDll)&quot; &quot;Assets/icon.png&quot; &quot;$(AppIconFile)&quot; &quot;$(AppIcnsFile)&quot;" />
+  </Target>
 </Project>
