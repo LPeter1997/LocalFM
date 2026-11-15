@@ -5,8 +5,9 @@
 #
 # The library lands in native/out/<rid>/, where LocalFM.Native picks it up.
 # FFmpeg headers are vendored (8.1). At link time:
-#   Linux:          the system's FFmpeg 8.x shared libraries (runtime packages are enough, no -devel)
-#   Windows/macOS:  -DFFMPEG_ROOT=<shared FFmpeg 8.x build with lib/> (import libs / dylibs)
+#   -DFFMPEG_ROOT=<prefix>  the bundled audio-only build (native/ffmpeg/build.sh), as native/build.sh does for
+#                           packages and CI on every OS
+#   otherwise (Linux dev)   the system's FFmpeg 8.x shared libraries (runtime packages are enough, no -devel)
 cmake_minimum_required(VERSION 3.20)
 project(localfm_native C)
 
@@ -43,10 +44,17 @@ foreach(_entry IN LISTS _ff_libs)
   string(REPLACE ":" ";" _parts "${_entry}")
   list(GET _parts 0 _name)
   list(GET _parts 1 _major)
-  find_library(FF_${_name}
-    NAMES ${_name} lib${_name}.so.${_major} lib${_name}.${_major}.dylib
-    HINTS "${FFMPEG_ROOT}/lib" "${FFMPEG_ROOT}/bin"
-    REQUIRED)
+  if(FFMPEG_ROOT)
+    # A bundled build (native/build.sh): never fall back to the system's FFmpeg.
+    find_library(FF_${_name}
+      NAMES ${_name} lib${_name}.so.${_major} lib${_name}.${_major}.dylib
+      PATHS "${FFMPEG_ROOT}/lib" "${FFMPEG_ROOT}/bin"
+      NO_DEFAULT_PATH REQUIRED)
+  else()
+    find_library(FF_${_name}
+      NAMES ${_name} lib${_name}.so.${_major} lib${_name}.${_major}.dylib
+      REQUIRED)
+  endif()
   target_link_libraries(localfm_native PRIVATE "${FF_${_name}}")
 endforeach()
 
@@ -64,6 +72,18 @@ elseif(APPLE)
   target_link_libraries(localfm_native PRIVATE "-framework CoreFoundation" "-framework CoreAudio" "-framework AudioToolbox")
 endif()
 
+# The bundled FFmpeg sits next to the library (and the app): look there first.
+# Only that: no build-machine paths (CMake would add the link folders).
+if(APPLE)
+  set_target_properties(localfm_native PROPERTIES BUILD_WITH_INSTALL_RPATH ON INSTALL_RPATH "@loader_path" INSTALL_NAME_DIR "@rpath")
+elseif(UNIX)
+  set_target_properties(localfm_native PROPERTIES BUILD_WITH_INSTALL_RPATH ON INSTALL_RPATH "$ORIGIN")
+endif()
+
+set(LFM_RID_OVERRIDE "" CACHE STRING "Output folder name (the RID) when building for another architecture")
+if(LFM_RID_OVERRIDE)
+  set(LFM_RID "${LFM_RID_OVERRIDE}")
+endif()
 set(_out "${CMAKE_CURRENT_SOURCE_DIR}/out/${LFM_RID}")
 set_target_properties(localfm_native PROPERTIES
   LIBRARY_OUTPUT_DIRECTORY "${_out}"
