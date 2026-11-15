@@ -136,6 +136,12 @@ public partial class MainWindow : Window
             if (int.TryParse(Environment.GetEnvironmentVariable("LOCALFM_SNAPSHOT_WIDTH"), out int width)) Width = width;
             _ = SnapshotAndExit(path);
         }
+        else if (Vm is { } vm)
+        {
+            vm.Updater.ShowWhatsNewIfUpdated();
+            vm.Updater.CheckMenuEntry();
+            _ = vm.Updater.CheckOnStartAsync();
+        }
     }
 
     private void CommitSeek()
@@ -240,6 +246,19 @@ public partial class MainWindow : Window
                 if (v2.Albums.Albums.FirstOrDefault() is { } first) v2.Albums.PlayCommand.Execute(first);
             }
             if (Environment.GetEnvironmentVariable("LOCALFM_SNAPSHOT_LYRICS") == "1" && Vm is { } v3) v3.Lyrics.IsOpen = true;
+            if (Environment.GetEnvironmentVariable("LOCALFM_SNAPSHOT_UPDATE") is { Length: > 0 } update && Vm is { } v6)
+            {
+                if (update == "whatsnew")
+                {
+                    v6.Updater.WhatsNew = LocalFM.UI.Updates.SnapshotUpdateService.SnapshotNotes;
+                    v6.Updater.WhatsNewOpen = true;
+                }
+                else
+                {
+                    await v6.Updater.CheckNowCommand.ExecuteAsync(null);
+                    if (update == "downloading") { v6.Updater.IsDownloading = true; v6.Updater.Progress = 42; }
+                }
+            }
             if (Environment.GetEnvironmentVariable("LOCALFM_SNAPSHOT_VIBE") is "1" or "leave" && Vm is { } v5)
             {
                 v5.Vibe.IsOpen = true;

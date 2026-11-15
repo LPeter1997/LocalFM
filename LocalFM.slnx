@@ -18,6 +18,7 @@
     <Project Path="tests/LocalFM.Library.Tests/LocalFM.Library.Tests.csproj" />
     <Project Path="tests/LocalFM.Metadata.Tests/LocalFM.Metadata.Tests.csproj" />
     <Project Path="tests/LocalFM.Playback.Tests/LocalFM.Playback.Tests.csproj" />
+    <Project Path="tests/LocalFM.UI.Tests/LocalFM.UI.Tests.csproj" />
     <Project Path="tests/LocalFM.Vibe.Tests/LocalFM.Vibe.Tests.csproj" />
   </Folder>
   <Folder Name="/tools/">

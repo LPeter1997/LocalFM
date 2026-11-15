@@ -15,6 +15,15 @@
     <PackageReference Include="Avalonia.Themes.Fluent" />
     <PackageReference Include="Avalonia.Fonts.Inter" />
     <PackageReference Include="CommunityToolkit.Mvvm" />
+    <PackageReference Include="Velopack" />
+  </ItemGroup>
+  <!-- Distro packages (deb, rpm, AUR, Flatpak) are updated by the system: -p:LocalFMUpdater=false compiles the
+       Velopack updater out and leaves a "new version available" notice (docs/release.md). -->
+  <PropertyGroup Condition="'$(LocalFMUpdater)' == 'false'">
+    <DefineConstants>$(DefineConstants);NO_UPDATER</DefineConstants>
+  </PropertyGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="LocalFM.UI.Tests" />
   </ItemGroup>
   <ItemGroup>
     <AvaloniaResource Include="Assets\icon.png" />

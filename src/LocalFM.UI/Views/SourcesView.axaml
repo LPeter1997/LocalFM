@@ -57,6 +57,19 @@
     <TextBlock Text="{Binding BundleStatus}" Classes="muted small" TextWrapping="Wrap"
                IsVisible="{Binding BundleStatus, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
     <TextBlock Classes="faint small"><Run Text="Library data: " /><Run Text="{Binding DataFolder}" /></TextBlock>
+    <TextBlock Classes="h2" Text="Updates" Margin="0,14,0,0" />
+    <StackPanel Spacing="10" DataContext="{Binding Updater}" x:DataType="vm:UpdaterViewModel">
+      <TextBlock Classes="muted" TextWrapping="Wrap"><Run Text="{Binding CurrentVersion, StringFormat='LocalFM {0}. '}" /><Run Text="{Binding ModeText}" /></TextBlock>
+      <CheckBox IsChecked="{Binding CheckOnStart}" IsVisible="{Binding CanCheck}">Check for updates when LocalFM starts</CheckBox>
+      <StackPanel Orientation="Horizontal" Spacing="10" IsVisible="{Binding CanCheck}">
+        <Button Classes="ghost" Command="{Binding CheckNowCommand}">Check now</Button>
+        <TextBlock Text="{Binding StatusText}" Classes="muted" VerticalAlignment="Center" TextWrapping="Wrap" />
+      </StackPanel>
+      <StackPanel Orientation="Horizontal" Spacing="10" IsVisible="{Binding CanAddToMenu}">
+        <Button Classes="ghost" Command="{Binding AddToMenuCommand}">Add to applications menu</Button>
+        <TextBlock Text="{Binding MenuText}" Classes="muted" VerticalAlignment="Center" TextWrapping="Wrap" />
+      </StackPanel>
+    </StackPanel>
   </StackPanel>
   </ScrollViewer>
 </UserControl>

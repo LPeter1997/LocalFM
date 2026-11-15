@@ -28,7 +28,7 @@
   <!-- The root panel also holds the invisible resize grips along the window edges (WindowChrome) -->
   <Border x:Name="Frame">
   <Panel x:Name="RootPanel">
-  <Grid RowDefinitions="Auto,*,Auto" Background="{StaticResource Surface}">
+  <Grid RowDefinitions="Auto,*,Auto,Auto" Background="{StaticResource Surface}">
     <!-- Our own title bar: drag to move, double-click to maximize; the page sheet below tucks into it -->
     <Grid x:Name="TitleBar" Height="48" ColumnDefinitions="216,Auto,*,*,Auto" Background="{StaticResource Surface}">
       <StackPanel Orientation="Horizontal" Spacing="8" Margin="20,0,0,0" VerticalAlignment="Center">
@@ -163,6 +163,18 @@
         </DockPanel>
       </Border>
 
+
+      <!-- What's new (once, after an update) -->
+      <Border Grid.Column="1" Width="380" Background="{StaticResource Surface}" BorderBrush="{StaticResource Line}" BorderThickness="1,0,0,0"
+              IsVisible="{Binding Updater.WhatsNewOpen}">
+        <DockPanel DataContext="{Binding Updater}" x:DataType="vm:UpdaterViewModel" Margin="0,14,0,0">
+          <TextBlock DockPanel.Dock="Top" Classes="h2" Text="{Binding WhatsNewTitle}" Margin="20,0,20,8" />
+          <Button DockPanel.Dock="Bottom" Classes="primary" Content="Got it" Command="{Binding CloseWhatsNewCommand}" HorizontalAlignment="Left" Margin="20,8,20,16" />
+          <ScrollViewer HorizontalScrollBarVisibility="Disabled">
+            <c:MarkdownView Markdown="{Binding WhatsNew}" Margin="20,4,20,12" />
+          </ScrollViewer>
+        </DockPanel>
+      </Border>
       <!-- Vibe together -->
       <Border Grid.Column="1" x:Name="VibePanel" Width="380" Background="{StaticResource Surface}" BorderBrush="{StaticResource Line}" BorderThickness="1,0,0,0"
               IsVisible="{Binding Vibe.IsOpen}">
@@ -269,8 +281,29 @@
       </Border>
     </Grid>
 
+    <!-- Update banner (Updater) -->
+    <Border Grid.Row="2" Background="{StaticResource Surface2}" BorderBrush="{StaticResource Line}" BorderThickness="0,1,0,0" Padding="16,7"
+            IsVisible="{Binding Updater.ShowBanner}">
+      <Grid ColumnDefinitions="Auto,*,Auto" DataContext="{Binding Updater}" x:DataType="vm:UpdaterViewModel">
+        <c:Icon Classes="icon" Data="{StaticResource IcoImport}" Width="16" Height="16" Stroke="{StaticResource Accent}" Margin="0,0,10,0" VerticalAlignment="Center" />
+        <TextBlock Grid.Column="1" Text="{Binding BannerText}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+        <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="6" Margin="10,0,0,0">
+          <Button Classes="primary" Content="When I quit" Command="{Binding UpdateOnQuitCommand}" IsVisible="{Binding IsInApp}" IsEnabled="{Binding CanAct}"
+                  ToolTip.Tip="Download it now and install it when you quit LocalFM (closing to the tray is not quitting)" />
+          <Button Classes="ghost" Content="Restart now" Command="{Binding RestartNowCommand}" IsVisible="{Binding CanRestart}" IsEnabled="{Binding CanAct}"
+                  ToolTip.Tip="Install it now and restart; the music picks up where it was" />
+          <Button Classes="primary" Content="Release notes" Command="{Binding OpenReleasePageCommand}" IsVisible="{Binding IsNoticeOnly}"
+                  ToolTip.Tip="Open the release page; your package manager installs the update" />
+          <Button Classes="flat" Content="Skip" Command="{Binding SkipCommand}" IsEnabled="{Binding CanAct}" ToolTip.Tip="Skip this version" />
+          <Button Classes="flat" Command="{Binding DismissCommand}" IsEnabled="{Binding CanAct}" ToolTip.Tip="Remind me next time">
+            <c:Icon Classes="icon" Data="{StaticResource IcoClose}" Width="14" Height="14" />
+          </Button>
+        </StackPanel>
+      </Grid>
+    </Border>
+
     <!-- Now playing -->
-    <Border Grid.Row="2" Background="{StaticResource Surface}" BorderBrush="{StaticResource Line}" BorderThickness="0,1,0,0" Padding="14,10">
+    <Border Grid.Row="3" Background="{StaticResource Surface}" BorderBrush="{StaticResource Line}" BorderThickness="0,1,0,0" Padding="14,10">
       <!-- The right-hand buttons keep their size; title and transport share what is left -->
       <Grid ColumnDefinitions="*,2*,Auto" DataContext="{Binding NowPlaying}" x:DataType="vm:NowPlayingViewModel">
         <Grid ColumnDefinitions="Auto,*" VerticalAlignment="Center">
@@ -361,7 +394,7 @@
     </Border>
 
     <!-- Toast -->
-    <Border Grid.RowSpan="3" HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,100"
+    <Border Grid.RowSpan="4" HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,100"
             Background="{StaticResource Surface3}" CornerRadius="10" Padding="16,10" MaxWidth="560"
             IsVisible="{Binding Notice, Converter={x:Static ObjectConverters.IsNotNull}}" BoxShadow="0 6 24 0 #80000000">
       <TextBlock Text="{Binding Notice}" TextWrapping="Wrap" />

@@ -8,6 +8,7 @@ using LocalFM.Core;
 using LocalFM.Library;
 
 using LocalFM.UI.Controls;
+using LocalFM.UI.Updates;
 
 namespace LocalFM.UI.ViewModels;
 
@@ -48,9 +49,20 @@ public sealed partial class MainViewModel : ObservableObject
         };
         Lyrics = new LyricsViewModel(host);
         Vibe = new VibeViewModel(this);
+        Updater = new UpdaterViewModel(new UpdaterHost(this), CreateUpdateService(), AppInfo.Version);
+        // One side panel at a time: lyrics, the vibe, or What's new.
         Lyrics.PropertyChanged += (_, e) =>
         {
-            if (e.PropertyName == nameof(LyricsViewModel.IsOpen) && Lyrics.IsOpen) Vibe.IsOpen = false;
+            if (e.PropertyName == nameof(LyricsViewModel.IsOpen) && Lyrics.IsOpen) { Vibe.IsOpen = false; Updater.WhatsNewOpen = false; }
+        };
+        Vibe.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(VibeViewModel.IsOpen) && Vibe.IsOpen) Updater.WhatsNewOpen = false;
+            if (e.PropertyName == nameof(VibeViewModel.InVibe)) Updater.VibeChanged();
+        };
+        Updater.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(UpdaterViewModel.WhatsNewOpen) && Updater.WhatsNewOpen) { Lyrics.IsOpen = false; Vibe.IsOpen = false; }
         };
         host.Player.IgnoredWhileFollowing += () => Dispatcher.UIThread.Post(() =>
             Notify($"You're listening to {Host.Vibe.HostName ?? "someone"}'s vibe. Leave it to play your own music."));
@@ -138,6 +150,7 @@ public sealed partial class MainViewModel : ObservableObject
     }
     public LyricsViewModel Lyrics { get; }
     public VibeViewModel Vibe { get; }
+    public UpdaterViewModel Updater { get; }
     public AlbumsViewModel Albums { get; }
     public QueueViewModel Queue { get; }
     public SourcesViewModel Sources { get; }
@@ -308,4 +321,36 @@ public sealed partial class MainViewModel : ObservableObject
 
     private static Geometry? Icon(string key) =>
         Application.Current!.TryGetResource(key, null, out var g) ? g as Geometry : null;
+
+    /// <summary>GitHub releases (or LOCALFM_UPDATE_SOURCE); snapshot runs get a canned update and no network.</summary>
+    private static IUpdateService CreateUpdateService() =>
+        Environment.GetEnvironmentVariable("LOCALFM_SNAPSHOT_UPDATE") is { Length: > 0 } shot
+            ? new SnapshotUpdateService(shot == "notice" ? UpdateMode.NoticeOnly : UpdateMode.InApp)
+            : ReleaseSource.Create(AppInfo.Version);
+
+    /// <summary>The app as the updater sees it.</summary>
+    private sealed class UpdaterHost(MainViewModel main) : IUpdaterHost
+    {
+        public string? Get(string key) => main.Host.History.Get(key);
+        public void Set(string key, string value) => _ = main.Host.History.SetAsync(key, value);
+        public void Notify(string message) => main.Notify(message);
+        public bool IsPlaying => main.Host.Player.State == LocalFM.Playback.PlaybackState.Playing;
+        public bool InVibe => main.Host.Vibe.Role != LocalFM.Vibe.VibeRole.None;
+
+        public async Task PrepareRestartAsync()
+        {
+            var player = main.Host.Player;
+            bool playing = IsPlaying;
+            player.Pause();
+            player.SaveState(force: true);
+            // The writer runs in order: once this is stored, so is the state above.
+            await main.Host.History.SetAsync(UpdaterViewModel.ResumeKey, playing ? "1" : "");
+        }
+
+        public Task OpenUrlAsync(string url)
+        {
+            main.OpenUrl?.Invoke(url);
+            return Task.CompletedTask;
+        }
+    }
 }

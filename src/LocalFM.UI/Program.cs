@@ -19,6 +19,8 @@ internal static class Program
     [STAThread]
     public static int Main(string[] args)
     {
+        // Must run first: Velopack's install, update and uninstall hooks start the app with special arguments and exit here.
+        Velopack.VelopackApp.Build().Run();
         var folders = new List<string>();
         for (int i = 0; i < args.Length - 1; i++)
             if (args[i] == "--add-folder") folders.Add(Path.GetFullPath(args[++i]));

@@ -13,6 +13,8 @@
     <Version>0.1.0</Version>
     <!-- Linux app id: desktop file, metainfo, Flatpak, macOS bundle id, WM_CLASS and the MPRIS DesktopEntry. -->
     <LocalFMAppId>io.github.LPeter1997.LocalFM</LocalFMAppId>
+    <!-- Line numbers in stack traces without loose .pdb files in the publish folder (packaged as is). -->
+    <DebugType>embedded</DebugType>
     <RepoRoot>$(MSBuildThisFileDirectory)</RepoRoot>
     <NativeOutDir>$(RepoRoot)native/out/</NativeOutDir>
   </PropertyGroup>

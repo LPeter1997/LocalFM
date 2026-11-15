@@ -73,6 +73,12 @@ public sealed class AppHost : IDisposable
     public void Start(IReadOnlyList<string>? addFolders = null, VibeStart? vibe = null)
     {
         Player.RestoreState();
+        // "Restart now" for an update: carry on where the music was.
+        if (History.Get(ViewModels.UpdaterViewModel.ResumeKey) == "1")
+        {
+            _ = History.SetAsync(ViewModels.UpdaterViewModel.ResumeKey, "");
+            Player.Play();
+        }
         if (vibe is not null) _ = StartVibeAsync(vibe);
         _ = Task.Run(async () =>
         {
