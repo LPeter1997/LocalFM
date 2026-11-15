@@ -8,8 +8,12 @@
              x:DataType="vm:TracksViewModel">
   <DockPanel>
     <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Spacing="16" Margin="24,0,24,12">
-      <TextBlock Classes="h1" Text="Tracks" />
+      <TextBlock Classes="h1" Text="Tracks" VerticalAlignment="Center" />
       <TextBlock Classes="muted" Text="{Binding Summary}" VerticalAlignment="Center" Margin="0,6,0,0" />
+      <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center" IsVisible="{Binding Tracks.Count}">
+        <Button Classes="primary" Command="{Binding PlayAllCommand}">Play</Button>
+        <Button Classes="ghost" Command="{Binding ShuffleAllCommand}">Shuffle</Button>
+      </StackPanel>
     </StackPanel>
     <ListBox x:Name="List" Classes="rows" ItemsSource="{Binding Tracks}" Margin="16,0,16,8">
       <ListBox.ItemTemplate>

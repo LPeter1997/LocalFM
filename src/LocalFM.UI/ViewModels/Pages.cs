@@ -258,6 +258,17 @@ public sealed partial class TracksViewModel(MainViewModel main) : PageViewModel(
     });
 
     [RelayCommand] private void PlayFrom(TrackInfo track) => Host.Player.PlayTracks(Tracks.ToList(), Tracks.IndexOf(track));
+
+    /// <summary>Plays what the list shows: the whole library, or what the search found.</summary>
+    [RelayCommand] private void PlayAll() => Host.Player.PlayTracks(Tracks.ToList());
+
+    [RelayCommand]
+    private void ShuffleAll()
+    {
+        if (Tracks.Count == 0) return;
+        Host.Player.SetShuffle(true);
+        Host.Player.PlayTracks(Tracks.OrderBy(_ => Random.Shared.Next()).ToList());
+    }
 }
 
 public sealed partial class PlaylistsViewModel(MainViewModel main) : PageViewModel(main)
