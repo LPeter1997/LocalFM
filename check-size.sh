@@ -10,6 +10,8 @@ rid=$2
 kb=$(du -sk "$dir" | cut -f1)
 mb=$(LC_ALL=C awk -v k="$kb" 'BEGIN { printf "%.1f", k * 1024 / 1000000 }')
 budget=$(awk -v r="$rid" '$1 == r { print $2 }' size-budget.txt)
+# What the size is made of: the largest files (KB), so a jump points at its cause.
+(cd "$dir" && find . -type f -exec du -k {} + | sort -rn | head -12 | sed 's/^/  /')
 if [ -z "$budget" ]; then
     echo "$rid: $mb MB (no budget yet; add a line to size-budget.txt)"
     exit 0

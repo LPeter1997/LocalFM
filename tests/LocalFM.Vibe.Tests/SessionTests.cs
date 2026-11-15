@@ -141,11 +141,15 @@ public sealed class SessionTests : IDisposable
         Assert.Equal(PlaybackState.Stopped, listener.State);
         Assert.InRange((listener.Position - ownPosition).Duration().TotalMilliseconds, 0, 50);
         await Task.Delay(200);
+        // Only our own song may be in the history (on a slow machine its few hundred ms before the vibe can pass the
+        // 1 s a listen needs); nothing the host played is.
+        var own = ownTracks.Select(t => t.RecordingId.ToString()).ToHashSet();
         using (var conn = _listenerLib.Db.Open())
         using (var cmd = conn.CreateCommand())
         {
-            cmd.CommandText = "SELECT count(*) FROM play_event";
-            Assert.Equal(0L, (long)cmd.ExecuteScalar()!);
+            cmd.CommandText = "SELECT recording_id FROM play_event";
+            using var r = cmd.ExecuteReader();
+            while (r.Read()) Assert.Contains(r.GetString(0), own);
         }
         Assert.False(Directory.Exists(cacheDir));
     }
