@@ -65,7 +65,9 @@ case "$rid" in
         [ "$rid" = osx-x64 ] && args+=(--arch=x86_64 --extra-cflags=-mmacosx-version-min=12.0 --extra-ldflags=-mmacosx-version-min=12.0)
         ;;
     win-x64) args+=(--toolchain=msvc --target-os=win64 --arch=x86_64) ;;
-    win-arm64) args+=(--toolchain=msvc --target-os=win64 --arch=aarch64) ;;
+    # MSVC's ARM assembler cannot take FFmpeg's GNU-syntax assembly without gas-preprocessor.pl; the C versions
+    # decode audio more than fast enough.
+    win-arm64) args+=(--toolchain=msvc --target-os=win64 --arch=aarch64 --disable-asm) ;;
     *) echo "unknown rid: $rid" >&2; exit 2 ;;
 esac
 
