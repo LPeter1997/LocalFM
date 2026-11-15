@@ -17,7 +17,7 @@ public sealed class Scanner
     public static readonly HashSet<string> AudioExtensions = new(StringComparer.OrdinalIgnoreCase)
     {
         ".mp3", ".flac", ".ogg", ".oga", ".opus", ".m4a", ".m4b", ".mp4", ".aac", ".alac", ".wav", ".wave",
-        ".aif", ".aiff", ".aifc", ".wv", ".ape", ".mpc", ".wma", ".mka", ".dsf", ".dff", ".tta", ".spx",
+        ".aif", ".aiff", ".aifc", ".wv", ".ape", ".mpc", ".wma", ".mka", ".dsf", ".dff", ".tta", ".spx", ".webm",
     };
 
     private static readonly string[] FolderImageNames =
@@ -67,6 +67,9 @@ public sealed class Scanner
                 .ToDictionary(x => x.Path, x => (x.Size, x.MTime));
         }
 
+        // Metadata integrations left for files they delivered (see ImportHints).
+        var hints = ImportHints.Under(_db, source.Path);
+
         var seen = new ConcurrentDictionary<string, byte>();
         int found = 0, processed = 0, added = 0, updated = 0, failed = 0;
         void Report(bool done) => Progress?.Invoke(new ScanProgress(source.Path, found, processed, added, updated, failed, done));
@@ -101,7 +104,7 @@ public sealed class Scanner
         {
             await foreach (var path in work.Reader.ReadAllAsync(ct).ConfigureAwait(false))
             {
-                var scanned = ProbeFile(source.Id, path);
+                var scanned = ProbeFile(source.Id, path, hints.GetValueOrDefault(path));
                 if (scanned is null)
                 {
                     Interlocked.Increment(ref failed);
@@ -170,7 +173,7 @@ public sealed class Scanner
     }
 
     /// <summary>Probes and hashes a file. Returns null for unreadable/non-audio files.</summary>
-    public static ScannedFile? ProbeFile(Ulid sourceId, string path)
+    public static ScannedFile? ProbeFile(Ulid sourceId, string path, ImportHint? hint = null)
     {
         try
         {
@@ -180,6 +183,7 @@ public sealed class Scanner
             {
                 var tagPairs = probe.Tags;
                 var tags = FileTags.Parse(tagPairs);
+                if (hint is not null) tags = ImportHints.Apply(tags, hint);
                 var pic = probe.Picture;
                 string audioHash = AudioIdentity.Compute(probe);
                 return new ScannedFile(
@@ -189,7 +193,8 @@ public sealed class Scanner
                     probe.Duration is { } d ? (long)d.TotalMilliseconds : null,
                     probe.BitRate, probe.SampleRate, probe.Channels, probe.BitsPerSample,
                     tags, pic?.Data, pic?.Mime,
-                    pic is null ? FindFolderImage(Path.GetDirectoryName(path)!) : null);
+                    pic is null ? FindFolderImage(Path.GetDirectoryName(path)!) : null,
+                    hint);
             }
         }
         catch (Exception ex)

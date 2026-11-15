@@ -7,7 +7,7 @@ namespace LocalFM.Library.Import;
 /// Tags of one file, normalized across ID3/Vorbis/MP4/APE naming. Values keep their original text;
 /// multi-valued fields are split. Unknown tags stay available in <see cref="Raw"/>.
 /// </summary>
-public sealed class FileTags
+public sealed record FileTags
 {
     public string? Title { get; init; }
     public string? Artist { get; init; }

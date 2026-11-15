@@ -20,7 +20,8 @@ public sealed record ScannedFile(
     FileTags Tags,
     byte[]? Picture,
     string? PictureMime,
-    string? FolderImagePath);
+    string? FolderImagePath,
+    ImportHint? Hint = null);
 
 public enum ImportOutcome { Unchanged, Added, Updated, Moved, Retagged }
 
@@ -91,7 +92,20 @@ public sealed class Importer(ImageStore images)
             fileId, f.SourceId, f.Path, f.Size, f.MTime, f.AudioHash, f.TagsHash, f.Codec, f.Container,
             f.DurationMs, f.BitRate, f.SampleRate, f.Channels, f.BitsPerSample, trackId,
             f.Tags.TrackGainDb, f.Tags.TrackPeak, f.Tags.AlbumGainDb, f.Tags.AlbumPeak, now);
+        ApplyHintIds(tx, f, trackId, now);
         return ImportOutcome.Added;
+    }
+
+    /// <summary>Where an integration delivered the file: its id (for dedupe and links) and source page.</summary>
+    private static void ApplyHintIds(Tx tx, ScannedFile f, Ulid trackId, long now)
+    {
+        if (f.Hint is not { } h) return;
+        var recording = tx.Single("SELECT recording_id FROM track WHERE id = $1", r => r.IdN(0), trackId);
+        if (recording is not { } rec) return;
+        if (h.IdProvider is { } provider) AddExternal(tx, "recording", rec, provider, h.ExternalId);
+        if (h.Url is { Length: > 0 } url)
+            tx.Exec("INSERT OR IGNORE INTO attribute(entity_type, entity_id, key, value, source, updated_at) VALUES ('recording',$1,'source_url',$2,$3,$4)",
+                rec, url, h.Provider, now);
     }
 
     private static void UpdateTechnical(Tx tx, Ulid id, ScannedFile f, long now) =>
