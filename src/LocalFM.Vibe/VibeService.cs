@@ -1,5 +1,7 @@
 using LocalFM.App;
 using LocalFM.Core;
+using LocalFM.Library;
+using LocalFM.Library.Enrich;
 using LocalFM.Vibe.Client;
 using LocalFM.Vibe.Host;
 using LocalFM.Vibe.Net;
@@ -19,10 +21,14 @@ public sealed class VibeService : IAsyncDisposable
     private VibeClient? _client;
     private Follower? _follower;
 
-    public VibeService(PlayerService player, AppPaths paths)
+    private readonly Func<TrackInfo, CancellationToken, Task<LyricsData?>>? _lyrics;
+
+    /// <param name="lyrics">How hosting answers listeners' lyrics requests.</param>
+    public VibeService(PlayerService player, AppPaths paths, Func<TrackInfo, CancellationToken, Task<LyricsData?>>? lyrics = null)
     {
         _player = player;
         _paths = paths;
+        _lyrics = lyrics;
         RemoteMediaCache.Sweep(paths.VibeCacheDir); // leftovers of a session that did not end cleanly
     }
 
@@ -51,7 +57,7 @@ public sealed class VibeService : IAsyncDisposable
         try
         {
             await StopCoreAsync().ConfigureAwait(false);
-            _host = new VibeHost(_player, name ?? DefaultName, port);
+            _host = new VibeHost(_player, name ?? DefaultName, port, lyrics: _lyrics);
             _host.ListenersChanged += RaiseChanged;
             Log.Info(Area, $"Hosting a vibe on port {_host.Port}");
         }
@@ -71,6 +77,7 @@ public sealed class VibeService : IAsyncDisposable
             _client = client;
             client.Ended += reason => _ = OnEndedAsync(client, reason);
             _follower = new Follower(client, _player, Path.Combine(_paths.VibeCacheDir, client.ListenerId));
+            client.PeopleChanged += RaiseChanged;
             Log.Info(Area, $"Listening to {client.HostName}'s vibe");
         }
         finally { _busy.Release(); }

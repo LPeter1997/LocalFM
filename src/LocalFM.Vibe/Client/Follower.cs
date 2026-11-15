@@ -1,6 +1,8 @@
 using LocalFM.App;
 using LocalFM.Core;
 using LocalFM.Library;
+using LocalFM.Library.Enrich;
+using LocalFM.Metadata;
 using LocalFM.Native;
 using LocalFM.Playback;
 using LocalFM.Vibe.Protocol;
@@ -33,6 +35,8 @@ public sealed class Follower : IFollowSource, IAsyncDisposable
     private readonly SemaphoreSlim _poke = new(0);
     private readonly CancellationTokenSource _cts = new();
     private readonly Task _loop;
+    private readonly string _coverDir;
+    private readonly HashSet<string> _coversWanted = new();
     private DateTime _lastCorrection = DateTime.MinValue;
     private (Ulid Item, DateTime At)? _starting;
 
@@ -43,6 +47,8 @@ public sealed class Follower : IFollowSource, IAsyncDisposable
         _client = client;
         _player = player;
         _cache = new RemoteMediaCache(cacheDir, client);
+        _coverDir = Path.Combine(cacheDir, "covers");
+        Directory.CreateDirectory(_coverDir);
         client.WindowChanged += Poke;
         client.TimelineChanged += Poke;
         player.EnterFollowMode(this);
@@ -82,7 +88,8 @@ public sealed class Follower : IFollowSource, IAsyncDisposable
             foreach (var o in window)
             {
                 if (!Ulid.TryParse(o.ItemId, out var id)) continue;
-                if (!_entries.TryGetValue(id, out var e) || e.Offer != o)
+                string? cover = Cover(o);
+                if (!_entries.TryGetValue(id, out var e) || e.Offer != o || e.Item.Track.CoverPath != cover)
                 {
                     _cache.Add(o.MediaId, o.Size);
                     e = new Entry(o, new QueueItem(id, ToTrack(o)), rate => Decoder.Open(_cache.Add(o.MediaId, o.Size).OpenRead(), rate));
@@ -115,12 +122,48 @@ public sealed class Follower : IFollowSource, IAsyncDisposable
         Disc: o.Disc,
         Position: o.Position,
         DurationMs: o.DurationMs,
-        CoverPath: null,
+        CoverPath: Cover(o),
         Codec: o.Codec,
         TrackGainDb: o.TrackGainDb,
         TrackPeak: o.TrackPeak,
         AlbumGainDb: o.AlbumGainDb,
         AlbumPeak: o.AlbumPeak);
+
+    /// <summary>The downloaded cover, or null (asking for it in the background; the queue updates when it is in).</summary>
+    private string? Cover(TrackOffer o)
+    {
+        if (o.CoverId is not { } id || o.CoverSize <= 0 || o.CoverSize > 32 << 20) return null;
+        string path = Path.Combine(_coverDir, id);
+        if (File.Exists(path)) return path;
+        if (_coversWanted.Add(id))
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    await _client.DownloadAsync(id, o.CoverSize, path, _cts.Token).ConfigureAwait(false);
+                    Poke();
+                }
+                catch (Exception ex) when (ex is not OperationCanceledException) { Log.Debug(Area, $"Cover {id}: {ex.Message}"); }
+                catch (OperationCanceledException) { }
+                finally { lock (_gate) _coversWanted.Remove(id); }
+            });
+        return null;
+    }
+
+    /// <summary>Lyrics for a track of the vibe, from the host.</summary>
+    public async Task<LyricsView?> LyricsAsync(TrackInfo track, CancellationToken ct)
+    {
+        string? itemId;
+        lock (_gate) itemId = _entries.Values.FirstOrDefault(e => e.Item.Track.TrackId == track.TrackId)?.Item.Id.ToString();
+        if (itemId is null) return null;
+        var reply = await _client.LyricsAsync(itemId, ct).ConfigureAwait(false);
+        if (reply is not { Content: { } content, Format: { } format }) return null;
+        var data = new LyricsData(reply.Provider ?? "host", MetadataService.FormatOf(format), content);
+        return new LyricsView(data, Lrc.Parse(content, data.Format));
+    }
+
+    /// <summary>Who is in the vibe, the host first.</summary>
+    public IReadOnlyList<string> People => _client.People;
 
     private Ulid StableId(string key)
     {

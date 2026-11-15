@@ -43,7 +43,8 @@ public sealed class AppHost : IDisposable
         Player = new PlayerService(Engine, History, Queries);
         Sound = SoundSettings.Load(History);
         Player.ApplySound(Sound);
-        Vibe = new VibeService(Player, Paths);
+        Vibe = new VibeService(Player, Paths,
+            async (track, ct) => (await Metadata.GetLyricsAsync(track, allowFetch: true, ct).ConfigureAwait(false))?.Data);
     }
 
     public VibeService Vibe { get; }

@@ -13,6 +13,9 @@ namespace LocalFM.Vibe.Protocol;
 [JsonDerivedType(typeof(Timeline), "timeline")]
 [JsonDerivedType(typeof(QueueWindow), "queue")]
 [JsonDerivedType(typeof(Bye), "bye")]
+[JsonDerivedType(typeof(LyricsRequest), "lyricsReq")]
+[JsonDerivedType(typeof(LyricsReply), "lyrics")]
+[JsonDerivedType(typeof(Presence), "presence")]
 public abstract record Message;
 
 public enum ConnectionRole { Control, Data }
@@ -41,6 +44,15 @@ public sealed record QueueWindow(List<TrackOffer> Items) : Message;
 /// <summary>Why the session ends (host stopped, kicked, …).</summary>
 public sealed record Bye(string Reason) : Message;
 
+/// <summary>Asks the host for the lyrics it has (or finds) for an item in the window.</summary>
+public sealed record LyricsRequest(uint Request, string ItemId) : Message;
+
+/// <summary>No content: the host has none. <see cref="Format"/>: plain, lrc or elrc.</summary>
+public sealed record LyricsReply(uint Request, string? Provider, string? Format, string? Content) : Message;
+
+/// <summary>Who is in the vibe (the host first).</summary>
+public sealed record Presence(List<string> Names) : Message;
+
 /// <summary>A track in the window: what to show and where its bytes come from.</summary>
 public sealed record TrackOffer
 {
@@ -61,6 +73,9 @@ public sealed record TrackOffer
     public double? TrackPeak { get; init; }
     public double? AlbumGainDb { get; init; }
     public double? AlbumPeak { get; init; }
+    /// <summary>The cover as a readable media id (null: none), and its size.</summary>
+    public string? CoverId { get; init; }
+    public long CoverSize { get; init; }
     /// <summary>Plays gaplessly after the previous item in the window (album continuations).</summary>
     public bool JoinGapless { get; init; }
 }

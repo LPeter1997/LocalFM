@@ -509,7 +509,7 @@ public sealed class PlayerService : IDisposable
         lock (_gate)
         {
             if (_follow is null) return;
-            if (items.Select(i => i.Id).SequenceEqual(Queue.Items.Select(i => i.Id))) return;
+            if (items.SequenceEqual(Queue.Items)) return; // same items, same metadata
             int idx = Queue.Current is { } cur ? items.ToList().FindIndex(i => i.Id == cur.Id) : -1;
             Queue.Restore(items, Math.Max(0, idx));
         }

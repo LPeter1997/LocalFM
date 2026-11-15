@@ -84,6 +84,7 @@ public sealed partial class LyricsViewModel : ObservableObject
     private async Task OtherVersion()
     {
         if (_host.Player.Current?.Track is not { } track) return;
+        if (_host.Vibe.Follower is not null) { Source = "Only the host can change the lyrics."; return; }
         IsLoading = true;
         try
         {
@@ -105,14 +106,18 @@ public sealed partial class LyricsViewModel : ObservableObject
         Status = null;
         try
         {
-            var view = await Task.Run(() => _host.Metadata.GetLyricsAsync(track, allowFetch, cts.Token, force));
+            // Listening to a vibe: the host's lyrics (they may have edited them; the track is not in our library).
+            var view = _host.Vibe.Follower is { } vibe
+                ? await vibe.LyricsAsync(track, cts.Token)
+                : await Task.Run(() => _host.Metadata.GetLyricsAsync(track, allowFetch, cts.Token, force));
             if (cts.IsCancellationRequested || track.RecordingId != _recording) return;
             Lines.Clear();
             _view = null;
             _current = -1;
             if (view is null)
             {
-                Status = !_host.Metadata.OnlineEnabled ? "No lyrics stored (online lookups are off)."
+                Status = _host.Vibe.Follower is not null ? "The host has no lyrics for this song."
+                    : !_host.Metadata.OnlineEnabled ? "No lyrics stored (online lookups are off)."
                     : allowFetch ? "No lyrics found." : "No lyrics stored.";
                 return;
             }
@@ -146,7 +151,7 @@ public sealed partial class LyricsViewModel : ObservableObject
 
     public void SeekTo(LyricLineViewModel line)
     {
-        if (line.Line.Time is { } t) _host.Player.Seek(t);
+        if (line.Line.Time is { } t && !_host.Player.IsFollowing) _host.Player.Seek(t);
     }
 
     private void Follow()

@@ -2,6 +2,9 @@ using System.Net;
 using System.Security.Cryptography;
 using LocalFM.App;
 using LocalFM.Core;
+using LocalFM.Library;
+using LocalFM.Library.Enrich;
+using LocalFM.Metadata;
 using LocalFM.Playback;
 using LocalFM.Vibe.Net;
 using LocalFM.Vibe.Protocol;
@@ -24,7 +27,7 @@ public sealed class VibeHost : IAsyncDisposable
     private static readonly TimeSpan Heartbeat = TimeSpan.FromSeconds(1);
     /// <summary>Lets a seek or state change land in the engine before we read the position.</summary>
     private static readonly TimeSpan Settle = TimeSpan.FromMilliseconds(40);
-    private const int RecentMedia = 8;
+    private const int RecentMedia = 16; // audio and covers of the window and what was in it just now
 
     private readonly PlayerService _player;
     private readonly VibeIdentity _identity;
@@ -41,14 +44,20 @@ public sealed class VibeHost : IAsyncDisposable
     private string? _windowKey;
     private readonly Task _acceptLoop, _publishLoop;
 
-    public VibeHost(PlayerService player, string hostName, int port = TlsTransport.DefaultPort, IReadOnlyList<IPAddress>? addresses = null)
+    private readonly Func<TrackInfo, CancellationToken, Task<LyricsData?>>? _lyrics;
+
+    /// <param name="lyrics">Looks up lyrics for listeners (null: listeners get none).</param>
+    public VibeHost(PlayerService player, string hostName, int port = TlsTransport.DefaultPort, IReadOnlyList<IPAddress>? addresses = null,
+        Func<TrackInfo, CancellationToken, Task<LyricsData?>>? lyrics = null)
     {
         _player = player;
+        _lyrics = lyrics;
         HostName = hostName;
         _identity = VibeIdentity.Create();
         _listener = TlsTransport.Listen(_identity, port);
         Invite = new Invite(addresses ?? Invite.LocalAddresses(), _listener.Port, _identity.Fingerprint, _secret, hostName);
         player.Changed += Poke;
+        ListenersChanged += SendPresence;
         player.Seeked += OnSeeked;
         _acceptLoop = Task.Run(AcceptLoop);
         _publishLoop = Task.Run(PublishLoop);
@@ -175,6 +184,9 @@ public sealed class VibeHost : IAsyncDisposable
                     case Ping ping:
                         await peer.Control.SendAsync(new Pong(ping.T0, VibeClock.NowUs), peer.Cts.Token).ConfigureAwait(false);
                         break;
+                    case LyricsRequest req:
+                        _ = Task.Run(() => AnswerLyrics(peer, req));
+                        break;
                     case Bye:
                         return;
                 }
@@ -183,6 +195,43 @@ public sealed class VibeHost : IAsyncDisposable
         catch (Exception ex) when (ex is not OperationCanceledException) { Log.Debug(Area, $"{peer.Name}: {ex.Message}"); }
         catch (OperationCanceledException) { }
         finally { await RemoveAsync(peer).ConfigureAwait(false); }
+    }
+
+    private async Task AnswerLyrics(Peer peer, LyricsRequest req)
+    {
+        LyricsData? data = null;
+        try
+        {
+            var item = _player.Snapshot(out _).FirstOrDefault(i => i.Id.ToString() == req.ItemId);
+            if (item is not null && _lyrics is not null)
+            {
+                using var timeout = CancellationTokenSource.CreateLinkedTokenSource(peer.Cts.Token);
+                timeout.CancelAfter(TimeSpan.FromSeconds(20));
+                data = await _lyrics(item.Track, timeout.Token).ConfigureAwait(false);
+            }
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException) { Log.Debug(Area, $"Lyrics for a listener: {ex.Message}"); }
+        catch (OperationCanceledException) { }
+        try
+        {
+            await peer.Control.SendAsync(data is null ? new LyricsReply(req.Request, null, null, null)
+                : new LyricsReply(req.Request, data.Provider, MetadataService.FormatName(data.Format), data.Content), peer.Cts.Token).ConfigureAwait(false);
+        }
+        catch (Exception ex) { Log.Debug(Area, $"{peer.Name}: {ex.Message}"); }
+    }
+
+    private void SendPresence()
+    {
+        List<Peer> peers;
+        lock (_gate) peers = _peers.Where(p => p.Welcomed).ToList();
+        var msg = new Presence([HostName, .. peers.Select(p => p.Name)]);
+        foreach (var p in peers) _ = SendQuietly(p, msg);
+    }
+
+    private static async Task SendQuietly(Peer p, Message m)
+    {
+        try { await p.Control.SendAsync(m, p.Cts.Token).ConfigureAwait(false); }
+        catch (Exception ex) { Log.Debug(Area, $"{p.Name}: {ex.Message}"); }
     }
 
     private async Task ServeData(Peer peer, Wire wire)
@@ -324,6 +373,7 @@ public sealed class VibeHost : IAsyncDisposable
         {
             var t = list[i].Track;
             if (Media(t.Path) is not { } m) continue;
+            var cover = t.CoverPath is { } cp ? Media(cp) : null;
             offers.Add(new TrackOffer
             {
                 ItemId = list[i].Id.ToString(),
@@ -342,15 +392,17 @@ public sealed class VibeHost : IAsyncDisposable
                 TrackPeak = t.TrackPeak,
                 AlbumGainDb = t.AlbumGainDb,
                 AlbumPeak = t.AlbumPeak,
+                CoverId = cover?.Id,
+                CoverSize = cover?.Size ?? 0,
                 JoinGapless = i > 0 && _player.GaplessAlbums && PlayerService.Continues(list[i - 1].Track, t),
             });
         }
         lock (_gate)
         {
-            foreach (var o in offers)
+            foreach (var id in offers.SelectMany(o => new[] { o.CoverId, o.MediaId }).OfType<string>())
             {
-                _servable.Remove(o.MediaId);
-                _servable.Add(o.MediaId);
+                _servable.Remove(id);
+                _servable.Add(id);
             }
             while (_servable.Count > RecentMedia) _servable.RemoveAt(0);
         }
@@ -382,6 +434,7 @@ public sealed class VibeHost : IAsyncDisposable
     {
         if (_cts.IsCancellationRequested) return;
         _player.Changed -= Poke;
+        ListenersChanged -= SendPresence;
         _player.Seeked -= OnSeeked;
         List<Peer> peers;
         lock (_gate) peers = [.. _peers];

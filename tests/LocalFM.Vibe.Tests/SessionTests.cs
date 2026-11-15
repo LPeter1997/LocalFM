@@ -2,6 +2,7 @@ using System.Net;
 using LocalFM.App;
 using LocalFM.Core;
 using LocalFM.Library;
+using LocalFM.Library.Enrich;
 using LocalFM.Library.Tests;
 using LocalFM.Native;
 using LocalFM.Playback;
@@ -133,6 +134,37 @@ public sealed class SessionTests : IDisposable
             Assert.Equal(0L, (long)cmd.ExecuteScalar()!);
         }
         Assert.False(Directory.Exists(cacheDir));
+    }
+
+    [SkippableFact]
+    public async Task Listener_gets_covers_lyrics_and_who_is_there()
+    {
+        Skip.IfNot(TempLibrary.HaveFfmpeg);
+        _hostLib.MakeTrack("c/1.flac", Tags("Covered", 1), 3, coverPng: _hostLib.MakePng());
+        await _hostLib.ScanAsync();
+        var tracks = _hostLib.Queries.AlbumTracks(_hostLib.Queries.Albums().Single().ReleaseId);
+        Assert.NotNull(tracks[0].CoverPath);
+        var (host, _) = Player(_hostLib);
+        var (listener, _) = Player(_listenerLib);
+        host.PlayTracks(tracks, 0);
+        LyricsData? Lyrics(TrackInfo t) => t.Title == "Covered" ? new LyricsData("lrclib", LyricsFormat.Lrc, "[00:01.00]Hello\n[00:02.00]World") : null;
+        await using var vibe = new VibeHost(host, "Host", port: 0, lyrics: (t, _) => Task.FromResult(Lyrics(t)));
+        await using var client = await VibeClient.ConnectAsync(Loopback(vibe), "Friend");
+        var follower = new Follower(client, listener, Path.Combine(_listenerLib.Root, "vibe-cache"));
+        try
+        {
+            await Until(() => listener.Current?.Track.CoverPath is { } p && File.Exists(p), 10, "the cover arrives");
+            Assert.Equal(File.ReadAllBytes(tracks[0].CoverPath!), File.ReadAllBytes(listener.Current!.Track.CoverPath!));
+
+            var lyrics = await follower.LyricsAsync(listener.Current!.Track, CancellationToken.None);
+            Assert.NotNull(lyrics);
+            Assert.True(lyrics.Synced);
+            Assert.Equal(["Hello", "World"], lyrics.Lines.Select(l => l.Text));
+
+            await Until(() => follower.People.Count == 2, 5, "presence");
+            Assert.Equal(["Host", "Friend"], follower.People);
+        }
+        finally { await follower.DisposeAsync(); }
     }
 
     [SkippableFact]

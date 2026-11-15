@@ -17,6 +17,7 @@ public sealed class VibeClient : IRangeSource, IAsyncDisposable
     private readonly Wire _control, _data;
     private readonly CancellationTokenSource _cts = new();
     private readonly ConcurrentDictionary<uint, TaskCompletionSource<(int Status, ReadOnlyMemory<byte> Data)>> _pending = new();
+    private readonly ConcurrentDictionary<uint, TaskCompletionSource<LyricsReply>> _lyrics = new();
     private uint _nextRequest;
     private volatile bool _dataGone;
     private int _ended;
@@ -37,9 +38,12 @@ public sealed class VibeClient : IRangeSource, IAsyncDisposable
     public ClockSync Clock { get; } = new();
     public QueueWindow? Window { get; private set; }
     public Timeline? Timeline { get; private set; }
+    /// <summary>Who is in the vibe, the host first.</summary>
+    public IReadOnlyList<string> People { get; private set; } = [];
 
     public event Action? WindowChanged;
     public event Action? TimelineChanged;
+    public event Action? PeopleChanged;
     /// <summary>The session is over (host ended it, removed us, or the connection broke), with a reason to show.</summary>
     public event Action<string>? Ended;
 
@@ -93,6 +97,13 @@ public sealed class VibeClient : IRangeSource, IAsyncDisposable
                         Timeline = t;
                         TimelineChanged?.Invoke();
                         break;
+                    case LyricsReply l:
+                        if (_lyrics.TryRemove(l.Request, out var waiting)) waiting.TrySetResult(l);
+                        break;
+                    case Presence p:
+                        People = p.Names;
+                        PeopleChanged?.Invoke();
+                        break;
                     case Bye bye:
                         reason = bye.Reason;
                         return;
@@ -119,10 +130,46 @@ public sealed class VibeClient : IRangeSource, IAsyncDisposable
         catch (Exception ex) { Log.Debug(Area, $"Ping: {ex.Message}"); }
     }
 
+    /// <summary>The host's lyrics for an item of the window; null when it has none (or does not answer).</summary>
+    public async Task<LyricsReply?> LyricsAsync(string itemId, CancellationToken ct)
+    {
+        uint id = Interlocked.Increment(ref _nextRequest);
+        var tcs = new TaskCompletionSource<LyricsReply>(TaskCreationOptions.RunContinuationsAsynchronously);
+        _lyrics[id] = tcs;
+        try
+        {
+            await _control.SendAsync(new LyricsRequest(id, itemId), ct).ConfigureAwait(false);
+            return await tcs.Task.WaitAsync(TimeSpan.FromSeconds(30), ct).ConfigureAwait(false);
+        }
+        catch (TimeoutException) { return null; }
+        catch (IOException) { return null; }
+        catch (ObjectDisposedException) { return null; }
+        finally { _lyrics.TryRemove(id, out _); }
+    }
+
+    /// <summary>Copies a whole (small) file from the host, e.g. a cover.</summary>
+    public async Task DownloadAsync(string mediaId, long size, string path, CancellationToken ct)
+    {
+        var buf = new byte[Wire.MaxRange];
+        string temp = path + ".part";
+        await using (var f = new FileStream(temp, FileMode.Create, FileAccess.Write))
+        {
+            for (long at = 0; at < size;)
+            {
+                int n = await ReadAsync(mediaId, at, buf.AsMemory(0, (int)Math.Min(buf.Length, size - at)), ct).ConfigureAwait(false);
+                if (n <= 0) throw new IOException("The host's file ended early.");
+                await f.WriteAsync(buf.AsMemory(0, n), ct).ConfigureAwait(false);
+                at += n;
+            }
+        }
+        File.Move(temp, path, overwrite: true);
+    }
+
     private void End(string reason)
     {
         if (Interlocked.Exchange(ref _ended, 1) != 0) return;
         _cts.Cancel();
+        foreach (var t in _lyrics.Values) t.TrySetCanceled();
         Ended?.Invoke(reason);
     }
 
