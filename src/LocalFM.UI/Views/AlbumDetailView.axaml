@@ -77,7 +77,7 @@
                  IsVisible="{Binding Online.Count}">
           <ListBox.ItemTemplate>
             <DataTemplate x:DataType="vm:AlbumGuessRow">
-              <Grid ColumnDefinitions="*,Auto,Auto">
+              <Grid ColumnDefinitions="*,Auto,Auto,Auto">
                 <StackPanel VerticalAlignment="Center">
                   <TextBlock Text="{Binding Title}" FontWeight="Medium" TextTrimming="CharacterEllipsis" />
                   <TextBlock Classes="muted small" Text="{Binding Artist}" TextTrimming="CharacterEllipsis" />
@@ -85,6 +85,7 @@
                 <TextBlock Grid.Column="1" Classes="small" Text="in your library" Foreground="{StaticResource Accent}" Margin="10,0"
                            VerticalAlignment="Center" IsVisible="{Binding InLibrary}" />
                 <TextBlock Grid.Column="2" Classes="muted small" VerticalAlignment="Center" Text="{Binding Facts}" />
+                <TextBlock Grid.Column="3" Classes="small" FontWeight="SemiBold" VerticalAlignment="Center" Text="{Binding Coverage}" Margin="10,0,0,0" />
               </Grid>
             </DataTemplate>
           </ListBox.ItemTemplate>
@@ -143,7 +144,7 @@
           </TextBox>
           <Button Grid.Column="2" Classes="ghost" Command="{Binding SearchCommand}" IsEnabled="{Binding !Busy}">Search</Button>
         </Grid>
-        <StackPanel Orientation="Horizontal" Spacing="8">
+        <StackPanel Orientation="Horizontal" Spacing="8" IsVisible="{Binding ShowStatus}">
           <ProgressBar IsIndeterminate="True" Width="80" IsVisible="{Binding Busy}" VerticalAlignment="Center" />
           <TextBlock Text="{Binding Status}" Classes="muted small" VerticalAlignment="Center" TextWrapping="Wrap" />
           <Button Classes="ghost" FontSize="12" Command="{Binding FindTheirAlbumsCommand}" IsVisible="{Binding HasStrays}">Find their albums</Button>
@@ -151,6 +152,18 @@
 
         <!-- By songs -->
         <StackPanel Spacing="10" IsVisible="{Binding BySongs}">
+          <DockPanel>
+            <Button DockPanel.Dock="Right" Classes="ghost" Command="{Binding FindBySongsCommand}" IsEnabled="{Binding !Busy}">Look up</Button>
+            <!-- a lone song can be looked up by a corrected title; the artist goes for every song -->
+            <UniformGrid Rows="1" Margin="0,0,8,0">
+              <TextBox Text="{Binding LookupTitle}" PlaceholderText="Song title" Margin="0,0,8,0" IsVisible="{Binding SingleSong}">
+                <TextBox.KeyBindings><KeyBinding Gesture="Enter" Command="{Binding FindBySongsCommand}" /></TextBox.KeyBindings>
+              </TextBox>
+              <TextBox Text="{Binding LookupArtist}" PlaceholderText="Artist">
+                <TextBox.KeyBindings><KeyBinding Gesture="Enter" Command="{Binding FindBySongsCommand}" /></TextBox.KeyBindings>
+              </TextBox>
+            </UniformGrid>
+          </DockPanel>
           <Border CornerRadius="8" Background="{StaticResource Surface2}" Padding="12,8" IsVisible="{Binding CanSort}">
             <Grid ColumnDefinitions="*,Auto">
               <TextBlock Text="{Binding SortSummary}" TextWrapping="Wrap" VerticalAlignment="Center" />
@@ -174,10 +187,7 @@
               </DataTemplate>
             </ListBox.ItemTemplate>
           </ListBox>
-          <StackPanel Orientation="Horizontal" Spacing="8">
-            <Button Classes="primary" Command="{Binding ApplyGuessCommand}" IsEnabled="{Binding !Busy}">Put on selected album</Button>
-            <Button Classes="ghost" Command="{Binding FindBySongsCommand}" IsEnabled="{Binding !Busy}">Look again</Button>
-          </StackPanel>
+          <Button Classes="primary" Command="{Binding ApplyGuessCommand}" IsEnabled="{Binding !Busy}" IsVisible="{Binding HasGuesses}">Put on selected album</Button>
         </StackPanel>
 
         <!-- By album title -->

@@ -507,7 +507,9 @@ public sealed partial class MoveViewModel : ObservableObject
         _moved = moved;
         _close = close;
         Tracks = tracks;
-        _search = tracks[0].Album ?? "";
+        // Start from the album's own title (finds its other copies), unless it has no real one.
+        string album = tracks[0].Album ?? "";
+        _search = Normalize.Key(album) is var key && (key == Normalize.Key("[Unknown Album]") || key == Normalize.Key("Singles")) ? "" : album;
         _newAlbumName = "";
         _ = Find();
         _ = FindOnline();
@@ -560,7 +562,7 @@ public sealed partial class MoveViewModel : ObservableObject
                 var songs = _host.Metadata.Albums.Describe(ids);
                 return await _host.Metadata.Albums.FindAsync(songs);
             });
-            foreach (var g in guesses.Where(g => g.LocalReleaseId != CurrentAlbum).Take(12)) Online.Add(new AlbumGuessRow(g, Tracks.Count));
+            foreach (var g in LocalFM.Metadata.AlbumFinder.Rank(guesses).Where(g => g.LocalReleaseId != CurrentAlbum).Take(12)) Online.Add(new AlbumGuessRow(g, Tracks.Count));
             OnlineStatus = Online.Count == 0 ? "MusicBrainz knows no other album with this song." : null;
             // The original album is the likely answer; prefer it over the first local search hit.
             if (Online.Count > 0 && Online[0].Guess is { Secondary: false }) SelectedOnline = Online[0];

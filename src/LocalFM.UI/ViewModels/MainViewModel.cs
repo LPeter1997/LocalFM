@@ -11,13 +11,25 @@ using LocalFM.UI.Controls;
 
 namespace LocalFM.UI.ViewModels;
 
-public sealed record NavItem(string Name, Geometry? Icon, PageViewModel Page);
+public sealed partial class NavItem(string name, Geometry? icon, PageViewModel page) : ObservableObject
+{
+    public string Name { get; } = name;
+    public Geometry? Icon { get; } = icon;
+    public PageViewModel Page { get; } = page;
+
+    /// <summary>A count shown as a red dot next to the name (fixes waiting in Tidy up); 0 hides it.</summary>
+    [ObservableProperty] [NotifyPropertyChangedFor(nameof(HasBadge), nameof(BadgeText))] private int _badge;
+    public bool HasBadge => Badge > 0;
+    public string BadgeText => Badge > 99 ? "99+" : Badge.ToString(System.Globalization.CultureInfo.InvariantCulture);
+}
 
 public sealed partial class MainViewModel : ObservableObject
 {
     private readonly Stack<PageViewModel> _back = new();
     private readonly DispatcherTimer _searchDebounce;
     private readonly DispatcherTimer _libraryDebounce;
+    /// <summary>Each source reports its scan done; Tidy up looks again once they have settled.</summary>
+    private readonly DispatcherTimer _tidyDebounce;
     private readonly DispatcherTimer _queueDebounce;
     private DispatcherTimer? _noticeTimer;
 
@@ -46,7 +58,7 @@ public sealed partial class MainViewModel : ObservableObject
             new("Playlists", Icon("IcoPlaylist"), new PlaylistsViewModel(this)),
             new("Queue", Icon("IcoQueue"), Queue),
             new("Stats", Icon("IcoStats"), new StatsViewModel(this)),
-            new("Tidy up", Icon("IcoMagic"), new TidyViewModel(this)),
+            new("Tidy up", Icon("IcoMagic"), Tidy = new TidyViewModel(this)),
             new("Sound", Icon("IcoSliders"), new SoundViewModel(this)),
             new("Import", Icon("IcoImport"), new ImportViewModel(this)),
             new("Sources", Icon("IcoFolder"), Sources),
@@ -76,10 +88,23 @@ public sealed partial class MainViewModel : ObservableObject
         host.Player.Changed += () => Dispatcher.UIThread.Post(() => { if (!_queueDebounce.IsEnabled) _queueDebounce.Start(); });
         host.Player.Error += msg => Dispatcher.UIThread.Post(() => Notify(msg));
         host.Scanner.Progress += p => Dispatcher.UIThread.Post(() =>
-            ScanStatus = p.Done ? null : $"Scanning… {p.Processed:N0} / {p.Found:N0}");
+        {
+            ScanStatus = p.Done ? null : $"Scanning… {p.Processed:N0} / {p.Found:N0}";
+            // New or changed songs may need tidying: look again in the background and count what is found.
+            if (p.Done) { _tidyDebounce!.Stop(); _tidyDebounce.Start(); }
+        });
+        _tidyDebounce = new DispatcherTimer(TimeSpan.FromSeconds(3), DispatcherPriority.Background, (_, _) =>
+        {
+            _tidyDebounce!.Stop();
+            _ = Tidy.CheckInBackgroundAsync(CurrentPage == Tidy);
+        });
+        _tidyDebounce.Stop();
+        var tidyNav = Nav.First(n => n.Page == Tidy);
+        Tidy.PropertyChanged += (_, e) => { if (e.PropertyName == nameof(TidyViewModel.FixCount)) tidyNav.Badge = Tidy.FixCount; };
     }
 
     public AppHost Host { get; }
+    public TidyViewModel Tidy { get; }
     public TrackActions Actions { get; }
     public NowPlayingViewModel NowPlaying { get; }
     public AccentTheme Theme { get; }

@@ -57,10 +57,13 @@
           <ListBox Classes="nav" ItemsSource="{Binding Nav}" SelectedItem="{Binding SelectedNav}">
             <ListBox.ItemTemplate>
               <DataTemplate x:DataType="vm:NavItem">
-                <StackPanel Orientation="Horizontal" Spacing="12">
+                <Grid ColumnDefinitions="Auto,*,Auto">
                   <c:Icon Classes="icon" Data="{Binding Icon}" />
-                  <TextBlock Text="{Binding Name}" VerticalAlignment="Center" FontWeight="Medium" />
-                </StackPanel>
+                  <TextBlock Grid.Column="1" Text="{Binding Name}" VerticalAlignment="Center" FontWeight="Medium" Margin="12,0,0,0" />
+                  <Border Grid.Column="2" Classes="badge" IsVisible="{Binding HasBadge}" ToolTip.Tip="Fixes ready in Tidy up">
+                    <TextBlock Text="{Binding BadgeText}" />
+                  </Border>
+                </Grid>
               </DataTemplate>
             </ListBox.ItemTemplate>
           </ListBox>

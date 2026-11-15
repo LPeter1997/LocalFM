@@ -229,6 +229,9 @@ public sealed partial class TidyViewModel(MainViewModel main) : PageViewModel(ma
     /// <summary>0: names, 1: albums.</summary>
     [ObservableProperty] private int _tab;
 
+    /// <summary>Every fix waiting (names and albums): the badge on the Tidy up menu item.</summary>
+    [ObservableProperty] private int _fixCount;
+
     public bool NamesTab => Tab == 0;
     public bool AlbumsTab => Tab == 1;
 
@@ -242,6 +245,18 @@ public sealed partial class TidyViewModel(MainViewModel main) : PageViewModel(ma
     {
         if (!_scanned) await Scan();
         if (!_albumsLoaded) { _albumsLoaded = true; await CheckAlbums(); }
+    }
+
+    /// <summary>
+    /// Runs the checks without the page being open (after a library scan), so the menu badge shows fixes as they
+    /// are found. While the page is open, only a first check runs: rows the person is looking at stay put.
+    /// </summary>
+    public async Task CheckInBackgroundAsync(bool pageOpen)
+    {
+        if (Checking || (pageOpen && _scanned && _albumsLoaded)) return;
+        await Scan();
+        _albumsLoaded = true;
+        await CheckAlbums();
     }
 
     [RelayCommand]
@@ -277,6 +292,7 @@ public sealed partial class TidyViewModel(MainViewModel main) : PageViewModel(ma
         if (Tabs[0] != names) Tabs[0] = names;
         if (Tabs[1] != albums) Tabs[1] = albums;
         Tab = tab; // replacing an item clears the selection
+        FixCount = Suggestions.Count + AlbumSuggestions.Count;
     }
 
     // ------------------------------------------------------------------ albums
@@ -286,6 +302,13 @@ public sealed partial class TidyViewModel(MainViewModel main) : PageViewModel(ma
     private async Task CheckAlbums()
     {
         _scout?.Cancel();
+        _scout = null; // the cancelled run must not clear Checking for this one
+        Checking = true;
+        // Songs that joined a matched album after it was matched are compared with its release first, so they
+        // do not show up as songs that are not on it.
+        try { await Task.Run(() => Host.Metadata.Scout.SettleAsync(Host.ShutdownToken)); }
+        catch (OperationCanceledException) { Checking = false; return; }
+        catch (Exception ex) { Log.Warn("Tidy", $"Matching albums again failed: {ex.Message}"); }
         var offline = await Task.Run(() => AlbumChecks.FindOffline(Host.Db).Where(s => !AlbumChecks.IsDismissed(Host.History, s)).ToList());
         Replace(AlbumSuggestions, offline.Select(s => new AlbumSuggestionViewModel(s)));
         UpdateTabs();
@@ -293,12 +316,12 @@ public sealed partial class TidyViewModel(MainViewModel main) : PageViewModel(ma
         if (!Host.Metadata.OnlineEnabled)
         {
             AlbumStatus = (AlbumStatus is null ? "" : AlbumStatus + " ") + "Turn on online services (Sources) to also check songs against MusicBrainz.";
+            Checking = false;
             return;
         }
 
         var cts = CancellationTokenSource.CreateLinkedTokenSource(Host.ShutdownToken);
         _scout = cts;
-        Checking = true;
         var found = new Progress<AlbumSuggestion>(AddFromScout);
         var progress = new Progress<AlbumScout.Progress>(p =>
         {
@@ -325,8 +348,7 @@ public sealed partial class TidyViewModel(MainViewModel main) : PageViewModel(ma
         var songs = s.Tracks.ToHashSet();
         foreach (var stale in AlbumSuggestions.Where(r => r.Suggestion.Kind == AlbumIssue.NotOnAlbum && r.Suggestion.Tracks.Any(songs.Contains)).ToList())
             AlbumSuggestions.Remove(stale);
-        if (AlbumSuggestions.Any(r => r.Suggestion.Key == s.Key)) return;
-        AlbumSuggestions.Add(new AlbumSuggestionViewModel(s));
+        if (AlbumSuggestions.All(r => r.Suggestion.Key != s.Key)) AlbumSuggestions.Add(new AlbumSuggestionViewModel(s));
         UpdateTabs();
     }
 

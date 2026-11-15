@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using LocalFM.Core;
+using LocalFM.Library;
 using LocalFM.Library.Edit;
 using LocalFM.Library.Enrich;
 using LocalFM.Metadata;
@@ -55,18 +56,27 @@ public sealed partial class MatchViewModel : ObservableObject
     [ObservableProperty] private string? _artist;
     [ObservableProperty] private ReleaseCandidate? _selected;
     [ObservableProperty] private AlbumGuessRow? _selectedGuess;
-    [ObservableProperty] private bool _busy;
-    [ObservableProperty] private string? _status;
+    [ObservableProperty] [NotifyPropertyChangedFor(nameof(ShowStatus))] private bool _busy;
+    [ObservableProperty] [NotifyPropertyChangedFor(nameof(ShowStatus))] private string? _status;
     [ObservableProperty] private bool _fetchCover = true;
     /// <summary>0: by album title, 1: by songs.</summary>
     [ObservableProperty] private int _mode;
     [ObservableProperty] private string? _sortSummary;
     [ObservableProperty] private int _strayCount;
+    /// <summary>By songs: the title to look the song up by (one song only) and the artist (all songs).</summary>
+    [ObservableProperty] private string? _lookupTitle;
+    [ObservableProperty] private string? _lookupArtist;
+    [ObservableProperty] private bool _singleSong;
+    private string? _shownTitle, _shownArtist;
+    private Ulid? _single;
 
     public bool BySongs => Mode == 1;
     public bool ByTitle => Mode == 0;
     public bool CanSort => _placements.Count >= 2;
+    public bool HasGuesses => Guesses.Count > 0;
     public bool HasStrays => StrayCount > 0;
+    /// <summary>The status line takes no room when it has nothing to say.</summary>
+    public bool ShowStatus => Busy || !string.IsNullOrEmpty(Status) || HasStrays;
     private IReadOnlyList<Ulid> _strays = [];
 
     partial void OnModeChanged(int value)
@@ -76,7 +86,11 @@ public sealed partial class MatchViewModel : ObservableObject
         if (value == 1 && Guesses.Count == 0 && !Busy) _ = FindBySongs();
     }
 
-    partial void OnStrayCountChanged(int value) => OnPropertyChanged(nameof(HasStrays));
+    partial void OnStrayCountChanged(int value)
+    {
+        OnPropertyChanged(nameof(HasStrays));
+        OnPropertyChanged(nameof(ShowStatus));
+    }
 
     private void OnRetrying(string provider, TimeSpan delay) =>
         Avalonia.Threading.Dispatcher.UIThread.Post(() => { if (Busy) Status = $"{provider} is busy, retrying in {delay.TotalSeconds:0.#} s…"; });
@@ -131,23 +145,23 @@ public sealed partial class MatchViewModel : ObservableObject
         try
         {
             var songs = await Task.Run(() => _songScope is { } scope ? _host.Metadata.Albums.Describe(scope) : _host.Metadata.Albums.DescribeAlbum(_releaseId));
+            songs = WithLookupFields(songs);
             Status = $"Looking up {Converters.Count(songs.Count, "song")}…";
             var progress = new Progress<int>(n => { if (Busy) Status = $"Looking up songs… {n} / {songs.Count}"; });
             var guesses = await Task.Run(() => _host.Metadata.Albums.FindAsync(songs, progress));
             _placements = AlbumFinder.Assign(guesses);
             Guesses.Clear();
-            // The albums that place songs first (in placement order), then the other albums they are on.
-            var placedIds = _placements.Select(p => p.ReleaseMbid).ToHashSet();
-            foreach (var g in _placements.Select(p => guesses.First(x => x.ReleaseMbid == p.ReleaseMbid))
-                         .Concat(guesses.Where(g => !placedIds.Contains(g.ReleaseMbid))).Take(40))
-                Guesses.Add(new AlbumGuessRow(g, songs.Count));
+            foreach (var g in AlbumFinder.Rank(guesses).Take(40)) Guesses.Add(new AlbumGuessRow(g, songs.Count));
             SelectedGuess = Guesses.FirstOrDefault();
+            OnPropertyChanged(nameof(HasGuesses));
             int placed = _placements.Sum(p => p.Songs.Count);
             SortSummary = _placements.Count >= 2
                 ? "Your songs are on " + string.Join(", ", _placements.Select(p => $"“{p.Title}” ({p.Songs.Count})")) + "."
                 : null;
             OnPropertyChanged(nameof(CanSort));
-            Status = guesses.Count == 0 ? "MusicBrainz knows none of these songs. Check the titles and artist, or search by album title."
+            Status = guesses.Count == 0
+                ? songs.Count == 1 ? "MusicBrainz does not know this song. Correct the title or artist above and look again."
+                  : "MusicBrainz knows none of these songs. Correct the artist above, or search by album title."
                 : placed < songs.Count ? $"{Converters.Count(songs.Count - placed, "song")} could not be found."
                 : null;
         }
@@ -159,6 +173,39 @@ public sealed partial class MatchViewModel : ObservableObject
         finally { Busy = false; _host.Metadata.Http.Retrying -= OnRetrying; }
     }
 
+    /// <summary>
+    /// Fills the lookup boxes the first time (the song's cleaned title and artist) and afterwards applies what
+    /// the person typed: the title for a lone song, the artist for every song.
+    /// </summary>
+    private List<SongQuery> WithLookupFields(List<SongQuery> songs)
+    {
+        SingleSong = songs.Count == 1;
+        _single = SingleSong ? songs[0].TrackId : null;
+        string? Clean(string? artist) => artist is null ? null : Cleanup.CleanArtist(artist)?.Text ?? artist;
+        if (_shownArtist is null)
+        {
+            _shownArtist = LookupArtist = Clean(songs.FirstOrDefault()?.Artist) ?? "";
+            _shownTitle = LookupTitle = SingleSong ? Cleanup.CleanTitle(songs[0].Title, songs[0].Artist)?.Text ?? songs[0].Title : "";
+            return songs;
+        }
+        bool artistTyped = !string.IsNullOrWhiteSpace(LookupArtist) && LookupArtist != _shownArtist;
+        bool titleTyped = SingleSong && !string.IsNullOrWhiteSpace(LookupTitle) && LookupTitle != _shownTitle;
+        return songs.Select(q => q with
+        {
+            Title = titleTyped ? LookupTitle!.Trim() : q.Title,
+            Artist = artistTyped ? LookupArtist!.Trim() : q.Artist,
+        }).ToList();
+    }
+
+    /// <summary>A corrected title is kept before the song is put on its album, so the album's track list lines up with it.</summary>
+    private async Task SaveTypedTitleAsync()
+    {
+        if (_single is not { } track || !SingleSong || string.IsNullOrWhiteSpace(LookupTitle) || LookupTitle == _shownTitle) return;
+        string title = LookupTitle.Trim();
+        await _host.Db.Writer.Run((c, t) =>
+            MetadataEditor.Apply(new Tx(c, t), [new FieldChange("track", track, "title", title)], MetadataEditor.CleanupSource, lockFields: false));
+    }
+
     /// <summary>After an apply: look up only the songs that were not on the release.</summary>
     [RelayCommand]
     private Task FindTheirAlbums()
@@ -166,6 +213,8 @@ public sealed partial class MatchViewModel : ObservableObject
         _songScope = _strays;
         StrayCount = 0;
         Guesses.Clear();
+        OnPropertyChanged(nameof(HasGuesses));
+        _shownArtist = _shownTitle = null; // other songs: fill the boxes from them
         if (Mode == 1) return FindBySongs();
         Mode = 1;
         return Task.CompletedTask;
@@ -220,9 +269,11 @@ public sealed partial class MatchViewModel : ObservableObject
         try
         {
             bool cover = FetchCover;
+            await SaveTypedTitleAsync();
             var report = await Task.Run(() => _host.Metadata.Organizer.SortAsync(placements, cover));
             Status = report.Problems.Count > 0 ? string.Join(" ", report.Problems) : null;
             Guesses.Clear();
+            OnPropertyChanged(nameof(HasGuesses));
             _placements = [];
             SortSummary = null;
             OnPropertyChanged(nameof(CanSort));

@@ -154,6 +154,25 @@
       <Setter Property="Margin" Value="0,1" />
       <Setter Property="Foreground" Value="{StaticResource Muted}" />
     </Style>
+    <Style Selector="ListBox.nav ListBoxItem">
+      <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+    </Style>
+    <!-- A count of things waiting (Tidy up fixes): a small red pill, kept red whatever the accent colour is -->
+    <Style Selector="Border.badge">
+      <Setter Property="Background" Value="#E5484D" />
+      <Setter Property="CornerRadius" Value="9" />
+      <Setter Property="MinWidth" Value="18" />
+      <Setter Property="Height" Value="18" />
+      <Setter Property="Padding" Value="5,0" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+    <Style Selector="Border.badge > TextBlock">
+      <Setter Property="Foreground" Value="White" />
+      <Setter Property="FontSize" Value="11" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="HorizontalAlignment" Value="Center" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
     <Style Selector="ListBox.nav ListBoxItem:selected /template/ ContentPresenter">
       <Setter Property="Background" Value="{StaticResource Surface3}" />
     </Style>
