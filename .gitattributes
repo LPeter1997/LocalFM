@@ -1,0 +1,2 @@
+# Scripts run by bash on every OS (Git Bash and MSYS2 on Windows): keep LF.
+*.sh text eol=lf

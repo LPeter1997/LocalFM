@@ -78,7 +78,7 @@ public static class DesktopEntry
         Keywords=music;player;library;lyrics;
         StartupWMClass={AppId}
 
-        """;
+        """.ReplaceLineEndings("\n"); // a Linux file, whatever the source's line endings were checked out as
 
     /// <summary>The program quoted by the Desktop Entry rules (spaces, quotes, $ and backticks).</summary>
     internal static string ExecLine(string program)

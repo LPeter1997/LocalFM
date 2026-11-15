@@ -51,6 +51,7 @@ public sealed class PlaybackEngine : IDisposable
 
     // engine-thread state
     private readonly List<Segment> _pending = new(); // segments queued in the ring, not yet audible
+    private volatile bool _endWritten;  // the ring holds the end of the queue: nothing more is written until a new play
     private readonly HashSet<Source> _live = new();
     private Source? _current;           // being decoded into the ring
     private Source? _next;              // opened, waiting to be spliced after _current
@@ -97,6 +98,10 @@ public sealed class PlaybackEngine : IDisposable
 
     /// <summary>Frames queued in the ring that the device has not consumed yet.</summary>
     public long BufferedFrames => _out.WriteIndex - _out.ReadIndex;
+
+    /// <summary>The ring holds the end of the queue: what is buffered is all there is until something new plays.
+    /// Offline rendering drains a partial last block only then (a busy engine thread is not the end).</summary>
+    public bool EndOfQueueBuffered => _endWritten;
 
     public TimeSpan Position
     {
@@ -237,6 +242,7 @@ public sealed class PlaybackEngine : IDisposable
             }
             if (_nextRequest is not null) return; // still opening; we wait (only audible if it takes > ring length)
             _pending.Add(new Segment(_out.WriteIndex, null, 0));
+            _endWritten = true;
             _current = null;
             Collect();
             return;
@@ -435,6 +441,7 @@ public sealed class PlaybackEngine : IDisposable
         if (n < ChunkFrames) src.AtEnd = true;
         _out.Flush();
         _pending.Clear();
+        _endWritten = false;
         _active = new Segment(_out.WriteIndex, src, frame);
         if (n > 0) _out.Write(_buf.AsSpan(0, n * 2));
     }
@@ -462,6 +469,7 @@ public sealed class PlaybackEngine : IDisposable
             }
             _fadeIn = null;
             _current = anchorSrc;
+            _endWritten = false;
             _live.Add(anchorSrc);
         }
         else if (_current is null && anchorSrc is not null && ReferenceEquals(_anchor, anchorSrc.Track))
@@ -474,6 +482,7 @@ public sealed class PlaybackEngine : IDisposable
                 if (!_out.Truncate(_pending[idx].WriteIndex)) return;
                 _pending.RemoveAt(idx);
                 _current = anchorSrc;
+                _endWritten = false;
             }
         }
 
@@ -569,6 +578,7 @@ public sealed class PlaybackEngine : IDisposable
         _active = null;
         _anchor = _nextFor = null;
         _pending.Clear();
+        _endWritten = false;
         _current = null;
         _fadeIn = null;
         CancelNext();

@@ -6,10 +6,12 @@ public class EngineTests
 {
     private const int Rate = 48000;
 
-    /// <summary>Drives an offline engine: plays the files as a queue and returns everything it rendered.</summary>
+    /// <summary>Drives an offline engine: plays the files as a queue and returns everything it rendered.
+    /// <paramref name="realTime"/> pulls blocks at a device's pace: a crossfade needs the next track open before the
+    /// mix point, which real playback reaches seconds after "next" is set, not milliseconds.</summary>
     private static (float[] Samples, List<EngineEvent> Events, long Underruns) RenderQueue(
         string[] files, Action<PlaybackEngine, TrackHandle[], int>? onFrame = null,
-        Action<PlaybackEngine>? setup = null, Func<string, int, TrackHandle>? handle = null)
+        Action<PlaybackEngine>? setup = null, Func<string, int, TrackHandle>? handle = null, bool realTime = false)
     {
         using var engine = new PlaybackEngine(OutputMode.Offline, Rate);
         setup?.Invoke(engine);
@@ -22,8 +24,6 @@ public class EngineTests
         var deadline = DateTime.UtcNow.AddSeconds(30);
         bool finished = false;
         int rendered = 0;
-        long lastBuffered = -1;
-        var stalledSince = DateTime.UtcNow;
         while (!finished && DateTime.UtcNow < deadline)
         {
             while (engine.Events.TryRead(out var e))
@@ -37,15 +37,15 @@ public class EngineTests
                 if (e is PlaybackFinished) finished = true;
             }
             long buffered = engine.BufferedFrames;
-            if (buffered != lastBuffered) { lastBuffered = buffered; stalledSince = DateTime.UtcNow; }
-            // Render full blocks; once the engine has nothing more to add (end of queue), drain the tail.
-            bool drain = DateTime.UtcNow - stalledSince > TimeSpan.FromMilliseconds(100);
+            // Render full blocks; once the engine has written the end of the queue, drain the tail. A partial block
+            // before that would pad the output with silence whenever the engine thread is slow (a busy CI machine).
+            bool drain = engine.EndOfQueueBuffered && buffered > 0;
             if (buffered >= 512 || drain)
             {
                 engine.RenderOffline(block);
                 output.AddRange(block);
                 onFrame?.Invoke(engine, handles, rendered++);
-                stalledSince = DateTime.UtcNow;
+                if (realTime) Thread.Sleep(512 * 1000 / Rate);
             }
             else Thread.Sleep(1);
         }
@@ -165,8 +165,7 @@ public class EngineTests
         var started = new List<string>();
         var output = new List<float>();
         bool changed = false, finished = false;
-        var deadline = DateTime.UtcNow.AddSeconds(20);
-        var lastData = DateTime.UtcNow;
+        var deadline = DateTime.UtcNow.AddSeconds(40);
         while (DateTime.UtcNow < deadline && !finished)
         {
             while (engine.Events.TryRead(out var e))
@@ -185,11 +184,10 @@ public class EngineTests
                 changed = true;
                 Thread.Sleep(50);
             }
-            if (engine.BufferedFrames >= 512 || (DateTime.UtcNow - lastData).TotalMilliseconds > 100)
+            if (engine.BufferedFrames >= 512 || (engine.EndOfQueueBuffered && engine.BufferedFrames > 0))
             {
                 engine.RenderOffline(block);
                 output.AddRange(block);
-                lastData = DateTime.UtcNow;
                 // About real time (512 frames ≈ 10.7 ms): opening C must get the head start it has in real playback,
                 // also on a slow, shared CI machine.
                 Thread.Sleep(10);
@@ -217,7 +215,7 @@ public class EngineTests
     {
         Skip.IfNot(Fixtures.HaveFfmpeg);
         string[] files = [Fixtures.Sine("xfade-a", 440, Rate, 3.0), Fixtures.Sine("xfade-b", 660, Rate, 3.0)];
-        var (s, events, _) = RenderQueue(files, setup: e => e.Crossfade = TimeSpan.FromSeconds(1));
+        var (s, events, _) = RenderQueue(files, setup: e => e.Crossfade = TimeSpan.FromSeconds(1), realTime: true);
         int frames = s.Length / 2;
 
         Assert.Equal(2, events.OfType<TrackStarted>().Count());
@@ -233,7 +231,7 @@ public class EngineTests
     {
         Skip.IfNot(Fixtures.HaveFfmpeg);
         var files = Fixtures.SplitSine("xfade-album", "flac", Rate, 2.0, 2.0);
-        var (s, _, _) = RenderQueue(files, setup: e => e.Crossfade = TimeSpan.FromSeconds(1),
+        var (s, _, _) = RenderQueue(files, setup: e => e.Crossfade = TimeSpan.FromSeconds(1), realTime: true,
             handle: (f, i) => new TrackHandle(f, i, JoinGapless: i > 0));
         Assert.InRange(s.Length / 2, 4 * Rate, 4 * Rate + 1024);
         var (max, at) = MaxDelta(s, 100, 4 * Rate - 100);
