@@ -7,7 +7,11 @@ namespace LocalFM.Library.Enrich;
 /// then it is almost certainly the wrong release and nothing was written.
 /// <c>MergedInto</c> is set when the release was already in the library as another local album: the tracks moved
 /// there and the album that was matched no longer exists.</summary>
-public sealed record ApplyResult(int TracksMatched, int TracksUnmatched, bool CoverStored, bool MergedIntoGroup, bool Applied = true, Ulid? MergedInto = null);
+public sealed record ApplyResult(int TracksMatched, int TracksUnmatched, bool CoverStored, bool MergedIntoGroup, bool Applied = true, Ulid? MergedInto = null)
+{
+    /// <summary>Local tracks that are not on the applied release (still on the album; the person may sort them out).</summary>
+    public IReadOnlyList<Ulid> UnmatchedTrackIds { get; init; } = [];
+}
 
 /// <summary>
 /// Writes external release data onto a local release, inside a writer transaction.
@@ -135,7 +139,11 @@ public sealed class MetadataApplier(ImageStore images)
         }
 
         Edit.MetadataEditor.PruneOrphans(tx);
-        return new ApplyResult(matched, local.Count - matched, coverStored, merged, MergedInto: mergedInto);
+        var matchedIds = assigned.Where(a => a is not null).Select(a => a!.Id).ToHashSet();
+        return new ApplyResult(matched, local.Count - matched, coverStored, merged, MergedInto: mergedInto)
+        {
+            UnmatchedTrackIds = local.Where(l => !matchedIds.Contains(l.Id)).Select(l => l.Id).ToList(),
+        };
     }
 
     private sealed record LocalTrack(Ulid Id, Ulid MediumId, int Disc, int Position, string Title, Ulid RecordingId, long? LengthMs);

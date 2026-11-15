@@ -50,7 +50,17 @@ public sealed class MetadataService
         CoverArt = new CoverArtArchive(Http);
         Itunes = new Itunes(Http);
         Lrclib = new Lrclib(Http);
+        Albums = new AlbumFinder(MusicBrainz, db);
+        Organizer = new AlbumOrganizer(this, db);
+        Scout = new AlbumScout(this, db, kv);
     }
+
+    /// <summary>"Which album is this song on?"</summary>
+    public AlbumFinder Albums { get; }
+    /// <summary>Puts songs on the albums they belong to.</summary>
+    public AlbumOrganizer Organizer { get; }
+    /// <summary>Tidy up's background album check.</summary>
+    public AlbumScout Scout { get; }
 
     public CachedHttp Http { get; }
     public MusicBrainz MusicBrainz { get; }

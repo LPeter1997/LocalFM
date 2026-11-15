@@ -21,6 +21,44 @@ public sealed class MusicBrainz(CachedHttp http)
         return doc.RootElement.Arr("releases").Select(ParseCandidate).ToList();
     }
 
+    /// <summary>Recordings (songs) by title and artist, each with the releases it appears on.</summary>
+    public async Task<List<RecordingHit>> SearchRecordingsAsync(string title, string? artist, CancellationToken ct = default)
+    {
+        var q = new StringBuilder($"recording:\"{Escape(title)}\"");
+        if (!string.IsNullOrWhiteSpace(artist)) q.Append($" AND artist:\"{Escape(artist)}\"");
+        string url = $"{Base}recording/?query={Uri.EscapeDataString(q.ToString())}&fmt=json&limit=50";
+        var res = await http.GetAsync(Provider, url, TimeSpan.FromDays(7), ct: ct).ConfigureAwait(false);
+        if (!res.Ok) return [];
+        using var doc = JsonDocument.Parse(res.Body);
+        return ParseRecordings(doc.RootElement);
+    }
+
+    public static List<RecordingHit> ParseRecordings(JsonElement root) =>
+        root.Arr("recordings").Select(r =>
+        {
+            string artist = ReleaseData.CreditText(Credit(r));
+            var releases = r.Arr("releases").Select(rel =>
+            {
+                var rg = rel.Obj("release-group");
+                var media = rel.Arr("media").FirstOrDefault();
+                var track = media.Arr("track").FirstOrDefault();
+                var relCredit = Credit(rel);
+                return new RecordingRelease(
+                    rel.Str("id") ?? "",
+                    rel.Str("title") ?? "",
+                    relCredit.Count > 0 ? ReleaseData.CreditText(relCredit) : artist,
+                    rel.Str("date"),
+                    rel.Str("status"),
+                    rg.Str("id"),
+                    rg.Str("primary-type"),
+                    rg.ValueKind == JsonValueKind.Object && rg.TryGetProperty("secondary-types", out var st)
+                        ? st.EnumerateArray().Select(x => x.GetString()!).Where(x => x is not null).ToList() : [],
+                    (int)(rel.Long("track-count") ?? media.Long("track-count") ?? 0),
+                    int.TryParse(track.Str("number"), out int n) ? n : null);
+            }).Where(x => x.Id.Length > 0).ToList();
+            return new RecordingHit(r.Str("id") ?? "", r.Str("title") ?? "", artist, r.Long("length"), (int)(r.Long("score") ?? 0), releases);
+        }).ToList();
+
     public async Task<ReleaseData?> GetReleaseAsync(string mbid, CancellationToken ct = default)
     {
         string url = $"{Base}release/{Uri.EscapeDataString(mbid)}?inc=recordings+artist-credits+labels+release-groups+genres+isrcs&fmt=json";

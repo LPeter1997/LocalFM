@@ -292,6 +292,25 @@ public static class MetadataEditor
         return moved;
     }
 
+    /// <summary>An empty album (its own release group) to move songs into. Discs are created as tracks arrive.</summary>
+    public static Ulid NewAlbum(Tx tx, string title, string? artistText)
+    {
+        long now = Sql.Now();
+        string clean = Normalize.Text(title) ?? "New album";
+        Ulid? credit = Normalize.Text(artistText) is { } a ? ResolveCreditText(tx, a, now) : null;
+        var group = Ulid.NewUlid();
+        tx.Exec("""
+            INSERT INTO release_group(id, title, artist_credit_id, primary_type, title_key, created_at, updated_at)
+            VALUES ($1,$2,$3,'album',$4,$5,$5)
+            """, group, clean, credit, Normalize.Key(clean), now);
+        var release = Ulid.NewUlid();
+        tx.Exec("""
+            INSERT INTO release(id, release_group_id, title, artist_credit_id, title_key, created_at, updated_at)
+            VALUES ($1,$2,$3,$4,$5,$6,$6)
+            """, release, group, clean, credit, Normalize.Key(clean), now);
+        return release;
+    }
+
     /// <summary>Moves every track of one album onto another (merging two editions or two halves of one album).</summary>
     public static int MergeRelease(Tx tx, Ulid fromReleaseId, Ulid intoReleaseId, string source = UserSource, bool lockIt = true) =>
         fromReleaseId == intoReleaseId ? 0 : MoveTracks(tx,
