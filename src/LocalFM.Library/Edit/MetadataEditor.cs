@@ -129,19 +129,34 @@ public static class MetadataEditor
     {
         if (!lockIt && IsLocked(tx, entityType, id, "artist_credit_id")) return false;
         string? creditId = text is null ? null : ResolveCreditText(tx, text, now).ToString();
-        if (!MetadataApplier.SetField(tx, entityType, id, "artist_credit_id", creditId, source, now, lockIt)) return false;
-        if (entityType == "track")
+        if (entityType == "track") return SetTrackCredit(tx, id, creditId, source, now, lockIt);
+
+        string? oldCredit = tx.Single("SELECT artist_credit_id FROM release WHERE id = $1", r => r.Str(0), id);
+        if (!MetadataApplier.SetField(tx, "release", id, "artist_credit_id", creditId, source, now, lockIt)) return false;
+        var group = tx.Single("SELECT release_group_id FROM release WHERE id = $1", r => r.Id(0), id);
+        if (tx.Long("SELECT COUNT(*) FROM release WHERE release_group_id = $1", group) == 1)
+            MetadataApplier.SetField(tx, "release_group", group, "artist_credit_id", creditId, source, now, lockIt);
+
+        // Tracks credited exactly like the album was are "by the album artist": they follow. A track with its
+        // own credit ("A feat. B") keeps it, and SetField leaves locked tracks alone on unlocked writes.
+        if (oldCredit is not null && oldCredit != creditId)
         {
-            var rec = tx.Single("SELECT recording_id FROM track WHERE id = $1", r => r.Id(0), id);
-            if (tx.Long("SELECT COUNT(*) FROM track WHERE recording_id = $1", rec) == 1)
-                MetadataApplier.SetField(tx, "recording", rec, "artist_credit_id", creditId, source, now, lockIt);
+            var followers = tx.Query("""
+                SELECT t.id FROM track t JOIN medium m ON m.id = t.medium_id
+                WHERE m.release_id = $1 AND t.artist_credit_id = $2
+                """, r => r.Id(0), id, oldCredit);
+            foreach (var trackId in followers)
+                SetTrackCredit(tx, trackId, creditId, source, now, lockIt);
         }
-        else
-        {
-            var group = tx.Single("SELECT release_group_id FROM release WHERE id = $1", r => r.Id(0), id);
-            if (tx.Long("SELECT COUNT(*) FROM release WHERE release_group_id = $1", group) == 1)
-                MetadataApplier.SetField(tx, "release_group", group, "artist_credit_id", creditId, source, now, lockIt);
-        }
+        return true;
+    }
+
+    private static bool SetTrackCredit(Tx tx, Ulid trackId, string? creditId, string source, long now, bool lockIt)
+    {
+        if (!MetadataApplier.SetField(tx, "track", trackId, "artist_credit_id", creditId, source, now, lockIt)) return false;
+        var rec = tx.Single("SELECT recording_id FROM track WHERE id = $1", r => r.Id(0), trackId);
+        if (tx.Long("SELECT COUNT(*) FROM track WHERE recording_id = $1", rec) == 1)
+            MetadataApplier.SetField(tx, "recording", rec, "artist_credit_id", creditId, source, now, lockIt);
         return true;
     }
 

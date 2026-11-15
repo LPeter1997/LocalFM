@@ -74,6 +74,29 @@ public class EditorTests
     }
 
     [SkippableFact]
+    public async Task Album_artist_edit_carries_tracks_credited_like_the_album()
+    {
+        Skip.IfNot(TempLibrary.HaveFfmpeg);
+        using var lib = new TempLibrary();
+        const string band = "Slash featuring Myles Kennedy and the Conspirators";
+        lib.MakeTrack("a/1.flac", new() { ["title"] = "No More Heroes", ["artist"] = band, ["album"] = "Apocalyptic Love", ["track"] = "1" }, seconds: 0.3);
+        lib.MakeTrack("a/2.flac", new() { ["title"] = "Guest Song", ["artist"] = "Slash feat. Someone Else", ["albumartist"] = band, ["album"] = "Apocalyptic Love", ["track"] = "2" }, seconds: 0.3);
+        await lib.ScanAsync();
+
+        var heroes = lib.Queries.Tracks("No More Heroes").Single();
+        await lib.Db.Writer.Run((c, t) => MetadataEditor.Apply(new Tx(c, t),
+            [new FieldChange("release", heroes.ReleaseId, "artist", "Slash feat. Myles Kennedy & The Conspirators")]));
+
+        Assert.Equal("Slash feat. Myles Kennedy & The Conspirators", lib.Queries.ByTrack(heroes.TrackId)!.Artist);
+        Assert.Equal("Slash feat. Someone Else", lib.Queries.Tracks("Guest Song").Single().Artist); // its own credit stays
+        var artists = lib.Queries.Artists();
+        Assert.DoesNotContain(artists, a => a.Name == band);                                          // old band pruned
+        var slash = artists.Single(a => a.Name == "Slash");
+        Assert.Equal(1, slash.AlbumCount);
+        Assert.Equal(1, slash.TrackCount);                                                            // the guest track is a different credit
+    }
+
+    [SkippableFact]
     public async Task Hand_edits_lock_fields_and_merge_artists()
     {
         Skip.IfNot(TempLibrary.HaveFfmpeg);
