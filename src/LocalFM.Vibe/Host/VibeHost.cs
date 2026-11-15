@@ -55,7 +55,8 @@ public sealed class VibeHost : IAsyncDisposable
         HostName = hostName;
         _identity = VibeIdentity.Create();
         _listener = TlsTransport.Listen(_identity, port);
-        Invite = new Invite(addresses ?? Invite.LocalAddresses(), _listener.Port, _identity.Fingerprint, _secret, hostName);
+        _local = (addresses ?? Invite.LocalAddresses()).Select(a => new IPEndPoint(a, _listener.Port)).ToList();
+        Invite = new Invite(_local, _identity.Fingerprint, _secret, hostName);
         player.Changed += Poke;
         ListenersChanged += SendPresence;
         player.Seeked += OnSeeked;
@@ -64,7 +65,18 @@ public sealed class VibeHost : IAsyncDisposable
     }
 
     public string HostName { get; }
-    public Invite Invite { get; }
+    private readonly List<IPEndPoint> _local;
+
+    /// <summary>The current invite; it grows a public endpoint once the router maps a port.</summary>
+    public Invite Invite { get; private set; }
+    public event Action? InviteChanged;
+
+    /// <summary>Adds (or, with null, removes) the router-mapped public endpoint to the invite.</summary>
+    public void SetPublicEndpoint(IPEndPoint? endpoint)
+    {
+        Invite = Invite with { Endpoints = endpoint is null ? _local : [.. _local, endpoint] };
+        InviteChanged?.Invoke();
+    }
     public int Port => _listener.Port;
 
     public IReadOnlyList<ListenerInfo> Listeners
@@ -83,6 +95,14 @@ public sealed class VibeHost : IAsyncDisposable
         try { await p.Control.SendAsync(new Bye("The host removed you from the vibe.")).WaitAsync(TimeSpan.FromSeconds(2)).ConfigureAwait(false); }
         catch { }
         await RemoveAsync(p).ConfigureAwait(false);
+    }
+
+    /// <summary>Tests: breaks every connection without a goodbye, as a network failure would.</summary>
+    internal async Task DropConnectionsAsync()
+    {
+        List<Peer> peers;
+        lock (_gate) peers = [.. _peers];
+        foreach (var p in peers) await RemoveAsync(p).ConfigureAwait(false);
     }
 
     private void Poke() => _changed.Release();

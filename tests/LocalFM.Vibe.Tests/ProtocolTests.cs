@@ -11,14 +11,13 @@ public class ProtocolTests
     [Fact]
     public void Invite_round_trips()
     {
-        var invite = new Invite([IPAddress.Parse("192.168.1.20"), IPAddress.Parse("100.101.102.103"), IPAddress.Parse("2001:db8::1")],
-            47811, new byte[32].Select((_, i) => (byte)i).ToArray(), new byte[16].Select((_, i) => (byte)(200 + i)).ToArray(), "Péter");
+        var invite = new Invite([IPEndPoint.Parse("192.168.1.20:47811"), IPEndPoint.Parse("100.101.102.103:47811"),
+            IPEndPoint.Parse("[2001:db8::1]:47811"), IPEndPoint.Parse("203.0.113.9:51000")], new byte[32].Select((_, i) => (byte)i).ToArray(), new byte[16].Select((_, i) => (byte)(200 + i)).ToArray(), "Péter");
         string code = invite.Encode();
         Assert.StartsWith("lfmvibe1-", code);
-        Assert.True(code.Length < 160, code);
+        Assert.True(code.Length < 200, code);
         Assert.True(Invite.TryDecode("  " + code[..20] + "\n" + code[20..] + " ", out var back)); // pasted with line breaks
-        Assert.Equal(invite.Addresses, back.Addresses);
-        Assert.Equal(invite.Port, back.Port);
+        Assert.Equal(invite.Endpoints, back.Endpoints);
         Assert.Equal(invite.Fingerprint, back.Fingerprint);
         Assert.Equal(invite.Secret, back.Secret);
         Assert.Equal("Péter", back.HostName);

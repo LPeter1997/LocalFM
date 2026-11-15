@@ -62,7 +62,7 @@ public static class TlsTransport
     /// <summary>Connects to whichever of the invite's addresses answers first with the right certificate.</summary>
     public static async Task<(Stream Stream, IPEndPoint EndPoint)> ConnectAsync(Invite invite, IEnumerable<IPEndPoint>? prefer, CancellationToken ct)
     {
-        var endpoints = (prefer ?? []).Concat(invite.Addresses.Select(a => new IPEndPoint(a, invite.Port))).Distinct().ToList();
+        var endpoints = (prefer ?? []).Concat(invite.Endpoints).Distinct().ToList();
         using var race = CancellationTokenSource.CreateLinkedTokenSource(ct);
         var attempts = endpoints.Select(ep => Attempt(ep, invite.Fingerprint, race.Token)).ToList();
         var errors = new List<string>();

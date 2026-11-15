@@ -44,8 +44,9 @@ public sealed class VibeClient : IRangeSource, IAsyncDisposable
     public event Action? WindowChanged;
     public event Action? TimelineChanged;
     public event Action? PeopleChanged;
-    /// <summary>The session is over (host ended it, removed us, or the connection broke), with a reason to show.</summary>
-    public event Action<string>? Ended;
+    /// <summary>The connection is over, with a reason to show; <c>HostEnded</c> is true when the host said goodbye
+    /// (ended the vibe, removed us) and false when the connection broke (worth reconnecting).</summary>
+    public event Action<string, bool>? Ended;
 
     public static async Task<VibeClient> ConnectAsync(Invite invite, string name, CancellationToken ct = default)
     {
@@ -80,6 +81,7 @@ public sealed class VibeClient : IRangeSource, IAsyncDisposable
     private async Task ControlLoop()
     {
         string reason = "Lost the connection to the host.";
+        bool byHost = false;
         try
         {
             while (await _control.ReadMessageAsync(_cts.Token).ConfigureAwait(false) is { } m)
@@ -106,13 +108,14 @@ public sealed class VibeClient : IRangeSource, IAsyncDisposable
                         break;
                     case Bye bye:
                         reason = bye.Reason;
+                        byHost = true;
                         return;
                 }
             }
         }
         catch (OperationCanceledException) when (_cts.IsCancellationRequested) { return; }
         catch (Exception ex) { Log.Info(Area, $"Control connection: {ex.Message}"); }
-        finally { End(reason); }
+        finally { End(reason, byHost); }
     }
 
     private async Task PingLoop()
@@ -165,12 +168,12 @@ public sealed class VibeClient : IRangeSource, IAsyncDisposable
         File.Move(temp, path, overwrite: true);
     }
 
-    private void End(string reason)
+    private void End(string reason, bool byHost)
     {
         if (Interlocked.Exchange(ref _ended, 1) != 0) return;
         _cts.Cancel();
         foreach (var t in _lyrics.Values) t.TrySetCanceled();
-        Ended?.Invoke(reason);
+        Ended?.Invoke(reason, byHost);
     }
 
     // ------------------------------------------------------------------ data
@@ -210,7 +213,7 @@ public sealed class VibeClient : IRangeSource, IAsyncDisposable
         {
             _dataGone = true;
             foreach (var t in _pending.Values) t.TrySetException(new IOException("Lost the connection to the host."));
-            End("Lost the connection to the host.");
+            End("Lost the connection to the host.", false);
         }
     }
 

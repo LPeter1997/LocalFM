@@ -7,10 +7,11 @@ using System.Text;
 namespace LocalFM.Vibe.Net;
 
 /// <summary>
-/// What a friend needs to join: where the host can be reached, the host's certificate fingerprint (so nobody
-/// can stand in for it) and the join secret. Shared as a short text code: <c>lfmvibe1-</c> + base64url.
+/// What a friend needs to join: where the host can be reached (LAN, VPN and, with a router mapping, public
+/// addresses; each with its port), the host's certificate fingerprint (so nobody can stand in for it) and the
+/// join secret. Shared as a short text code: <c>lfmvibe1-</c> + base64url.
 /// </summary>
-public sealed record Invite(IReadOnlyList<IPAddress> Addresses, int Port, byte[] Fingerprint, byte[] Secret, string HostName)
+public sealed record Invite(IReadOnlyList<IPEndPoint> Endpoints, byte[] Fingerprint, byte[] Secret, string HostName)
 {
     public const string Prefix = "lfmvibe1-";
 
@@ -20,17 +21,17 @@ public sealed record Invite(IReadOnlyList<IPAddress> Addresses, int Port, byte[]
         if (name.Length > 60) name = name[..60];
         using var ms = new MemoryStream();
         Span<byte> port = stackalloc byte[2];
-        BinaryPrimitives.WriteUInt16BigEndian(port, (ushort)Port);
-        ms.Write(port);
         ms.WriteByte((byte)Fingerprint.Length); ms.Write(Fingerprint);
         ms.WriteByte((byte)Secret.Length); ms.Write(Secret);
         ms.WriteByte((byte)name.Length); ms.Write(name);
-        var addrs = Addresses.Take(16).ToList();
-        ms.WriteByte((byte)addrs.Count);
-        foreach (var a in addrs)
+        var eps = Endpoints.Take(16).ToList();
+        ms.WriteByte((byte)eps.Count);
+        foreach (var ep in eps)
         {
-            var b = a.GetAddressBytes();
+            var b = ep.Address.GetAddressBytes();
             ms.WriteByte((byte)b.Length); ms.Write(b);
+            BinaryPrimitives.WriteUInt16BigEndian(port, (ushort)ep.Port);
+            ms.Write(port);
         }
         return Prefix + Convert.ToBase64String(ms.ToArray()).TrimEnd('=').Replace('+', '-').Replace('/', '_');
     }
@@ -46,20 +47,22 @@ public sealed record Invite(IReadOnlyList<IPAddress> Addresses, int Port, byte[]
             string b64 = text[Prefix.Length..].Replace('-', '+').Replace('_', '/');
             b64 = b64.PadRight(b64.Length + (4 - b64.Length % 4) % 4, '=');
             var r = new Reader(Convert.FromBase64String(b64));
-            int port = r.U16();
             var fp = r.Bytes(r.U8());
             var secret = r.Bytes(r.U8());
             var name = Encoding.UTF8.GetString(r.Bytes(r.U8()));
             int n = r.U8();
-            var addrs = new List<IPAddress>();
+            var eps = new List<IPEndPoint>();
             for (int i = 0; i < n; i++)
             {
                 int len = r.U8();
                 if (len is not (4 or 16)) return false;
-                addrs.Add(new IPAddress(r.Bytes(len)));
+                var addr = new IPAddress(r.Bytes(len));
+                int port = r.U16();
+                if (port == 0) return false;
+                eps.Add(new IPEndPoint(addr, port));
             }
-            if (port == 0 || fp.Length != 32 || secret.Length < 16 || addrs.Count == 0) return false;
-            invite = new Invite(addrs, port, fp, secret, name);
+            if (fp.Length != 32 || secret.Length < 16 || eps.Count == 0) return false;
+            invite = new Invite(eps, fp, secret, name);
             return true;
         }
         catch (Exception e) when (e is FormatException or IndexOutOfRangeException or ArgumentException) { return false; }

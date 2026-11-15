@@ -15,7 +15,7 @@ namespace LocalFM.Vibe.Client;
 /// position. Tracks change gaplessly in our own engine; the follower only steps in when we are on the wrong
 /// track or drift too far, and then jumps to where the host is "now" (computed on the engine thread).
 /// </summary>
-public sealed class Follower : IFollowSource, IAsyncDisposable
+public sealed class Follower : IFollowSource, IRangeSource, IAsyncDisposable
 {
     private const string Area = "Vibe";
     /// <summary>Drift beyond this is corrected with a seek (a short soft blip).</summary>
@@ -26,7 +26,8 @@ public sealed class Follower : IFollowSource, IAsyncDisposable
     private static readonly TimeSpan Cooldown = TimeSpan.FromSeconds(1.5);
     private static readonly TimeSpan OpenTimeout = TimeSpan.FromSeconds(15);
 
-    private readonly VibeClient _client;
+    private VibeClient _client;
+    private QueueWindow? _lastWindow;
     private readonly PlayerService _player;
     private readonly RemoteMediaCache _cache;
     private readonly Dictionary<Ulid, Entry> _entries = new();
@@ -46,7 +47,7 @@ public sealed class Follower : IFollowSource, IAsyncDisposable
     {
         _client = client;
         _player = player;
-        _cache = new RemoteMediaCache(cacheDir, client);
+        _cache = new RemoteMediaCache(cacheDir, this);
         _coverDir = Path.Combine(cacheDir, "covers");
         Directory.CreateDirectory(_coverDir);
         client.WindowChanged += Poke;
@@ -56,6 +57,22 @@ public sealed class Follower : IFollowSource, IAsyncDisposable
     }
 
     public string HostName => _client.HostName;
+
+    /// <summary>Continues with a new connection to the same host (after the old one broke). Playback goes on
+    /// from what is cached meanwhile; item ids are the host's, so nothing restarts.</summary>
+    public void Reattach(VibeClient client)
+    {
+        var old = _client;
+        old.WindowChanged -= Poke;
+        old.TimelineChanged -= Poke;
+        _client = client;
+        client.WindowChanged += Poke;
+        client.TimelineChanged += Poke;
+        Poke();
+    }
+
+    ValueTask<int> IRangeSource.ReadAsync(string mediaId, long offset, Memory<byte> buffer, CancellationToken ct) =>
+        _client.ReadAsync(mediaId, offset, buffer, ct);
     /// <summary>How far our speaker is from the host's (positive: we are late), when known.</summary>
     public TimeSpan? LastError { get; private set; }
 
@@ -81,7 +98,9 @@ public sealed class Follower : IFollowSource, IAsyncDisposable
 
     private List<Entry> SyncWindow()
     {
-        var window = _client.Window?.Items ?? [];
+        // A fresh connection has no window yet: keep the last one so what follows stays queued.
+        if (_client.Window is { } w) _lastWindow = w;
+        var window = _lastWindow?.Items ?? [];
         var list = new List<Entry>();
         lock (_gate)
         {

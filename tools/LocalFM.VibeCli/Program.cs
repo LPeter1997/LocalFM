@@ -7,7 +7,7 @@ using LocalFM.Vibe;
 using LocalFM.Vibe.Net;
 
 // Headless vibe harness (no library, no UI), for trying vibes between machines:
-//   LocalFM.VibeCli host [--null] [--port N] file1 file2 ...   prints an invite, plays the files
+//   LocalFM.VibeCli host [--null] [--port N] [--no-map] file1 file2 ...   prints an invite, plays the files
 //   LocalFM.VibeCli join [--null] <invite>                     follows that vibe
 // --debug shows sync decisions.
 if (args.Length < 2 || args[0] is not ("host" or "join"))
@@ -35,16 +35,21 @@ if (args[0] == "host")
     var tracks = rest.Select((f, i) => new TrackInfo(Ulid.NewUlid(), Ulid.NewUlid(), Ulid.NewUlid(), Path.GetFullPath(f),
         Path.GetFileNameWithoutExtension(f), "VibeCli", "Files", null, Ulid.Empty, null, 1, i + 1, null, null, null,
         null, null, null, null)).ToList();
-    var host = await vibe.StartHostingAsync("VibeCli", port);
+    var host = await vibe.StartHostingAsync("VibeCli", port, mapPort: !args.Contains("--no-map"));
     Console.WriteLine($"Invite: {host.Invite.Encode()}");
-    Console.WriteLine($"Listening on port {host.Port}; addresses: {string.Join(", ", host.Invite.Addresses)}");
+    Console.WriteLine($"Listening on port {host.Port}; reachable at: {string.Join(", ", host.Invite.Endpoints)}");
+    vibe.Changed += () => { if (vibe.Reachability != Reachability.Checking) Console.WriteLine($"\nReachability: {vibe.Reachability} {vibe.Mapping?.EndPoint}"); };
     host.ListenersChanged += () => Console.WriteLine($"\nListeners: {string.Join(", ", host.Listeners.Select(l => l.Name))}");
     player.PlayTracks(tracks, 0);
 }
 else
 {
     if (!Invite.TryDecode(rest[0], out var invite)) { Console.Error.WriteLine("Not a vibe invite."); return 1; }
-    vibe.Changed += () => { if (vibe.Role == VibeRole.None) { Console.WriteLine($"\nEnded: {vibe.EndedReason}"); stop.TrySetResult(); } };
+    vibe.Changed += () =>
+    {
+        if (vibe.Role == VibeRole.None) { Console.WriteLine($"\nEnded: {vibe.EndedReason}"); stop.TrySetResult(); }
+        else if (vibe.Reconnecting) Console.WriteLine("\nReconnecting…");
+    };
     await vibe.JoinAsync(invite, "VibeCli");
     Console.WriteLine($"Listening to {vibe.HostName}");
 }
