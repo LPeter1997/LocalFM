@@ -64,6 +64,11 @@ public partial class MainWindow : Window
 
     private static readonly FilePickerFileType BundleType = new("LocalFM knowledge base") { Patterns = ["*.localfm-kb"] };
 
+    private static readonly FilePickerFileType ImportType = new("Music and zips")
+    {
+        Patterns = ["*.zip", .. LocalFM.Library.Import.Scanner.AudioExtensions.Select(e => "*" + e)],
+    };
+
     /// <summary>The person asked to switch to the miniplayer.</summary>
     public event Action? MiniPlayerRequested;
 
@@ -88,6 +93,19 @@ public partial class MainWindow : Window
                 {
                     Title = "Import knowledge base", AllowMultiple = false, FileTypeFilter = [BundleType, FilePickerFileTypes.All],
                 });
+                return files.Count > 0 ? files[0].TryGetLocalPath() : null;
+            };
+            vm.PickImportFiles = async () =>
+            {
+                var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+                {
+                    Title = "Import music", AllowMultiple = true, FileTypeFilter = [ImportType, FilePickerFileTypes.All],
+                });
+                return files.Select(f => f.TryGetLocalPath()).OfType<string>().ToList();
+            };
+            vm.PickProgram = async () =>
+            {
+                var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions { Title = "Locate yt-dlp", AllowMultiple = false });
                 return files.Count > 0 ? files[0].TryGetLocalPath() : null;
             };
             vm.OpenUrl = url =>
@@ -191,6 +209,18 @@ public partial class MainWindow : Window
                     if (vm.CurrentPage is AlbumsViewModel { Profile: { } profile }) await profile.LookUpCommand.ExecuteAsync(null);
                 }
                 else if (vm.Nav.FirstOrDefault(n => n.Name.StartsWith(page, StringComparison.OrdinalIgnoreCase)) is { } nav) vm.Navigate(nav);
+            }
+            // Import page states: a preview of <path>, optionally imported (into the snapshot home, never ~/Music).
+            if (Environment.GetEnvironmentVariable("LOCALFM_SNAPSHOT_IMPORT") is { Length: > 0 } importPath
+                && Vm is { CurrentPage: ImportViewModel import } vi)
+            {
+                await vi.Host.Import.SetImportFolderAsync(Path.Combine(vi.Host.Paths.Root, "imported"));
+                await import.ResolveManyAsync([importPath]);
+                if (Environment.GetEnvironmentVariable("LOCALFM_SNAPSHOT_IMPORT_RUN") == "1")
+                {
+                    await import.ImportSelectedCommand.ExecuteAsync(null);
+                    await Task.Delay(2500);
+                }
             }
             if (Environment.GetEnvironmentVariable("LOCALFM_SNAPSHOT_PLAY") == "1" && Vm is { } v2)
             {

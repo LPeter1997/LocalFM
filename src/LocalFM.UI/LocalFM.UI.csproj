@@ -19,5 +19,6 @@
   <ItemGroup>
     <ProjectReference Include="..\LocalFM.App\LocalFM.App.csproj" />
     <ProjectReference Include="..\LocalFM.Desktop\LocalFM.Desktop.csproj" />
+    <ProjectReference Include="..\LocalFM.Ingest\LocalFM.Ingest.csproj" />
   </ItemGroup>
 </Project>

@@ -17,7 +17,7 @@ The app has a built-in snapshot mode (`src/LocalFM.UI/Views/MainWindow.axaml.cs`
 stealing focus. `LOCALFM_OUTPUT=null` keeps playback silent while the audio clock still runs, so lyrics,
 position and visualizers move as in real use. Other options: `LOCALFM_SNAPSHOT_PAGE` (a nav page,
 `album`, `album:<title>`, `match`, `move`, `edit`, `mini`, `artist:<name>`), `_PLAY=1`, `_LYRICS=1`, `_NOWPLAYING=<mode>`, `_WAIT=<ms>`,
-`_WIDTH`/`_HEIGHT`, `_SCROLL=<px>`. Add an option there when a state you need can't be reached.
+`_WIDTH`/`_HEIGHT`, `_SCROLL=<px>`, `_IMPORT=<zip/folder/link>` (Import page preview; `_IMPORT_RUN=1` also imports it into `<home>/imported`). Add an option there when a state you need can't be reached.
 
 Snapshots need a live desktop: while the session is locked (`loginctl show-session <id> -p LockedHint`),
 the compositor stops giving new windows frames, so only the first frame is captured and any shot that

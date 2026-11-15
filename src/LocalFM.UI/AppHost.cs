@@ -1,5 +1,6 @@
 using LocalFM.App;
 using LocalFM.Core;
+using LocalFM.Ingest;
 using LocalFM.Library;
 using LocalFM.Library.Import;
 using LocalFM.Metadata;
@@ -22,6 +23,7 @@ public sealed class AppHost : IDisposable
         Scanner = new Scanner(Db, Images);
         Watcher = new FolderWatcher(Scanner);
         Metadata = new MetadataService(Db, Images, History);
+        Import = new ImportService(Db, Paths, Scanner, Watcher, History);
 
         try
         {
@@ -52,6 +54,7 @@ public sealed class AppHost : IDisposable
     public Scanner Scanner { get; }
     public FolderWatcher Watcher { get; }
     public MetadataService Metadata { get; }
+    public ImportService Import { get; }
     public PlaybackEngine Engine { get; }
     public PlayerService Player { get; }
     public string? StartupWarning { get; }
@@ -68,6 +71,7 @@ public sealed class AppHost : IDisposable
                     if (Directory.Exists(f)) await Sources.AddFolderAsync(Db, f).ConfigureAwait(false);
                 foreach (var s in Sources.List(Db).Where(s => s.Enabled)) Watcher.Watch(s);
                 await Scanner.ScanAllAsync().ConfigureAwait(false);
+                Import.Start(); // after the startup scan, so resumed imports do not compete with it
             }
             catch (Exception ex) { Log.Error("Host", "Startup scan failed", ex); }
         });
@@ -75,6 +79,7 @@ public sealed class AppHost : IDisposable
 
     public void Dispose()
     {
+        Import.Dispose();
         Watcher.Dispose();
         Player.Dispose();
         Engine.Dispose();

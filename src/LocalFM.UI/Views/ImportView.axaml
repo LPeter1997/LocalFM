@@ -1,0 +1,157 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:LocalFM.UI.ViewModels"
+             xmlns:c="using:LocalFM.UI.Controls"
+             x:Class="LocalFM.UI.Views.ImportView"
+             x:DataType="vm:ImportViewModel"
+             DragDrop.AllowDrop="True">
+  <UserControl.Styles>
+    <!-- Row actions appear on hover, like the queue. -->
+    <Style Selector="Border.jobrow Button.hover"><Setter Property="Opacity" Value="0" /></Style>
+    <Style Selector="Border.jobrow:pointerover Button.hover"><Setter Property="Opacity" Value="1" /></Style>
+    <Style Selector="Border.jobrow:pointerover"><Setter Property="Background" Value="{StaticResource Surface2}" /></Style>
+    <Style Selector="Border#DropZone.dragover"><Setter Property="BorderBrush" Value="{StaticResource Accent}" /></Style>
+  </UserControl.Styles>
+  <ScrollViewer>
+  <!-- A capped star column: the page keeps one width whatever it shows, and stays left-aligned like the others. -->
+  <Grid>
+  <Grid.ColumnDefinitions><ColumnDefinition Width="*" MaxWidth="908" /><ColumnDefinition Width="0.0001*" /></Grid.ColumnDefinitions>
+  <StackPanel Margin="24,0,24,12" Spacing="14">
+    <TextBlock Classes="h1" Text="Import" />
+    <TextBlock Classes="muted" TextWrapping="Wrap">
+      Bring music into your library: a link through yt-dlp, or the zips and folders you downloaded from a store or a
+      Google Takeout export. Files are put in the import folder by artist and album, then scanned like any other music.
+    </TextBlock>
+
+    <!-- Integrations -->
+    <Border Background="{StaticResource Surface}" CornerRadius="10" Padding="14,10">
+      <Grid ColumnDefinitions="Auto,*,Auto">
+        <c:Icon Classes="icon" Data="{StaticResource IcoWave}" Stroke="{StaticResource Muted}" VerticalAlignment="Center" />
+        <StackPanel Grid.Column="1" Margin="12,0" VerticalAlignment="Center">
+          <TextBlock Text="{Binding YtDlpStatus}" FontWeight="SemiBold" />
+          <TextBlock Text="{Binding YtDlpNote}" Classes="faint small" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap"
+                     ToolTip.Tip="{Binding YtDlpNote}" IsVisible="{Binding YtDlpNote, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+        </StackPanel>
+        <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+          <Button Classes="ghost" Command="{Binding UpdateYtDlpCommand}" IsVisible="{Binding YtDlpAvailable}" IsEnabled="{Binding !Updating}">Update</Button>
+          <Button Classes="ghost" Command="{Binding LocateYtDlpCommand}">Locate…</Button>
+          <Button Classes="flat" Command="{Binding DetectCommand}" ToolTip.Tip="Look again">
+            <c:Icon Classes="icon" Data="{StaticResource IcoRefresh}" Width="16" Height="16" />
+          </Button>
+        </StackPanel>
+      </Grid>
+    </Border>
+
+    <!-- Input -->
+    <Border x:Name="DropZone" Background="{StaticResource Surface}" CornerRadius="10" Padding="14,12"
+            BorderThickness="1" BorderBrush="Transparent">
+      <StackPanel Spacing="10">
+        <Grid ColumnDefinitions="*,Auto">
+          <TextBox x:Name="InputBox" Text="{Binding Input}" PlaceholderText="Paste a link, or drop files, folders or a zip here"
+                   IsEnabled="{Binding !Resolving}">
+            <TextBox.KeyBindings><KeyBinding Gesture="Enter" Command="{Binding ResolveCommand}" /></TextBox.KeyBindings>
+          </TextBox>
+          <Button Grid.Column="1" Classes="primary" Margin="8,0,0,0" Command="{Binding ResolveCommand}" IsEnabled="{Binding !Resolving}">Look up</Button>
+        </Grid>
+        <StackPanel Orientation="Horizontal" Spacing="8">
+          <Button Classes="ghost" Command="{Binding PickFilesCommand}" IsEnabled="{Binding !Resolving}">Choose files or zips…</Button>
+          <Button Classes="ghost" Command="{Binding PickFolderCommand}" IsEnabled="{Binding !Resolving}">Choose folder…</Button>
+        </StackPanel>
+        <TextBlock Text="{Binding Message}" Classes="muted small" TextWrapping="Wrap"
+                   IsVisible="{Binding Message, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+      </StackPanel>
+    </Border>
+
+    <!-- Preview -->
+    <StackPanel Spacing="8" IsVisible="{Binding HasPreview}">
+      <Grid ColumnDefinitions="*,Auto">
+        <StackPanel VerticalAlignment="Center">
+          <TextBlock Classes="h2" Text="{Binding PreviewTitle}" TextTrimming="CharacterEllipsis" />
+          <TextBlock Text="{Binding PreviewNote}" Classes="faint small" TextWrapping="Wrap"
+                     IsVisible="{Binding PreviewNote, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+        </StackPanel>
+        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+          <Button Classes="ghost" Command="{Binding ToggleAllCommand}" Content="{Binding ToggleAllText}" />
+          <Button Classes="ghost" Command="{Binding ClearPreviewCommand}">Discard</Button>
+          <Button Classes="primary" Command="{Binding ImportSelectedCommand}" IsEnabled="{Binding SelectedCount}">
+            <TextBlock><Run Text="Import " /><Run Text="{Binding SelectedCount}" /></TextBlock>
+          </Button>
+        </StackPanel>
+      </Grid>
+      <ItemsControl ItemsSource="{Binding Candidates}">
+        <ItemsControl.ItemTemplate>
+          <DataTemplate x:DataType="vm:CandidateViewModel">
+            <Border CornerRadius="8" Padding="8,6" Classes="jobrow">
+              <Grid ColumnDefinitions="Auto,*,Auto,Auto,52">
+                <CheckBox IsChecked="{Binding Selected}" VerticalAlignment="Center" MinWidth="0" Margin="0,0,8,0" />
+                <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                  <TextBlock Text="{Binding Title}" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding Candidate.Input}" />
+                  <TextBlock Text="{Binding Detail}" Classes="muted small" TextTrimming="CharacterEllipsis" />
+                </StackPanel>
+                <Border Grid.Column="2" CornerRadius="5" Background="{StaticResource Surface3}" Padding="6,2" Margin="8,0,0,0"
+                        VerticalAlignment="Center" IsVisible="{Binding HasLicense}">
+                  <TextBlock Text="{Binding License}" Classes="small" />
+                </Border>
+                <TextBlock Grid.Column="3" Text="In library" Classes="faint small" Margin="8,0,0,0" VerticalAlignment="Center"
+                           IsVisible="{Binding Owned}" />
+                <TextBlock Grid.Column="4" Text="{Binding Duration}" Classes="faint small" HorizontalAlignment="Right" VerticalAlignment="Center" />
+              </Grid>
+            </Border>
+          </DataTemplate>
+        </ItemsControl.ItemTemplate>
+      </ItemsControl>
+      <TextBlock Text="{Binding ImportHint}" Classes="faint small" />
+    </StackPanel>
+
+    <!-- Jobs -->
+    <StackPanel Spacing="8" IsVisible="{Binding HasJobs}">
+      <Grid ColumnDefinitions="*,Auto">
+        <TextBlock Classes="h2" Text="Imports" VerticalAlignment="Center" />
+        <Button Grid.Column="1" Classes="ghost" Command="{Binding ClearFinishedCommand}" IsVisible="{Binding HasFinished}">Clear finished</Button>
+      </Grid>
+      <ItemsControl ItemsSource="{Binding Jobs}">
+        <ItemsControl.ItemTemplate>
+          <DataTemplate x:DataType="vm:ImportJobViewModel">
+            <Border CornerRadius="8" Padding="10,6" Classes="jobrow">
+              <Grid ColumnDefinitions="*,Auto,Auto" RowDefinitions="Auto,Auto">
+                <StackPanel VerticalAlignment="Center">
+                  <TextBlock Text="{Binding Title}" TextTrimming="CharacterEllipsis" />
+                  <TextBlock Text="{Binding Detail}" Classes="muted small" TextTrimming="CharacterEllipsis"
+                             IsVisible="{Binding Detail, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                </StackPanel>
+                <TextBlock Grid.Column="1" Text="{Binding State}" Classes="muted small" VerticalAlignment="Center" Margin="12,0"
+                           MaxWidth="320" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding State}"
+                           Foreground="{Binding Failed, Converter={x:Static vm:ImportViewModel.FailedBrush}}" />
+                <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="2" VerticalAlignment="Center">
+                  <Button Classes="flat hover" ToolTip.Tip="Open album" IsVisible="{Binding CanOpen}"
+                          Command="{Binding $parent[UserControl].((vm:ImportViewModel)DataContext).OpenJobCommand}" CommandParameter="{Binding}">
+                    <c:Icon Classes="icon" Data="{StaticResource IcoAlbum}" Width="16" Height="16" />
+                  </Button>
+                  <Button Classes="flat hover" ToolTip.Tip="Try again" IsVisible="{Binding CanRetry}"
+                          Command="{Binding $parent[UserControl].((vm:ImportViewModel)DataContext).RetryJobCommand}" CommandParameter="{Binding}">
+                    <c:Icon Classes="icon" Data="{StaticResource IcoRefresh}" Width="16" Height="16" />
+                  </Button>
+                  <Button Classes="flat hover" ToolTip.Tip="Cancel" IsVisible="{Binding CanCancel}"
+                          Command="{Binding $parent[UserControl].((vm:ImportViewModel)DataContext).CancelJobCommand}" CommandParameter="{Binding}">
+                    <c:Icon Classes="icon" Data="{StaticResource IcoClose}" Width="16" Height="16" />
+                  </Button>
+                </StackPanel>
+                <ProgressBar Grid.Row="1" Grid.ColumnSpan="3" Minimum="0" Maximum="1" Value="{Binding Progress}" Height="3" MinHeight="3"
+                             CornerRadius="2" Margin="0,6,0,0" IsVisible="{Binding Running}" />
+              </Grid>
+            </Border>
+          </DataTemplate>
+        </ItemsControl.ItemTemplate>
+      </ItemsControl>
+    </StackPanel>
+
+    <Grid ColumnDefinitions="*,Auto" Margin="0,6,0,0">
+      <TextBlock Classes="faint small" VerticalAlignment="Center" TextTrimming="PathSegmentEllipsis" ToolTip.Tip="{Binding ImportFolder}">
+        <Run Text="Import folder: " /><Run Text="{Binding ImportFolder}" />
+      </TextBlock>
+      <Button Grid.Column="1" Classes="ghost" Command="{Binding ChangeFolderCommand}">Change…</Button>
+    </Grid>
+  </StackPanel>
+  </Grid>
+  </ScrollViewer>
+</UserControl>

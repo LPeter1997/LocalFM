@@ -48,6 +48,7 @@ public sealed partial class MainViewModel : ObservableObject
             new("Stats", Icon("IcoStats"), new StatsViewModel(this)),
             new("Tidy up", Icon("IcoMagic"), new TidyViewModel(this)),
             new("Sound", Icon("IcoSliders"), new SoundViewModel(this)),
+            new("Import", Icon("IcoImport"), new ImportViewModel(this)),
             new("Sources", Icon("IcoFolder"), Sources),
         ];
         _selectedNav = Nav[0];
@@ -118,6 +119,12 @@ public sealed partial class MainViewModel : ObservableObject
 
     /// <summary>Set by the window: asks for a knowledge base file to open; returns a local path.</summary>
     public Func<Task<string?>>? PickOpenFile { get; set; }
+
+    /// <summary>Set by the window: asks for zips or audio files to import; returns local paths.</summary>
+    public Func<Task<IReadOnlyList<string>>>? PickImportFiles { get; set; }
+
+    /// <summary>Set by the window: asks for a program (the yt-dlp executable); returns a local path.</summary>
+    public Func<Task<string?>>? PickProgram { get; set; }
 
     /// <summary>Set by the window: opens a web link in the person's browser.</summary>
     public Action<string>? OpenUrl { get; set; }

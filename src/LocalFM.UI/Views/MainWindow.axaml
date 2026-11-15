@@ -16,6 +16,7 @@
     <DataTemplate DataType="vm:PlaylistsViewModel"><v:PlaylistsView /></DataTemplate>
     <DataTemplate DataType="vm:QueueViewModel"><v:QueueView /></DataTemplate>
     <DataTemplate DataType="vm:SourcesViewModel"><v:SourcesView /></DataTemplate>
+    <DataTemplate DataType="vm:ImportViewModel"><v:ImportView /></DataTemplate>
     <DataTemplate DataType="vm:AlbumEditorViewModel"><v:AlbumEditorView /></DataTemplate>
     <DataTemplate DataType="vm:TidyViewModel"><v:TidyView /></DataTemplate>
     <DataTemplate DataType="vm:SoundViewModel"><v:SoundView /></DataTemplate>
