@@ -113,6 +113,7 @@ public sealed class MprisSession : IPathMethodHandler, IDisposable
         bool hasTrack = item is not null;
         int count = _player.Snapshot(out int idx).Count;
         bool any = count > 0;
+        bool own = !_player.IsFollowing;
         return new()
         {
             ["PlaybackStatus"] = Status(),
@@ -124,12 +125,13 @@ public sealed class MprisSession : IPathMethodHandler, IDisposable
             ["Metadata"] = Metadata(item),
             ["Volume"] = (double)_player.Volume,
             ["Position"] = Micros(_player.Position),
-            ["CanGoNext"] = idx + 1 < count || _player.Repeat == RepeatMode.All && count > 0,
-            ["CanGoPrevious"] = hasTrack,
-            ["CanPlay"] = any,
-            ["CanPause"] = any,
-            ["CanSeek"] = hasTrack,
-            ["CanControl"] = true,
+            // Listening to a vibe: the host controls playback (volume stays ours).
+            ["CanGoNext"] = own && (idx + 1 < count || _player.Repeat == RepeatMode.All && count > 0),
+            ["CanGoPrevious"] = own && hasTrack,
+            ["CanPlay"] = own && any,
+            ["CanPause"] = own && any,
+            ["CanSeek"] = own && hasTrack,
+            ["CanControl"] = own,
         };
     }
 

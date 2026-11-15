@@ -78,7 +78,7 @@ public sealed class PlayerService : IDisposable
 
     public void PlayTracks(IReadOnlyList<TrackInfo> tracks, int startIndex = 0)
     {
-        if (tracks.Count == 0 || IsFollowing) return;
+        if (tracks.Count == 0 || Blocked()) return;
         lock (_gate)
         {
             Queue.Replace(tracks, startIndex);
@@ -88,7 +88,7 @@ public sealed class PlayerService : IDisposable
 
     public void PlayItem(Ulid itemId)
     {
-        if (IsFollowing) return;
+        if (Blocked()) return;
         lock (_gate)
         {
             if (Queue.SetCurrent(itemId)) StartCurrent(TimeSpan.Zero);
@@ -97,7 +97,7 @@ public sealed class PlayerService : IDisposable
 
     public void PlayPause()
     {
-        if (IsFollowing) return;
+        if (Blocked()) return;
         switch (_engine.State)
         {
             case PlaybackState.Playing: _engine.Pause(); break;
@@ -119,13 +119,13 @@ public sealed class PlayerService : IDisposable
 
     public void Pause()
     {
-        if (IsFollowing) return;
+        if (Blocked()) return;
         if (_engine.State == PlaybackState.Playing) _engine.Pause();
     }
 
     public void Next()
     {
-        if (IsFollowing) return;
+        if (Blocked()) return;
         lock (_gate)
         {
             var next = Queue.PeekNext();
@@ -140,7 +140,7 @@ public sealed class PlayerService : IDisposable
     /// <summary>Restarts the track when more than 3 s in, otherwise goes to the previous one.</summary>
     public void Previous()
     {
-        if (IsFollowing) return;
+        if (Blocked()) return;
         lock (_gate)
         {
             if (_engine.State != PlaybackState.Stopped && _engine.Position > TimeSpan.FromSeconds(3))
@@ -158,7 +158,7 @@ public sealed class PlayerService : IDisposable
 
     public void Seek(TimeSpan position)
     {
-        if (IsFollowing) return;
+        if (Blocked()) return;
         if (_engine.State == PlaybackState.Stopped)
         {
             lock (_gate) if (Queue.Current is { } c) _resume = (c, position);
@@ -170,22 +170,22 @@ public sealed class PlayerService : IDisposable
         Seeked?.Invoke(position);
     }
 
-    public void Stop() { if (!IsFollowing) _engine.Stop(); }
+    public void Stop() { if (!Blocked()) _engine.Stop(); }
 
     // ------------------------------------------------------------------ queue editing
 
-    public void Enqueue(IReadOnlyList<TrackInfo> tracks) { lock (_gate) if (!IsFollowing) Queue.Append(tracks); }
-    public void PlayNext(IReadOnlyList<TrackInfo> tracks) { lock (_gate) if (!IsFollowing) Queue.InsertNext(tracks); }
-    public void MoveItem(int from, int to) { lock (_gate) if (!IsFollowing) Queue.Move(from, to); }
-    public void ClearUpcoming() { lock (_gate) if (!IsFollowing) Queue.ClearUpcoming(); }
-    public void SetShuffle(bool on) { lock (_gate) if (!IsFollowing) Queue.SetShuffle(on); }
-    public void Reshuffle() { lock (_gate) if (!IsFollowing) Queue.Reshuffle(); }
+    public void Enqueue(IReadOnlyList<TrackInfo> tracks) { lock (_gate) if (!Blocked()) Queue.Append(tracks); }
+    public void PlayNext(IReadOnlyList<TrackInfo> tracks) { lock (_gate) if (!Blocked()) Queue.InsertNext(tracks); }
+    public void MoveItem(int from, int to) { lock (_gate) if (!Blocked()) Queue.Move(from, to); }
+    public void ClearUpcoming() { lock (_gate) if (!Blocked()) Queue.ClearUpcoming(); }
+    public void SetShuffle(bool on) { lock (_gate) if (!Blocked()) Queue.SetShuffle(on); }
+    public void Reshuffle() { lock (_gate) if (!Blocked()) Queue.Reshuffle(); }
 
     public void RemoveItem(Ulid itemId)
     {
         lock (_gate)
         {
-            if (IsFollowing) return;
+            if (Blocked()) return;
             bool wasCurrent = Queue.Current?.Id == itemId;
             Queue.Remove(itemId);
             if (wasCurrent && _engine.State != PlaybackState.Stopped)
@@ -207,7 +207,7 @@ public sealed class PlayerService : IDisposable
     public RepeatMode Repeat
     {
         get => Queue.Repeat;
-        set { lock (_gate) { if (IsFollowing) return; Queue.Repeat = value; UpdateNext(); } Changed?.Invoke(); }
+        set { lock (_gate) { if (Blocked()) return; Queue.Repeat = value; UpdateNext(); } Changed?.Invoke(); }
     }
 
     public IReadOnlyList<QueueItem> Snapshot(out int currentIndex)
@@ -457,6 +457,17 @@ public sealed class PlayerService : IDisposable
 
     /// <summary>Whether <see cref="Position"/> moves in real time (not for a moment after a start or seek).</summary>
     public bool PositionIsLive => _engine.PositionIsLive;
+
+    /// <summary>Raised when something tried to play, skip, seek or edit the queue while following a vibe (and
+    /// was ignored), so the UI can say why nothing happened.</summary>
+    public event Action? IgnoredWhileFollowing;
+
+    private bool Blocked()
+    {
+        if (_follow is null) return false;
+        IgnoredWhileFollowing?.Invoke();
+        return true;
+    }
 
     /// <summary>How long audio takes from the engine to the speaker.</summary>
     public TimeSpan OutputLatency => _engine.OutputLatency;

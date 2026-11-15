@@ -47,6 +47,13 @@ public sealed partial class MainViewModel : ObservableObject
             if (e.PropertyName == nameof(NowPlayingViewModel.CoverPath)) _ = Theme.CoverChangedAsync(NowPlaying.CoverPath);
         };
         Lyrics = new LyricsViewModel(host);
+        Vibe = new VibeViewModel(this);
+        Lyrics.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(LyricsViewModel.IsOpen) && Lyrics.IsOpen) Vibe.IsOpen = false;
+        };
+        host.Player.IgnoredWhileFollowing += () => Dispatcher.UIThread.Post(() =>
+            Notify($"You're listening to {Host.Vibe.HostName ?? "someone"}'s vibe. Leave it to play your own music."));
         Albums = new AlbumsViewModel(this);
         Queue = new QueueViewModel(this);
         Sources = new SourcesViewModel(this);
@@ -130,6 +137,7 @@ public sealed partial class MainViewModel : ObservableObject
         _ = Host.History.SetAsync(CoverColoursKey, value ? "1" : "0");
     }
     public LyricsViewModel Lyrics { get; }
+    public VibeViewModel Vibe { get; }
     public AlbumsViewModel Albums { get; }
     public QueueViewModel Queue { get; }
     public SourcesViewModel Sources { get; }
@@ -241,6 +249,7 @@ public sealed partial class MainViewModel : ObservableObject
     [RelayCommand]
     private void ShowNowPlayingAlbum()
     {
+        if (Host.Player.IsFollowing) return;
         if (Host.Player.Current?.Track is { } t) ShowAlbumOf(t);
     }
 
@@ -248,7 +257,7 @@ public sealed partial class MainViewModel : ObservableObject
     [RelayCommand]
     private void ShowNowPlayingArtist()
     {
-        if (Host.Player.Current?.Track is not { } t) return;
+        if (Host.Player.IsFollowing || Host.Player.Current?.Track is not { } t) return;
         var album = Host.Queries.Album(t.ReleaseId);
         foreach (var name in new[] { t.Artist, album?.Artist })
         {
@@ -265,10 +274,12 @@ public sealed partial class MainViewModel : ObservableObject
     [RelayCommand]
     private void MatchNowPlaying()
     {
+        if (Host.Player.IsFollowing) return;
         if (Host.Player.Current?.Track is { } t) ShowAlbumOf(t, openMatch: true);
     }
 
     [RelayCommand] private void ToggleLyrics() => Lyrics.IsOpen = !Lyrics.IsOpen;
+    [RelayCommand] private void ToggleVibe() => Vibe.IsOpen = !Vibe.IsOpen;
 
     public async Task RefreshPlaylistsAsync()
     {

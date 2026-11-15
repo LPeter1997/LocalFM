@@ -4,6 +4,8 @@
         xmlns:v="using:LocalFM.UI.Views"
         xmlns:c="using:LocalFM.UI.Controls"
         xmlns:ui="using:LocalFM.UI"
+        xmlns:net="using:LocalFM.Vibe.Net"
+        xmlns:host="using:LocalFM.Vibe.Host"
         x:Class="LocalFM.UI.Views.MainWindow"
         x:DataType="vm:MainViewModel"
         Title="LocalFM" Width="1280" Height="820" MinWidth="820" MinHeight="520">
@@ -160,6 +162,109 @@
           </Panel>
         </DockPanel>
       </Border>
+
+      <!-- Vibe together -->
+      <Border Grid.Column="1" x:Name="VibePanel" Width="380" Background="{StaticResource Surface}" BorderBrush="{StaticResource Line}" BorderThickness="1,0,0,0"
+              IsVisible="{Binding Vibe.IsOpen}">
+        <DockPanel DataContext="{Binding Vibe}" x:DataType="vm:VibeViewModel" Margin="0,14,0,0">
+          <TextBlock DockPanel.Dock="Top" Classes="h2" Text="Vibe together" Margin="20,0,20,8" />
+          <ScrollViewer>
+            <StackPanel Margin="20,4,20,20" Spacing="14">
+              <!-- Not in a vibe: start one or join one -->
+              <StackPanel Spacing="14" IsVisible="{Binding IsIdle}">
+                <TextBlock Classes="muted" TextWrapping="Wrap"
+                           Text="Listen to the same music at the same time with friends. You play, they hear it in sync, each with their own volume and sound." />
+                <StackPanel Spacing="6">
+                  <TextBlock Classes="faint small" Text="Your name" />
+                  <TextBox Text="{Binding Name}" MaxLength="40" />
+                </StackPanel>
+                <Button Classes="primary" HorizontalAlignment="Left" Content="Start a vibe" Command="{Binding StartHostingCommand}"
+                        IsEnabled="{Binding !Busy}" />
+                <StackPanel Spacing="6" Margin="0,8,0,0">
+                  <TextBlock Classes="faint small" Text="Join a friend's vibe" />
+                  <Grid ColumnDefinitions="*,Auto">
+                    <TextBox Text="{Binding JoinCode}" PlaceholderText="Paste an invite" IsEnabled="{Binding !Busy}">
+                      <TextBox.KeyBindings><KeyBinding Gesture="Enter" Command="{Binding JoinCommand}" /></TextBox.KeyBindings>
+                    </TextBox>
+                    <Button Grid.Column="1" Classes="ghost" Content="Join" Margin="8,0,0,0" Command="{Binding JoinCommand}"
+                            IsEnabled="{Binding !Busy}" />
+                  </Grid>
+                </StackPanel>
+                <StackPanel Spacing="6" IsVisible="{Binding HasNearby}">
+                  <TextBlock Classes="faint small" Text="On this network" />
+                  <ItemsControl ItemsSource="{Binding Nearby}">
+                    <ItemsControl.ItemTemplate>
+                      <DataTemplate x:DataType="net:NearbyVibe">
+                        <Grid ColumnDefinitions="*,Auto" Margin="0,2">
+                          <TextBlock Text="{Binding HostName}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                          <Button Grid.Column="1" Classes="ghost" Content="Join"
+                                  Command="{Binding $parent[ItemsControl].((vm:VibeViewModel)DataContext).JoinNearbyCommand}"
+                                  CommandParameter="{Binding}" />
+                        </Grid>
+                      </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                  </ItemsControl>
+                </StackPanel>
+              </StackPanel>
+
+              <!-- Hosting -->
+              <StackPanel Spacing="14" IsVisible="{Binding IsHosting}">
+                <TextBlock Classes="muted" TextWrapping="Wrap" Text="{Binding ReachabilityText}" />
+                <StackPanel Spacing="6">
+                  <TextBlock Classes="faint small" Text="Invite" />
+                  <TextBox Text="{Binding InviteCode}" IsReadOnly="True" TextWrapping="Wrap" FontSize="12" />
+                  <Button Classes="primary" HorizontalAlignment="Left" Content="Copy invite" Command="{Binding CopyInviteCommand}" />
+                </StackPanel>
+                <CheckBox IsChecked="{Binding VisibleOnNetwork}" Content="Visible on my network" />
+                <StackPanel Spacing="6">
+                  <TextBlock Classes="faint small" Text="{Binding ListenersTitle}" />
+                  <ItemsControl ItemsSource="{Binding Listeners}">
+                    <ItemsControl.ItemTemplate>
+                      <DataTemplate x:DataType="host:ListenerInfo">
+                        <Grid ColumnDefinitions="*,Auto">
+                          <TextBlock Text="{Binding Name}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                          <Button Grid.Column="1" Classes="flat" ToolTip.Tip="Remove from the vibe"
+                                  Command="{Binding $parent[ItemsControl].((vm:VibeViewModel)DataContext).KickCommand}"
+                                  CommandParameter="{Binding}">
+                            <c:Icon Classes="icon" Data="{StaticResource IcoClose}" Width="14" Height="14" />
+                          </Button>
+                        </Grid>
+                      </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                  </ItemsControl>
+                </StackPanel>
+                <Button Classes="ghost" HorizontalAlignment="Left" Content="End vibe" Command="{Binding StopCommand}" IsEnabled="{Binding !Busy}" />
+              </StackPanel>
+
+              <!-- Listening -->
+              <StackPanel Spacing="14" IsVisible="{Binding IsListening}">
+                <TextBlock TextWrapping="Wrap">
+                  <Run Text="Listening with " /><Run Text="{Binding HostName}" FontWeight="SemiBold" />
+                </TextBlock>
+                <TextBlock Classes="muted" TextWrapping="Wrap" IsVisible="{Binding ListeningStatus, Converter={x:Static ObjectConverters.IsNotNull}}"
+                           Text="{Binding ListeningStatus}" />
+                <StackPanel Spacing="6">
+                  <TextBlock Classes="faint small" Text="Here" />
+                  <ItemsControl ItemsSource="{Binding People}">
+                    <ItemsControl.ItemTemplate>
+                      <DataTemplate x:DataType="x:String">
+                        <TextBlock Text="{Binding}" Margin="0,2" TextTrimming="CharacterEllipsis" />
+                      </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                  </ItemsControl>
+                </StackPanel>
+                <TextBlock Classes="faint small" TextWrapping="Wrap"
+                           Text="The host picks the music. Your own queue is back when you leave." />
+                <Button Classes="ghost" HorizontalAlignment="Left" Content="Leave" Command="{Binding StopCommand}" IsEnabled="{Binding !Busy}" />
+              </StackPanel>
+
+              <ProgressBar IsIndeterminate="True" Width="120" HorizontalAlignment="Left" IsVisible="{Binding Busy}" />
+              <TextBlock Classes="muted" TextWrapping="Wrap" Foreground="{StaticResource Accent}" Text="{Binding Error}"
+                         IsVisible="{Binding Error, Converter={x:Static ObjectConverters.IsNotNull}}" />
+            </StackPanel>
+          </ScrollViewer>
+        </DockPanel>
+      </Border>
       </Grid>
       </Border>
     </Grid>
@@ -179,16 +284,16 @@
             </Border>
           </Button>
           <StackPanel Grid.Column="1" Margin="12,0,0,0" VerticalAlignment="Center" Spacing="2">
-            <TextBlock x:Name="BarTitle" Classes="link" Text="{Binding Title}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"
-                       HorizontalAlignment="Left" ToolTip.Tip="Go to album" />
-            <TextBlock x:Name="BarArtist" Classes="muted small link" Text="{Binding Artist}" TextTrimming="CharacterEllipsis"
-                       HorizontalAlignment="Left" ToolTip.Tip="Go to artist" />
+            <TextBlock x:Name="BarTitle" Classes.link="{Binding !IsFollowing}" Text="{Binding Title}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"
+                       HorizontalAlignment="Left" ToolTip.Tip="Go to album" ToolTip.ServiceEnabled="{Binding !IsFollowing}" />
+            <TextBlock x:Name="BarArtist" Classes="muted small" Classes.link="{Binding !IsFollowing}" Text="{Binding Artist}" TextTrimming="CharacterEllipsis"
+                       HorizontalAlignment="Left" ToolTip.Tip="Go to artist" ToolTip.ServiceEnabled="{Binding !IsFollowing}" />
             <TextBlock Text="{Binding Album}" Classes="faint small" TextTrimming="CharacterEllipsis" />
           </StackPanel>
         </Grid>
 
         <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2" MaxWidth="640">
-          <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Spacing="10">
+          <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Spacing="10" IsEnabled="{Binding !IsFollowing}">
             <Button Classes="flat" Classes.on="{Binding Shuffle}" Command="{Binding ToggleShuffleCommand}" ToolTip.Tip="Shuffle">
               <c:Icon Classes="icon" Data="{StaticResource IcoShuffle}" />
             </Button>
@@ -215,15 +320,20 @@
           <Grid ColumnDefinitions="44,*,44">
             <TextBlock Text="{Binding PositionText}" Classes="faint small" VerticalAlignment="Center" HorizontalAlignment="Right" />
             <Slider Grid.Column="1" x:Name="SeekSlider" Classes="seek" Minimum="0" Maximum="{Binding Duration}"
-                    Value="{Binding Position, Mode=OneWay}" IsEnabled="{Binding HasTrack}" Margin="10,-8" />
+                    Value="{Binding Position, Mode=OneWay}" IsEnabled="{Binding HasOwnTrack}" Margin="10,-8" />
             <TextBlock Grid.Column="2" Text="{Binding DurationText}" Classes="faint small" VerticalAlignment="Center" />
           </Grid>
         </StackPanel>
 
         <StackPanel Grid.Column="2" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center" Spacing="6">
-          <Button Classes="flat" ToolTip.Tip="Find metadata for this album" IsEnabled="{Binding HasTrack}"
+          <Button Classes="flat" ToolTip.Tip="Find metadata for this album" IsEnabled="{Binding HasOwnTrack}"
                   Command="{Binding $parent[Window].((vm:MainViewModel)DataContext).MatchNowPlayingCommand}">
             <c:Icon Classes="icon" Data="{StaticResource IcoMagic}" />
+          </Button>
+          <Button Classes="flat" Classes.on="{Binding $parent[Window].((vm:MainViewModel)DataContext).Vibe.InVibe}"
+                  ToolTip.Tip="{Binding $parent[Window].((vm:MainViewModel)DataContext).Vibe.ButtonTip}"
+                  Command="{Binding $parent[Window].((vm:MainViewModel)DataContext).ToggleVibeCommand}">
+            <c:Icon Classes="icon" Data="{StaticResource IcoVibe}" />
           </Button>
           <Button Classes="flat" Classes.on="{Binding $parent[Window].((vm:MainViewModel)DataContext).Lyrics.IsOpen}" ToolTip.Tip="Lyrics (L)"
                   Command="{Binding $parent[Window].((vm:MainViewModel)DataContext).ToggleLyricsCommand}">

@@ -179,6 +179,8 @@ public partial class MainWindow : Window
             case Key.Left: vm.NowPlaying.SeekBy(-5); break;
             case Key.L: vm.ToggleLyricsCommand.Execute(null); break;
             case Key.V: vm.ToggleNowPlayingCommand.Execute(null); break;
+            case Key.Escape when vm.Vibe.IsOpen: vm.Vibe.IsOpen = false; break;
+            case Key.Escape when vm.Lyrics.IsOpen: vm.Lyrics.IsOpen = false; break;
             case Key.Escape when vm.NowPlayingOpen: vm.NowPlayingOpen = false; break;
             case Key.M when ctrl: MiniPlayerRequested?.Invoke(); break;
             default: return;
@@ -238,6 +240,7 @@ public partial class MainWindow : Window
                 if (v2.Albums.Albums.FirstOrDefault() is { } first) v2.Albums.PlayCommand.Execute(first);
             }
             if (Environment.GetEnvironmentVariable("LOCALFM_SNAPSHOT_LYRICS") == "1" && Vm is { } v3) v3.Lyrics.IsOpen = true;
+            if (Environment.GetEnvironmentVariable("LOCALFM_SNAPSHOT_VIBE") == "1" && Vm is { } v5) v5.Vibe.IsOpen = true;
             if (Environment.GetEnvironmentVariable("LOCALFM_SNAPSHOT_NOWPLAYING") is { Length: > 0 } np && Vm is { } v4)
             {
                 v4.NowPlayingOpen = true;

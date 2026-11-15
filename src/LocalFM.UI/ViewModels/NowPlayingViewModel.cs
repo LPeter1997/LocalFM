@@ -26,7 +26,11 @@ public sealed partial class NowPlayingViewModel : ObservableObject
     [ObservableProperty] private string? _artist;
     [ObservableProperty] private string? _album;
     [ObservableProperty] private string? _coverPath;
-    [ObservableProperty] private bool _hasTrack;
+    [ObservableProperty] [NotifyPropertyChangedFor(nameof(HasOwnTrack))] private bool _hasTrack;
+    /// <summary>Listening to someone's vibe: they control playback, and the track is not in our library.</summary>
+    [ObservableProperty] [NotifyPropertyChangedFor(nameof(HasOwnTrack))] private bool _isFollowing;
+    /// <summary>A track of our own library is playing (album/artist links, metadata lookup).</summary>
+    public bool HasOwnTrack => HasTrack && !IsFollowing;
     [ObservableProperty] private bool _isPlaying;
     [ObservableProperty] private double _position;
     [ObservableProperty] private double _duration = 1;
@@ -71,6 +75,7 @@ public sealed partial class NowPlayingViewModel : ObservableObject
     public void CommitSeek(double seconds)
     {
         _player.Seek(TimeSpan.FromSeconds(seconds));
+        if (_player.IsFollowing) return; // the host's to do
         Position = seconds;
         PositionText = Converters.Time(TimeSpan.FromSeconds(seconds));
     }
@@ -82,8 +87,8 @@ public sealed partial class NowPlayingViewModel : ObservableObject
     [RelayCommand]
     private void ToggleShuffle()
     {
-        Shuffle = !Shuffle;
-        _player.SetShuffle(Shuffle);
+        _player.SetShuffle(!Shuffle);
+        Shuffle = _player.Queue.Shuffled;
     }
 
     [RelayCommand]
@@ -108,6 +113,7 @@ public sealed partial class NowPlayingViewModel : ObservableObject
     {
         var cur = _player.Current?.Track;
         HasTrack = cur is not null;
+        IsFollowing = _player.IsFollowing;
         Title = cur?.Title ?? "Nothing playing";
         Artist = cur?.Artist;
         Album = cur is null ? null : cur.Date is { Length: >= 4 } d ? $"{cur.Album} · {d[..4]}" : cur.Album;

@@ -88,7 +88,7 @@ public sealed class AppHost : IDisposable
         });
     }
 
-    /// <summary>--vibe-host / --vibe-join (until the vibe panel exists; handy for trying two instances).</summary>
+    /// <summary>--vibe-host / --vibe-join: handy for trying two instances. LOCALFM_VIBE_MAP=0 leaves the router alone.</summary>
     private async Task StartVibeAsync(VibeStart start)
     {
         try
@@ -100,7 +100,8 @@ public sealed class AppHost : IDisposable
             }
             else
             {
-                var host = await Vibe.StartHostingAsync().ConfigureAwait(false);
+                bool map = Environment.GetEnvironmentVariable("LOCALFM_VIBE_MAP") != "0";
+                var host = await Vibe.StartHostingAsync(mapPort: map).ConfigureAwait(false);
                 string text = host.Invite.Encode();
                 Log.Info("Host", $"Vibe invite: {text}");
                 Console.WriteLine($"Vibe invite: {text}");
