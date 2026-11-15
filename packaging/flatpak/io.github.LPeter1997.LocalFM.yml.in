@@ -1,0 +1,44 @@
+# Flatpak manifest template. package.sh writes the filled-in manifest next to the tarballs
+# (@VERSION@ and the sha256 of each architecture's distro tarball). Flathub builds from that.
+#
+# The app is the release tarball built with -p:LocalFMUpdater=false: Flatpak updates it, so the app only
+# says when a new version exists. FFmpeg (audio only) comes with the tarball. Importing from links needs the
+# host's yt-dlp, which a sandboxed app cannot run.
+id: io.github.LPeter1997.LocalFM
+runtime: org.freedesktop.Platform
+runtime-version: '26.08'
+sdk: org.freedesktop.Sdk
+command: localfm
+finish-args:
+  - --share=ipc
+  - --socket=x11
+  - --device=dri
+  - --socket=pulseaudio
+  # Online metadata, lyrics, artist profiles, and vibes (TCP, plus LAN discovery over multicast).
+  - --share=network
+  # Music libraries live anywhere; imports go to ~/Music/LocalFM by default.
+  - --filesystem=xdg-music
+  - --filesystem=home
+  - --filesystem=/media
+  - --filesystem=/mnt
+  - --filesystem=/run/media
+  # Media keys and the desktop's now-playing controls (MPRIS), and the tray icon.
+  - --own-name=org.mpris.MediaPlayer2.localfm
+  - --talk-name=org.kde.StatusNotifierWatcher
+modules:
+  - name: localfm
+    buildsystem: simple
+    build-commands:
+      - mkdir -p /app/lib/localfm /app/bin
+      - cp -a lib/. /app/lib/localfm/
+      - ln -s /app/lib/localfm/LocalFM /app/bin/localfm
+      - cp -a share/. /app/share/
+    sources:
+      - type: archive
+        only-arches: [x86_64]
+        url: https://github.com/LPeter1997/LocalFM/releases/download/v@VERSION@/localfm-@VERSION@-linux-x64.tar.gz
+        sha256: '@SHA256_X64@'
+      - type: archive
+        only-arches: [aarch64]
+        url: https://github.com/LPeter1997/LocalFM/releases/download/v@VERSION@/localfm-@VERSION@-linux-arm64.tar.gz
+        sha256: '@SHA256_ARM64@'

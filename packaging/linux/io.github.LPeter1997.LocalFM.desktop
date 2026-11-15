@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=LocalFM
+GenericName=Music player
+Comment=Play your own music, with everything there is to know about it
+Exec=localfm
+Icon=io.github.LPeter1997.LocalFM
+Terminal=false
+Categories=AudioVideo;Audio;Player;
+Keywords=music;player;library;lyrics;
+StartupWMClass=io.github.LPeter1997.LocalFM

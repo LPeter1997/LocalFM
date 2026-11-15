@@ -21,6 +21,8 @@ public sealed partial class YtDlpProvider(IProcessRunner runner, Func<string?> c
     private const string InfoTemplate =
         "after_move:%(.{id,title,track,artist,artists,creator,album,album_artist,release_year,release_date,track_number,uploader,channel,webpage_url,duration,license,thumbnails})j";
 
+    private static bool InFlatpak => Environment.GetEnvironmentVariable("FLATPAK_ID") is { Length: > 0 };
+
     public string? Executable()
     {
         string? configured = configuredPath();
@@ -33,9 +35,10 @@ public sealed partial class YtDlpProvider(IProcessRunner runner, Func<string?> c
         if (Executable() is not { } exe)
         {
             string? configured = configuredPath();
-            return new ProviderStatus(false, Note: string.IsNullOrWhiteSpace(configured)
-                ? "Not installed. Install yt-dlp (github.com/yt-dlp/yt-dlp) and LocalFM will find it."
-                : $"Not found at {configured}.");
+            return new ProviderStatus(false, Note: !string.IsNullOrWhiteSpace(configured) ? $"Not found at {configured}."
+                // The sandbox cannot run the system's programs; yt-dlp's single-file build (yt-dlp_linux) runs from home.
+                : InFlatpak ? "The Flatpak cannot run the system's yt-dlp. Locate yt-dlp_linux from its GitHub releases."
+                : "Not installed. Install yt-dlp (github.com/yt-dlp/yt-dlp) and LocalFM will find it.");
         }
         try
         {

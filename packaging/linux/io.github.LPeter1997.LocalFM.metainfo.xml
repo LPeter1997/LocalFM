@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- AppStream metadata for the Flatpak, deb and rpm (software centres, Flathub). Release entries are added
+     by package.sh from the version it builds. -->
+<component type="desktop-application">
+  <id>io.github.LPeter1997.LocalFM</id>
+  <name>LocalFM</name>
+  <summary>Play your own music, with everything there is to know about it</summary>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>MIT</project_license>
+  <developer id="io.github.lpeter1997">
+    <name>Peter Lenkefi</name>
+  </developer>
+  <description>
+    <p>
+      LocalFM is a music player for the music you own. It keeps a rich, local knowledge base about your library and
+      never needs an account:
+    </p>
+    <ul>
+      <li>Gapless playback, crossfade, an equalizer and ReplayGain</li>
+      <li>Album and track details, covers, synced lyrics and artist profiles from free online services, kept locally</li>
+      <li>Tidy up messy names and albums, and edit everything by hand</li>
+      <li>Listening statistics</li>
+      <li>Vibe together: friends listen to the same music at the same time, each with their own volume</li>
+    </ul>
+  </description>
+  <launchable type="desktop-id">io.github.LPeter1997.LocalFM.desktop</launchable>
+  <url type="homepage">https://github.com/LPeter1997/LocalFM</url>
+  <url type="bugtracker">https://github.com/LPeter1997/LocalFM/issues</url>
+  <url type="vcs-browser">https://github.com/LPeter1997/LocalFM</url>
+  <content_rating type="oars-1.1" />
+  <provides>
+    <binary>localfm</binary>
+  </provides>
+  <supports>
+    <control>pointing</control>
+    <control>keyboard</control>
+  </supports>
+  <requires>
+    <display_length compare="ge">720</display_length>
+  </requires>
+  <categories>
+    <category>AudioVideo</category>
+    <category>Audio</category>
+    <category>Player</category>
+  </categories>
+  <releases>
+    <!-- @RELEASES@ -->
+  </releases>
+</component>

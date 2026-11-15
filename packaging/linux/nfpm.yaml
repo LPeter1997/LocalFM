@@ -1,0 +1,66 @@
+# deb and rpm from the distro tarball's folder: package.sh runs nfpm inside it (nfpm does not expand
+# variables in content paths) and sets NFPM_ARCH and VERSION. The system package manager updates these
+# packages, so the app inside is built with -p:LocalFMUpdater=false. FFmpeg is bundled (an audio-only build).
+name: localfm
+arch: ${NFPM_ARCH}
+platform: linux
+version: ${VERSION}
+section: sound
+priority: optional
+maintainer: Peter Lenkefi <lenkefi.peti@gmail.com>
+description: |
+  Play your own music, with everything there is to know about it.
+  Gapless playback, crossfade, equalizer, covers, synced lyrics, artist
+  profiles, listening statistics, and listening together with friends.
+vendor: Peter Lenkefi
+homepage: https://github.com/LPeter1997/LocalFM
+license: MIT
+contents:
+  # tree keeps the folder (and the package owns it); a plain directory source is globbed flat.
+  - src: ./lib
+    dst: /usr/lib/localfm
+    type: tree
+  # The binary finds its native libraries next to itself through /proc/self/exe, which resolves this link.
+  - src: /usr/lib/localfm/LocalFM
+    dst: /usr/bin/localfm
+    type: symlink
+  # The shared folders under /usr/share belong to the system, so only these files are listed.
+  - src: ./share/applications/io.github.LPeter1997.LocalFM.desktop
+    dst: /usr/share/applications/io.github.LPeter1997.LocalFM.desktop
+  - src: ./share/metainfo/io.github.LPeter1997.LocalFM.metainfo.xml
+    dst: /usr/share/metainfo/io.github.LPeter1997.LocalFM.metainfo.xml
+  - src: ./share/icons/hicolor/512x512/apps/io.github.LPeter1997.LocalFM.png
+    dst: /usr/share/icons/hicolor/512x512/apps/io.github.LPeter1997.LocalFM.png
+  # rpm marks it %license; Debian keeps it as the package's copyright file.
+  - src: ./share/licenses/localfm/LICENSE
+    dst: /usr/share/licenses/localfm/LICENSE
+    type: license
+    packager: rpm
+  - src: ./share/licenses/localfm/LICENSE
+    dst: /usr/share/doc/localfm/copyright
+    packager: deb
+  # The bundled FFmpeg's licence (LGPL 2.1 or later).
+  - src: ./share/licenses/localfm/FFmpeg-COPYING.LGPLv2.1.txt
+    dst: /usr/share/licenses/localfm/FFmpeg-COPYING.LGPLv2.1.txt
+overrides:
+  deb:
+    depends:
+      - libc6 (>= 2.35)
+      - libfontconfig1
+      - libx11-6
+      - libice6
+      - libsm6
+      - libssl3 | libssl3t64
+      - libasound2 | libasound2t64
+      - libicu76 | libicu74 | libicu72 | libicu70
+    recommends:
+      - libpulse0
+  rpm:
+    depends:
+      - fontconfig
+      - libX11
+      - libICE
+      - libSM
+      - openssl-libs
+      - alsa-lib
+      - libicu

@@ -1,0 +1,21 @@
+# yaml-language-server: $schema=https://aka.ms/winget-manifest.defaultLocale.1.9.0.schema.json
+PackageIdentifier: LPeter1997.LocalFM
+PackageVersion: @VERSION@
+PackageLocale: en-US
+Publisher: Peter Lenkefi
+PublisherUrl: https://github.com/LPeter1997
+PackageName: LocalFM
+PackageUrl: https://github.com/LPeter1997/LocalFM
+License: MIT
+LicenseUrl: https://github.com/LPeter1997/LocalFM/blob/master/LICENSE
+ShortDescription: Play your own music, with everything there is to know about it
+Description: LocalFM is a music player for the music you own. Gapless playback, crossfade and an equalizer; covers, synced lyrics and artist profiles kept locally; tidy-up tools, listening statistics, and listening together with friends.
+Moniker: localfm
+Tags:
+  - music
+  - music-player
+  - audio
+  - lyrics
+ReleaseNotesUrl: https://github.com/LPeter1997/LocalFM/releases/tag/v@VERSION@
+ManifestType: defaultLocale
+ManifestVersion: 1.9.0
