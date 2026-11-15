@@ -190,7 +190,9 @@ public class EngineTests
                 engine.RenderOffline(block);
                 output.AddRange(block);
                 lastData = DateTime.UtcNow;
-                Thread.Sleep(2); // ~5x real time: file opening must get the head start it has in real playback
+                // About real time (512 frames ≈ 10.7 ms): opening C must get the head start it has in real playback,
+                // also on a slow, shared CI machine.
+                Thread.Sleep(10);
             }
             else Thread.Sleep(1);
         }

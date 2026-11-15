@@ -18,9 +18,11 @@ runs:
         RID: ${{ inputs.rid }}
       run: |
         prefix="$RUNNER_TEMP/ffmpeg"
-        [ "$RUNNER_OS" = Windows ] && prefix=$(cygpath -m "$prefix")
+        local=""
+        # GNU tar reads "D:/…" as a remote host; --force-local keeps it a file.
+        if [ "$RUNNER_OS" = Windows ]; then prefix=$(cygpath -m "$prefix"); local=--force-local; fi
         mkdir -p "$prefix"
-        tar -C "$prefix" -xzf "$RUNNER_TEMP/ffmpeg-$RID.tar.gz"
+        tar $local -C "$prefix" -xzf "$(cygpath -m "$RUNNER_TEMP" 2>/dev/null || echo "$RUNNER_TEMP")/ffmpeg-$RID.tar.gz"
         echo "FFMPEG_PREFIX=$prefix" >> "$GITHUB_ENV"
         case "$RUNNER_OS" in
           Linux) sudo apt-get update && sudo apt-get install -y ninja-build ;;

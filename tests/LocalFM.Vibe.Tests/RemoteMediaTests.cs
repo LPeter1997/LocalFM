@@ -46,7 +46,9 @@ public class RemoteMediaTests : IDisposable
     public void Seeking_ahead_of_the_download_fetches_that_part_first()
     {
         Skip.IfNot(Fixtures.HaveFfmpeg);
-        var file = Fixtures.Sweep("sweep-seek", "flac", 20);
+        // Long enough that the chunks a seek reads (the demuxer probes its way there) are a small part of the file,
+        // whatever the ffmpeg that made the fixture put in it.
+        var file = Fixtures.Sweep("sweep-seek-long", "flac", 120);
         var host = new FakeHost { Delay = TimeSpan.FromMilliseconds(20) };
         host.Add("t", file);
         using var cache = new RemoteMediaCache(_dir, host);
@@ -54,7 +56,7 @@ public class RemoteMediaTests : IDisposable
 
         using var local = Decoder.Open(file, Rate);
         using var streamed = Decoder.Open(remote.OpenRead(), Rate);
-        long target = 15L * Rate;
+        long target = 100L * Rate;
         Assert.True(local.Seek(target));
         Assert.True(streamed.Seek(target));
         var a = new float[2048 * 2];

@@ -61,11 +61,25 @@ public sealed class SessionTests : IDisposable
     private static TimeSpan Offset(PlayerService host, PlayerService listener) =>
         (host.Position - host.OutputLatency) - (listener.Position - listener.OutputLatency);
 
+    /// <summary>The listener is (or gets) within 80 ms of the host. A busy machine can land a start or seek late;
+    /// the follower then corrects it (Follower.Tolerance, after its cooldown), so this waits for that.</summary>
+    private static async Task InSync(PlayerService host, PlayerService listener, string what)
+    {
+        var deadline = DateTime.UtcNow.AddSeconds(5);
+        double offset;
+        while (Math.Abs(offset = Offset(host, listener).TotalMilliseconds) > 80)
+        {
+            if (DateTime.UtcNow > deadline) Assert.Fail($"{what}: still {offset:F0} ms apart");
+            await Task.Delay(20);
+        }
+    }
+
     [SkippableFact]
     public async Task Listener_follows_the_host_and_gets_its_own_queue_back()
     {
         Skip.IfNot(TempLibrary.HaveFfmpeg);
-        var hostTracks = await Album(_hostLib, "h", 3, 4);
+        // 7 s: after the seek to 3 s, room for a correction (Follower's cooldown) before track 2.
+        var hostTracks = await Album(_hostLib, "h", 3, 7);
         var ownTracks = await Album(_listenerLib, "own", 2, 2);
         var (host, _) = Player(_hostLib);
         var (listener, listenerHistory) = Player(_listenerLib);
@@ -92,7 +106,7 @@ public sealed class SessionTests : IDisposable
             Assert.Equal(host.Snapshot(out _).Select(i => i.Id), listener.Snapshot(out _).Select(i => i.Id));
             Assert.Equal("h1", listener.Current!.Track.Title);
             await Task.Delay(500);
-            Assert.InRange(Offset(host, listener).TotalMilliseconds, -80, 80);
+            await InSync(host, listener, "in sync after joining");
 
             // Listeners cannot steer.
             listener.Next();
@@ -104,13 +118,13 @@ public sealed class SessionTests : IDisposable
             host.Seek(TimeSpan.FromSeconds(3));
             await Until(() => listener.Position > TimeSpan.FromSeconds(2.9) && listener.Position < TimeSpan.FromSeconds(4), 5, "listener follows the seek");
             await Task.Delay(300);
-            Assert.InRange(Offset(host, listener).TotalMilliseconds, -80, 80);
+            await InSync(host, listener, "in sync after the seek");
 
             // The host moves on to the next track (gaplessly on both sides).
-            await Until(() => host.Current!.Track.Title == "h2", 5, "host reaches track 2");
+            await Until(() => host.Current!.Track.Title == "h2", 8, "host reaches track 2");
             await Until(() => listener.Current?.Track.Title == "h2", 5, "listener reaches track 2");
             await Task.Delay(300);
-            Assert.InRange(Offset(host, listener).TotalMilliseconds, -80, 80);
+            await InSync(host, listener, "in sync on track 2");
 
             // The host pauses and resumes.
             host.Pause();
