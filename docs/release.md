@@ -83,6 +83,10 @@ until `build.sh` changes (`.github/workflows/ffmpeg.yml`, `.github/actions/nativ
   LOCALFM_UPDATE_SOURCE=/tmp/u/v2/releases /tmp/u/v1/releases/LocalFM-linux-x64.AppImage
   ```
 
+  Verified 2026-11-15 on the Linux AppImage for both buttons, with music playing:
+  `LOCALFM_SNAPSHOT_UPDATE=quit|restart` (with a test `LOCALFM_HOME`) presses them without a click. Velopack keeps
+  downloads in `/var/tmp/velopack/LocalFM/packages` and installs a pending one as soon as any copy starts, so clear
+  that folder between runs (and after testing, before installing a real release).
 - Snapshots of the banner states: `LOCALFM_SNAPSHOT_UPDATE=available|downloading|notice|whatsnew` (no network).
 
 ## CI

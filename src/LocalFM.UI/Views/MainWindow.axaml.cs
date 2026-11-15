@@ -240,7 +240,9 @@ public partial class MainWindow : Window
                     await Task.Delay(2500);
                 }
             }
-            if (Environment.GetEnvironmentVariable("LOCALFM_SNAPSHOT_PLAY") == "1" && Vm is { } v2)
+            // Not when playback already carries on (resumed after "Restart now").
+            if (Environment.GetEnvironmentVariable("LOCALFM_SNAPSHOT_PLAY") == "1" && Vm is { } v2
+                && v2.Host.Player.State != LocalFM.Playback.PlaybackState.Playing)
             {
                 await Task.Delay(500);
                 if (v2.Albums.Albums.FirstOrDefault() is { } first) v2.Albums.PlayCommand.Execute(first);
@@ -248,7 +250,19 @@ public partial class MainWindow : Window
             if (Environment.GetEnvironmentVariable("LOCALFM_SNAPSHOT_LYRICS") == "1" && Vm is { } v3) v3.Lyrics.IsOpen = true;
             if (Environment.GetEnvironmentVariable("LOCALFM_SNAPSHOT_UPDATE") is { Length: > 0 } update && Vm is { } v6)
             {
-                if (update == "whatsnew")
+                if (update is "quit" or "restart")
+                {
+                    // A real start shows the installed version's notes, then the buttons are pressed.
+                    v6.Updater.ShowWhatsNewIfUpdated();
+                    await v6.Updater.CheckNowCommand.ExecuteAsync(null);
+                    Console.WriteLine($"update: {v6.Updater.CurrentVersion}, offered {v6.Updater.Available?.Version ?? "nothing"}, {v6.Host.Player.State}");
+                    if (v6.Updater.Available is not null)
+                    {
+                        if (update == "quit") await v6.Updater.UpdateOnQuitCommand.ExecuteAsync(null);
+                        else await v6.Updater.RestartNowCommand.ExecuteAsync(null);
+                    }
+                }
+                else if (update == "whatsnew")
                 {
                     v6.Updater.WhatsNew = LocalFM.UI.Updates.SnapshotUpdateService.SnapshotNotes;
                     v6.Updater.WhatsNewOpen = true;

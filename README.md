@@ -30,21 +30,29 @@ dotnet run --project src/LocalFM.UI        # or: -- --add-folder ~/Music
 dotnet publish src/LocalFM.UI -r linux-x64 -c Release   # Native AOT
 ```
 
-Windows/macOS (untested so far): build the native library once against a shared FFmpeg 8.x build,
-then build as usual:
+Bundled FFmpeg (what packages ship, on any OS; Windows runs these in MSYS2 / Git Bash):
 
 ```sh
-cmake -S native -B native/build -DFFMPEG_ROOT=/path/to/ffmpeg-shared && cmake --build native/build --config Release
+native/ffmpeg/build.sh linux-x64 /tmp/ffmpeg   # audio-only LGPL FFmpeg 8.1.3
+native/build.sh linux-x64 /tmp/ffmpeg          # localfm_native + FFmpeg's libraries into native/out/linux-x64/
 ```
+
+## Install and release
+
+Releases are on [GitHub](https://github.com/LPeter1997/LocalFM/releases): Windows `Setup.exe`/portable zip, macOS
+`.pkg`/`.dmg`, Linux AppImage (these update themselves), and `.deb`, `.rpm`, a tarball plus Flatpak, AUR and winget
+manifests (the package manager updates those). `./package.sh <version>` (`package.ps1` on Windows) builds them
+locally; [docs/release.md](docs/release.md) has the whole flow, CI and how to make a release.
 
 ## Environment
 
 - `LOCALFM_HOME` — data folder (default: `~/.local/share/LocalFM`): `library.db`, `images/`
 - `LOCALFM_OUTPUT=null` — silent real-time output (headless runs)
+- `LOCALFM_UPDATE_SOURCE=<folder or URL>` — read updates from vpk output instead of GitHub (docs/release.md)
 - `LOCALFM_SNAPSHOT=out.png` (+ `LOCALFM_SNAPSHOT_PAGE=albums|album|artists|tracks|playlists|queue|sources`, `LOCALFM_SNAPSHOT_PLAY=1`) — render the window to PNG and exit
 
 ## Licence
 
 LocalFM is released under the [MIT licence](LICENSE). Packages ship an audio-only build of
-[FFmpeg](https://ffmpeg.org), licensed under the LGPL 2.1 (`native/third_party/ffmpeg/COPYING.LGPLv2.1`), as separate
-shared libraries.
+[FFmpeg](https://ffmpeg.org), licensed under the LGPL 2.1 or later, as separate shared libraries next to the app with their licence
+(`FFmpeg-COPYING.LGPLv2.1.txt`). `native/ffmpeg/build.sh` rebuilds them from the pinned FFmpeg source.

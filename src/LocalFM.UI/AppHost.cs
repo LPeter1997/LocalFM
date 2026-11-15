@@ -77,6 +77,7 @@ public sealed class AppHost : IDisposable
         if (History.Get(ViewModels.UpdaterViewModel.ResumeKey) == "1")
         {
             _ = History.SetAsync(ViewModels.UpdaterViewModel.ResumeKey, "");
+            Log.Info("Host", "Updated: playing on where the music was");
             Player.Play();
         }
         if (vibe is not null) _ = StartVibeAsync(vibe);

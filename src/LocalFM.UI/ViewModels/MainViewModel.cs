@@ -324,7 +324,8 @@ public sealed partial class MainViewModel : ObservableObject
 
     /// <summary>GitHub releases (or LOCALFM_UPDATE_SOURCE); snapshot runs get a canned update and no network.</summary>
     private static IUpdateService CreateUpdateService() =>
-        Environment.GetEnvironmentVariable("LOCALFM_SNAPSHOT_UPDATE") is { Length: > 0 } shot
+        // quit/restart press the real buttons (against LOCALFM_UPDATE_SOURCE): the local update round trip.
+        Environment.GetEnvironmentVariable("LOCALFM_SNAPSHOT_UPDATE") is { Length: > 0 } shot and not ("quit" or "restart")
             ? new SnapshotUpdateService(shot == "notice" ? UpdateMode.NoticeOnly : UpdateMode.InApp)
             : ReleaseSource.Create(AppInfo.Version);
 
