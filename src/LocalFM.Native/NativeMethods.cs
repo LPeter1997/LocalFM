@@ -63,6 +63,8 @@ public static unsafe partial class NativeMethods
     public static partial void OutputClose(nint output);
     [LibraryImport(Lib, EntryPoint = "lfm_output_get_info")]
     public static partial void OutputGetInfo(nint output, out OutputInfo info);
+    [LibraryImport(Lib, EntryPoint = "lfm_output_latency_frames")]
+    public static partial long OutputLatencyFrames(nint output);
     [LibraryImport(Lib, EntryPoint = "lfm_output_write")]
     public static partial int OutputWrite(nint output, float* frames, int count);
     [LibraryImport(Lib, EntryPoint = "lfm_output_writable")]
@@ -92,6 +94,10 @@ public static unsafe partial class NativeMethods
     // decoder
     [LibraryImport(Lib, EntryPoint = "lfm_decoder_open", StringMarshalling = StringMarshalling.Utf8)]
     public static partial int DecoderOpen(string path, int outputRate, out nint decoder);
+    public const int SeekSize = 0x10000;
+    [LibraryImport(Lib, EntryPoint = "lfm_decoder_open_io")]
+    public static partial int DecoderOpenIo(delegate* unmanaged<nint, byte*, int, int> read,
+        delegate* unmanaged<nint, long, int, long> seek, nint user, int outputRate, out nint decoder);
     [LibraryImport(Lib, EntryPoint = "lfm_decoder_close")]
     public static partial void DecoderClose(nint decoder);
     [LibraryImport(Lib, EntryPoint = "lfm_decoder_get_info")]

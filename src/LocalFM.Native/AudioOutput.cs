@@ -41,6 +41,9 @@ public sealed unsafe class AudioOutput : IDisposable
     /// <summary>Drops queued audio from <paramref name="writeIndex"/> on, if it is far enough ahead of the playhead.</summary>
     public bool Truncate(long writeIndex) => NativeMethods.OutputTruncate(Handle, writeIndex) != 0;
 
+    /// <summary>Frames between the ring's read position and the speaker (0 when unknown or offline).</summary>
+    public long LatencyFrames => NativeMethods.OutputLatencyFrames(Handle);
+
     public void Flush() => NativeMethods.OutputFlush(Handle);
     public void SetVolume(float linear) => NativeMethods.OutputSetVolume(Handle, linear);
     public void SetPaused(bool paused) => NativeMethods.OutputSetPaused(Handle, paused ? 1 : 0);

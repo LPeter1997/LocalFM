@@ -1,3 +1,4 @@
+using LocalFM.Native;
 namespace LocalFM.Playback;
 
 /// <summary>
@@ -6,7 +7,13 @@ namespace LocalFM.Playback;
 /// <paramref name="JoinGapless"/> asks never to crossfade into this track (it continues the previous one,
 /// like the next track of a live album).
 /// </summary>
-public sealed record TrackHandle(string Path, object? Token = null, float Gain = 1f, bool JoinGapless = false);
+/// <param name="Open">Opens the decoder at the given output rate instead of <see cref="Decoder.Open(string, int)"/>
+/// on <paramref name="Path"/> (e.g. a file streamed from another LocalFM). Called on the thread pool.</param>
+public sealed record TrackHandle(string Path, object? Token = null, float Gain = 1f, bool JoinGapless = false,
+    Func<int, Decoder>? Open = null)
+{
+    internal Decoder OpenDecoder(int rate) => Open is { } open ? open(rate) : Decoder.Open(Path, rate);
+}
 
 public enum PlaybackState { Stopped, Playing, Paused }
 

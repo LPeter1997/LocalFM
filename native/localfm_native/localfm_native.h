@@ -66,6 +66,10 @@ LFM_API int32_t lfm_output_truncate(lfm_output* o, int64_t write_index);
 LFM_API int64_t lfm_output_read_index(lfm_output* o);
 LFM_API int64_t lfm_output_underruns(lfm_output* o);
 
+/* Frames between the ring's read position and the speaker (device buffer), 0 when unknown/offline.
+ * Callers subtract it to get the position actually heard. */
+LFM_API int64_t lfm_output_latency_frames(lfm_output* o);
+
 LFM_API void lfm_output_set_volume(lfm_output* o, float linear);
 LFM_API void lfm_output_set_paused(lfm_output* o, int32_t paused);
 
@@ -106,6 +110,16 @@ typedef struct lfm_decoder_info {
 LFM_API int  lfm_decoder_open(const char* path, int32_t output_rate, lfm_decoder** out);
 LFM_API void lfm_decoder_close(lfm_decoder* d);
 LFM_API void lfm_decoder_get_info(lfm_decoder* d, lfm_decoder_info* info);
+/* Opens from caller-supplied IO instead of a path (e.g. a file arriving over the network).
+ * read: bytes read into buf, 0 = end of stream, <0 = error. May block.
+ * seek: whence 0/1/2 = SEEK_SET/CUR/END (returns the new position), LFM_SEEK_SIZE = return the total
+ *       size (or <0 if unknown). <0 = error.
+ * The callbacks are called from whichever thread opens, reads or seeks the decoder, and `user` must stay
+ * valid until lfm_decoder_close. */
+#define LFM_SEEK_SIZE 0x10000
+typedef int32_t (*lfm_io_read)(void* user, uint8_t* buf, int32_t size);
+typedef int64_t (*lfm_io_seek)(void* user, int64_t offset, int32_t whence);
+LFM_API int lfm_decoder_open_io(lfm_io_read read, lfm_io_seek seek, void* user, int32_t output_rate, lfm_decoder** out);
 /* Reads up to `count` stereo frames. Returns frames read; 0 = end of stream; <0 = error. */
 LFM_API int32_t lfm_decoder_read(lfm_decoder* d, float* out, int32_t count);
 /* Sample-accurate seek, position in output-rate frames. */

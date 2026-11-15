@@ -8,6 +8,7 @@
 #include <libavutil/opt.h>
 #include <libswresample/swresample.h>
 
+#include <errno.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -36,6 +37,12 @@ struct lfm_decoder {
     int     eof_sent;    /* flush packet sent to decoder */
     int     swr_drained;
     int64_t duration_frames;
+
+    /* custom IO (lfm_decoder_open_io); NULL for files opened by path */
+    AVIOContext*  io;
+    lfm_io_read   io_read;
+    lfm_io_seek   io_seek;
+    void*         io_user;
 };
 
 static int setup_swr(lfm_decoder* d)
@@ -157,17 +164,38 @@ static int decode_more(lfm_decoder* d)
     }
 }
 
-LFM_API int lfm_decoder_open(const char* path, int32_t output_rate, lfm_decoder** out)
-{
-    if (!out || !path) return -1;
-    *out = NULL;
-    lfm_decoder* d = (lfm_decoder*)calloc(1, sizeof *d);
-    if (!d) return -2;
-    d->out_rate = output_rate > 0 ? output_rate : 48000;
-    d->seek_target = -1;
-    d->duration_frames = -1;
+#define IO_BUFFER_SIZE (64 * 1024)
 
-    if (avformat_open_input(&d->fmt, path, NULL, NULL) < 0) goto fail;
+static int io_read_bridge(void* opaque, uint8_t* buf, int size)
+{
+    lfm_decoder* d = (lfm_decoder*)opaque;
+    int32_t n = d->io_read(d->io_user, buf, size);
+    if (n == 0) return AVERROR_EOF;
+    return n < 0 ? AVERROR(EIO) : n;
+}
+
+static int64_t io_seek_bridge(void* opaque, int64_t offset, int whence)
+{
+    lfm_decoder* d = (lfm_decoder*)opaque;
+    if (whence & AVSEEK_SIZE) return d->io_seek(d->io_user, 0, LFM_SEEK_SIZE);
+    int64_t r = d->io_seek(d->io_user, offset, whence & ~AVSEEK_FORCE);
+    return r < 0 ? AVERROR(EIO) : r;
+}
+
+/* Opens `path`, or the custom IO already set up on `d` when path is NULL. Frees d on failure. */
+static int decoder_open(lfm_decoder* d, const char* path, lfm_decoder** out)
+{
+    if (!path) {
+        unsigned char* iobuf = (unsigned char*)av_malloc(IO_BUFFER_SIZE);
+        if (!iobuf) goto fail;
+        d->io = avio_alloc_context(iobuf, IO_BUFFER_SIZE, 0, d, io_read_bridge, NULL, io_seek_bridge);
+        if (!d->io) { av_free(iobuf); goto fail; }
+        d->fmt = avformat_alloc_context();
+        if (!d->fmt) goto fail;
+        d->fmt->pb = d->io;
+        d->fmt->flags |= AVFMT_FLAG_CUSTOM_IO;
+    }
+    if (avformat_open_input(&d->fmt, path ? path : "", NULL, NULL) < 0) goto fail;
     if (avformat_find_stream_info(d->fmt, NULL) < 0) goto fail;
     const AVCodec* codec = NULL;
     d->stream = av_find_best_stream(d->fmt, AVMEDIA_TYPE_AUDIO, -1, -1, &codec, 0);
@@ -203,6 +231,37 @@ fail:
     return -3;
 }
 
+static lfm_decoder* decoder_alloc(int32_t output_rate)
+{
+    lfm_decoder* d = (lfm_decoder*)calloc(1, sizeof *d);
+    if (!d) return NULL;
+    d->out_rate = output_rate > 0 ? output_rate : 48000;
+    d->seek_target = -1;
+    d->duration_frames = -1;
+    return d;
+}
+
+LFM_API int lfm_decoder_open(const char* path, int32_t output_rate, lfm_decoder** out)
+{
+    if (!out || !path) return -1;
+    *out = NULL;
+    lfm_decoder* d = decoder_alloc(output_rate);
+    if (!d) return -2;
+    return decoder_open(d, path, out);
+}
+
+LFM_API int lfm_decoder_open_io(lfm_io_read read, lfm_io_seek seek, void* user, int32_t output_rate, lfm_decoder** out)
+{
+    if (!out || !read || !seek) return -1;
+    *out = NULL;
+    lfm_decoder* d = decoder_alloc(output_rate);
+    if (!d) return -2;
+    d->io_read = read;
+    d->io_seek = seek;
+    d->io_user = user;
+    return decoder_open(d, NULL, out);
+}
+
 LFM_API void lfm_decoder_close(lfm_decoder* d)
 {
     if (!d) return;
@@ -210,7 +269,11 @@ LFM_API void lfm_decoder_close(lfm_decoder* d)
     av_packet_free(&d->pkt);
     swr_free(&d->swr);
     avcodec_free_context(&d->codec);
-    avformat_close_input(&d->fmt);
+    avformat_close_input(&d->fmt); /* leaves a custom pb alone (AVFMT_FLAG_CUSTOM_IO) */
+    if (d->io) {
+        av_freep(&d->io->buffer);
+        avio_context_free(&d->io);
+    }
     free(d->pend);
     free(d);
 }

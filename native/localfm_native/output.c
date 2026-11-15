@@ -244,6 +244,17 @@ LFM_API void lfm_output_close(lfm_output* o)
     free(o);
 }
 
+LFM_API int64_t lfm_output_latency_frames(lfm_output* o)
+{
+    if (!o->has_device) return 0;
+    ma_uint32 period = o->device.playback.internalPeriodSizeInFrames;
+    ma_uint32 periods = o->device.playback.internalPeriods;
+    ma_uint32 rate = o->device.playback.internalSampleRate;
+    if (period == 0 || rate == 0) return 0;
+    /* in the device's rate; convert to ours */
+    return (int64_t)period * (periods ? periods : 1) * o->rate / rate;
+}
+
 LFM_API void lfm_output_get_info(lfm_output* o, lfm_output_info* info)
 {
     info->sample_rate = o->rate;

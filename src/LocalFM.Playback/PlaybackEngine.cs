@@ -141,7 +141,11 @@ public sealed class PlaybackEngine : IDisposable
     // ------------------------------------------------------------------ commands
 
     /// <summary>Starts <paramref name="track"/> now (the current track keeps playing until it is ready).</summary>
-    public void Play(TrackHandle track, TimeSpan start = default) => Post(() => DoPlay(track, start));
+    public void Play(TrackHandle track, TimeSpan start = default) => Post(() => DoPlay(track, () => start));
+
+    /// <summary>Like <see cref="Play(TrackHandle, TimeSpan)"/>, but the start position is asked for only once the
+    /// file is open, right before playback begins (following another clock: opening time adds no error).</summary>
+    public void Play(TrackHandle track, Func<TimeSpan> startAt) => Post(() => DoPlay(track, startAt));
 
     /// <summary>Sets what follows the anchor track (see class remarks). Null means "stop after it".</summary>
     public void SetNext(TrackHandle? next) => Post(() => DoSetNext(next));
@@ -161,6 +165,12 @@ public sealed class PlaybackEngine : IDisposable
     });
 
     public void Seek(TimeSpan position) => Post(() => DoSeek(position));
+
+    /// <summary>Seeks to a position computed on the engine thread right before the jump.</summary>
+    public void SeekTo(Func<TimeSpan> position) => Post(() => DoSeek(position()));
+
+    /// <summary>How long audio takes from the ring to the speaker (device buffering); zero when unknown.</summary>
+    public TimeSpan OutputLatency => TimeSpan.FromSeconds((double)_out.LatencyFrames / SampleRate);
 
     public void Stop() => Post(DoStop);
 
@@ -345,7 +355,7 @@ public sealed class PlaybackEngine : IDisposable
         Collect();
     }
 
-    private void DoPlay(TrackHandle track, TimeSpan start)
+    private void DoPlay(TrackHandle track, Func<TimeSpan> startAt)
     {
         int gen = ++_playGen;
         _anchor = track;
@@ -357,8 +367,8 @@ public sealed class PlaybackEngine : IDisposable
             Decoder? dec = null;
             try
             {
-                dec = Decoder.Open(track.Path, rate);
-                long frame = (long)(start.TotalSeconds * rate);
+                dec = track.OpenDecoder(rate);
+                long frame = (long)(startAt().TotalSeconds * rate);
                 if (frame > 0) dec.Seek(frame);
                 var opened = dec;
                 Post(() => OnPlayOpened(gen, track, opened, Math.Max(0, frame)));
@@ -440,7 +450,7 @@ public sealed class PlaybackEngine : IDisposable
         {
             try
             {
-                var dec = Decoder.Open(next.Path, rate);
+                var dec = next.OpenDecoder(rate);
                 Post(() =>
                 {
                     if (gen != _nextGen) { dec.Dispose(); return; }
