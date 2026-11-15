@@ -78,7 +78,7 @@ public sealed class PlayerService : IDisposable
 
     public void PlayTracks(IReadOnlyList<TrackInfo> tracks, int startIndex = 0)
     {
-        if (tracks.Count == 0) return;
+        if (tracks.Count == 0 || IsFollowing) return;
         lock (_gate)
         {
             Queue.Replace(tracks, startIndex);
@@ -88,6 +88,7 @@ public sealed class PlayerService : IDisposable
 
     public void PlayItem(Ulid itemId)
     {
+        if (IsFollowing) return;
         lock (_gate)
         {
             if (Queue.SetCurrent(itemId)) StartCurrent(TimeSpan.Zero);
@@ -96,6 +97,7 @@ public sealed class PlayerService : IDisposable
 
     public void PlayPause()
     {
+        if (IsFollowing) return;
         switch (_engine.State)
         {
             case PlaybackState.Playing: _engine.Pause(); break;
@@ -117,11 +119,13 @@ public sealed class PlayerService : IDisposable
 
     public void Pause()
     {
+        if (IsFollowing) return;
         if (_engine.State == PlaybackState.Playing) _engine.Pause();
     }
 
     public void Next()
     {
+        if (IsFollowing) return;
         lock (_gate)
         {
             var next = Queue.PeekNext();
@@ -136,6 +140,7 @@ public sealed class PlayerService : IDisposable
     /// <summary>Restarts the track when more than 3 s in, otherwise goes to the previous one.</summary>
     public void Previous()
     {
+        if (IsFollowing) return;
         lock (_gate)
         {
             if (_engine.State != PlaybackState.Stopped && _engine.Position > TimeSpan.FromSeconds(3))
@@ -153,6 +158,7 @@ public sealed class PlayerService : IDisposable
 
     public void Seek(TimeSpan position)
     {
+        if (IsFollowing) return;
         if (_engine.State == PlaybackState.Stopped)
         {
             lock (_gate) if (Queue.Current is { } c) _resume = (c, position);
@@ -164,21 +170,22 @@ public sealed class PlayerService : IDisposable
         Seeked?.Invoke(position);
     }
 
-    public void Stop() => _engine.Stop();
+    public void Stop() { if (!IsFollowing) _engine.Stop(); }
 
     // ------------------------------------------------------------------ queue editing
 
-    public void Enqueue(IReadOnlyList<TrackInfo> tracks) { lock (_gate) Queue.Append(tracks); }
-    public void PlayNext(IReadOnlyList<TrackInfo> tracks) { lock (_gate) Queue.InsertNext(tracks); }
-    public void MoveItem(int from, int to) { lock (_gate) Queue.Move(from, to); }
-    public void ClearUpcoming() { lock (_gate) Queue.ClearUpcoming(); }
-    public void SetShuffle(bool on) { lock (_gate) Queue.SetShuffle(on); }
-    public void Reshuffle() { lock (_gate) Queue.Reshuffle(); }
+    public void Enqueue(IReadOnlyList<TrackInfo> tracks) { lock (_gate) if (!IsFollowing) Queue.Append(tracks); }
+    public void PlayNext(IReadOnlyList<TrackInfo> tracks) { lock (_gate) if (!IsFollowing) Queue.InsertNext(tracks); }
+    public void MoveItem(int from, int to) { lock (_gate) if (!IsFollowing) Queue.Move(from, to); }
+    public void ClearUpcoming() { lock (_gate) if (!IsFollowing) Queue.ClearUpcoming(); }
+    public void SetShuffle(bool on) { lock (_gate) if (!IsFollowing) Queue.SetShuffle(on); }
+    public void Reshuffle() { lock (_gate) if (!IsFollowing) Queue.Reshuffle(); }
 
     public void RemoveItem(Ulid itemId)
     {
         lock (_gate)
         {
+            if (IsFollowing) return;
             bool wasCurrent = Queue.Current?.Id == itemId;
             Queue.Remove(itemId);
             if (wasCurrent && _engine.State != PlaybackState.Stopped)
@@ -200,7 +207,7 @@ public sealed class PlayerService : IDisposable
     public RepeatMode Repeat
     {
         get => Queue.Repeat;
-        set { lock (_gate) { Queue.Repeat = value; UpdateNext(); } Changed?.Invoke(); }
+        set { lock (_gate) { if (IsFollowing) return; Queue.Repeat = value; UpdateNext(); } Changed?.Invoke(); }
     }
 
     public IReadOnlyList<QueueItem> Snapshot(out int currentIndex)
@@ -240,7 +247,8 @@ public sealed class PlayerService : IDisposable
     }
 
     private TrackHandle Handle(QueueItem item, QueueItem? previous = null) =>
-        new(item.Track.Path, item.Id, Gain(item.Track), JoinGapless: GaplessAlbums && previous is not null && Continues(previous.Track, item.Track));
+        _follow is { } f ? f.Handle(item, Gain(item.Track))
+        : new(item.Track.Path, item.Id, Gain(item.Track), JoinGapless: GaplessAlbums && previous is not null && Continues(previous.Track, item.Track));
 
     /// <summary>Whether <paramref name="b"/> is the track right after <paramref name="a"/> on the same release.</summary>
     public static bool Continues(TrackInfo a, TrackInfo b) =>
@@ -261,9 +269,12 @@ public sealed class PlayerService : IDisposable
     public void ApplySound(SoundSettings s)
     {
         _engine.SetEqualizer(s.Bands(), s.EffectivePreampDb);
-        _engine.Crossfade = TimeSpan.FromSeconds(s.CrossfadeSeconds);
         lock (_gate)
         {
+            // While following a vibe the host's crossfade shapes the shared timeline; ours waits until we leave.
+            var fade = TimeSpan.FromSeconds(s.CrossfadeSeconds);
+            if (_own is not null) _own = _own with { Crossfade = fade };
+            else _engine.Crossfade = fade;
             ReplayGain = s.ReplayGain;
             GaplessAlbums = s.GaplessAlbums;
             UpdateNext();
@@ -309,7 +320,7 @@ public sealed class PlayerService : IDisposable
                 {
                     // Gapless transitions are decided by the engine; follow it.
                     if (Queue.Current?.Id != id) Queue.SetCurrent(id);
-                    if (Queue.Current is { } cur)
+                    if (Queue.Current is { } cur && !IsFollowing) // a vibe's tracks are not ours to count
                     {
                         _session.Add(cur.Track);
                         _listen = new ListenTracker(cur.Track, _engine.State == PlaybackState.Playing);
@@ -334,7 +345,7 @@ public sealed class PlayerService : IDisposable
                     Queue.MarkFailed(id);
                     // Did the item we were trying to start fail (rather than the pre-opened next one)?
                     bool failedToStart = Queue.Current?.Id == id && !(_engine.Current?.Token is Ulid audible && audible == id);
-                    if (failedToStart)
+                    if (failedToStart && !IsFollowing) // following, the vibe decides what plays
                     {
                         var next = Queue.PeekNext();
                         if (next is not null && next.Id != id) { Queue.SetCurrent(next.Id); StartCurrent(TimeSpan.Zero); }
@@ -411,7 +422,16 @@ public sealed class PlayerService : IDisposable
         SavedState state;
         lock (_gate)
         {
-            state = new SavedState
+            // Following a vibe: what is ours is the queue put aside when we joined.
+            if (_own is { } own) state = new SavedState
+            {
+                TrackIds = own.Items.Select(i => i.Track.TrackId.ToString()).ToList(),
+                CurrentIndex = own.Index,
+                PositionMs = (long)own.Position.TotalMilliseconds,
+                Volume = _volume,
+                Repeat = own.Repeat,
+            };
+            else state = new SavedState
             {
                 TrackIds = Queue.Items.Select(i => i.Track.TrackId.ToString()).ToList(),
                 CurrentIndex = Queue.CurrentIndex,
@@ -424,6 +444,102 @@ public sealed class PlayerService : IDisposable
         _ = _history.SetAsync(StateKey, json);
     }
 
+    // ------------------------------------------------------------------ follow mode (listening to a vibe)
+
+    private IFollowSource? _follow;
+    private OwnState? _own;
+    private sealed record OwnState(List<QueueItem> Items, int Index, TimeSpan Position, RepeatMode Repeat,
+        IReadOnlyList<Ulid>? OriginalOrder, TimeSpan Crossfade);
+
+    /// <summary>True while playing someone else's vibe: transport and queue edits are ignored (volume and sound
+    /// settings still apply) and nothing is recorded in the listening history.</summary>
+    public bool IsFollowing => _follow is not null;
+
+    /// <summary>Whether <see cref="Position"/> moves in real time (not for a moment after a start or seek).</summary>
+    public bool PositionIsLive => _engine.PositionIsLive;
+
+    /// <summary>How long audio takes from the engine to the speaker.</summary>
+    public TimeSpan OutputLatency => _engine.OutputLatency;
+    /// <summary>The crossfade the engine plays with right now.</summary>
+    public TimeSpan Crossfade => _engine.Crossfade;
+
+    /// <summary>Puts our own queue and position aside and hands playback to <paramref name="source"/>.</summary>
+    public void EnterFollowMode(IFollowSource source)
+    {
+        SaveState(force: true);
+        lock (_gate)
+        {
+            if (_follow is null)
+            {
+                FinishListen(false);
+                _own = new OwnState([.. Queue.Items], Queue.CurrentIndex, Position, Queue.Repeat, Queue.OriginalOrder?.ToList(), _engine.Crossfade);
+                _resume = null;
+                _engine.Stop();
+                _follow = source;
+                Queue.Repeat = RepeatMode.Off;
+                Queue.Restore([], 0);
+            }
+            _follow = source;
+        }
+        Changed?.Invoke();
+    }
+
+    /// <summary>Stops the vibe's audio and brings back our own queue where it was, paused.</summary>
+    public void LeaveFollowMode()
+    {
+        lock (_gate)
+        {
+            if (_follow is null || _own is not { } own) return;
+            _follow = null;
+            _own = null;
+            _engine.Stop();
+            _engine.Crossfade = own.Crossfade;
+            Queue.Repeat = own.Repeat;
+            Queue.Restore(own.Items, own.Index, own.OriginalOrder);
+            if (Queue.Current is { } c) _resume = (c, own.Position);
+            _dirty = true;
+        }
+        Changed?.Invoke();
+    }
+
+    /// <summary>Following: the vibe's items around the current one, in play order. The current item stays the
+    /// one the engine plays (it follows gapless transitions itself).</summary>
+    public void FollowSetQueue(IReadOnlyList<QueueItem> items)
+    {
+        lock (_gate)
+        {
+            if (_follow is null) return;
+            if (items.Select(i => i.Id).SequenceEqual(Queue.Items.Select(i => i.Id))) return;
+            int idx = Queue.Current is { } cur ? items.ToList().FindIndex(i => i.Id == cur.Id) : -1;
+            Queue.Restore(items, Math.Max(0, idx));
+        }
+    }
+
+    /// <summary>Following: starts <paramref name="itemId"/>, at a position asked for once the file is open.</summary>
+    public void FollowPlay(Ulid itemId, Func<TimeSpan> startAt)
+    {
+        lock (_gate)
+        {
+            if (_follow is null || !Queue.SetCurrent(itemId) || Queue.Current is not { } item) return;
+            _engine.Play(Handle(item), startAt);
+            var next = Queue.PeekNext();
+            _engine.SetNext(next is null ? null : Handle(next, item));
+        }
+    }
+
+    public void FollowSeek(Func<TimeSpan> position) { if (IsFollowing) _engine.SeekTo(position); }
+    public void FollowPause() { if (IsFollowing) _engine.Pause(); }
+    public void FollowResume() { if (IsFollowing) _engine.Resume(); }
+    public void FollowStop() { if (IsFollowing) _engine.Stop(); }
+
+    public void FollowCrossfade(TimeSpan crossfade)
+    {
+        if (IsFollowing && _engine.Crossfade != crossfade) _engine.Crossfade = crossfade;
+    }
+
+    /// <summary>The item the engine is playing (null when stopped).</summary>
+    public Ulid? AudibleItem => _engine.Current?.Token as Ulid?;
+
     public void Dispose()
     {
         _saveTimer.Dispose();
@@ -432,6 +548,14 @@ public sealed class PlayerService : IDisposable
         _cts.Cancel();
         try { _eventLoop.Wait(TimeSpan.FromSeconds(1)); } catch { }
     }
+}
+
+/// <summary>Supplies engine handles for a followed vibe's items.</summary>
+public interface IFollowSource
+{
+    /// <summary>The handle for <paramref name="item"/>. Must be equal (same opener) each time it is asked for the
+    /// same item, or the engine re-opens the upcoming track.</summary>
+    TrackHandle Handle(QueueItem item, float gain);
 }
 
 public sealed class SavedState

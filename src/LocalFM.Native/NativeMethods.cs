@@ -63,6 +63,8 @@ public static unsafe partial class NativeMethods
     public static partial void OutputClose(nint output);
     [LibraryImport(Lib, EntryPoint = "lfm_output_get_info")]
     public static partial void OutputGetInfo(nint output, out OutputInfo info);
+    [LibraryImport(Lib, EntryPoint = "lfm_output_read_clock")]
+    public static partial long OutputReadClock(nint output, out long advance, out long period, out long ageNs);
     [LibraryImport(Lib, EntryPoint = "lfm_output_latency_frames")]
     public static partial long OutputLatencyFrames(nint output);
     [LibraryImport(Lib, EntryPoint = "lfm_output_write")]

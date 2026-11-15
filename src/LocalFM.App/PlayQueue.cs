@@ -65,13 +65,17 @@ public sealed class PlayQueue
         return any;
     }
 
-    /// <summary>Restores a saved queue exactly (no shuffling).</summary>
-    public void Restore(IEnumerable<QueueItem> items, int currentIndex)
+    /// <summary>The unshuffled order while shuffled (to restore a queue exactly), else null.</summary>
+    public IReadOnlyList<Ulid>? OriginalOrder => _originalOrder;
+
+    /// <summary>Restores a saved queue exactly (no shuffling); with <paramref name="originalOrder"/> it stays
+    /// shuffled and can be unshuffled to that order.</summary>
+    public void Restore(IEnumerable<QueueItem> items, int currentIndex, IEnumerable<Ulid>? originalOrder = null)
     {
         _items.Clear();
         _items.AddRange(items);
         _failed.Clear();
-        _originalOrder = null;
+        _originalOrder = originalOrder?.ToList();
         CurrentIndex = _items.Count == 0 ? -1 : Math.Clamp(currentIndex, 0, _items.Count - 1);
         Changed?.Invoke();
     }

@@ -6,6 +6,8 @@ using LocalFM.Library.Import;
 using LocalFM.Metadata;
 using LocalFM.Native;
 using LocalFM.Playback;
+using LocalFM.Vibe;
+using LocalFM.Vibe.Net;
 
 namespace LocalFM.UI;
 
@@ -41,7 +43,10 @@ public sealed class AppHost : IDisposable
         Player = new PlayerService(Engine, History, Queries);
         Sound = SoundSettings.Load(History);
         Player.ApplySound(Sound);
+        Vibe = new VibeService(Player, Paths);
     }
+
+    public VibeService Vibe { get; }
 
     public SoundSettings Sound { get; }
 
@@ -64,9 +69,10 @@ public sealed class AppHost : IDisposable
     public CancellationToken ShutdownToken => _shutdown.Token;
 
     /// <summary>Restores the queue and starts background scanning/watching of all sources.</summary>
-    public void Start(IReadOnlyList<string>? addFolders = null)
+    public void Start(IReadOnlyList<string>? addFolders = null, VibeStart? vibe = null)
     {
         Player.RestoreState();
+        if (vibe is not null) _ = StartVibeAsync(vibe);
         _ = Task.Run(async () =>
         {
             try
@@ -81,9 +87,31 @@ public sealed class AppHost : IDisposable
         });
     }
 
+    /// <summary>--vibe-host / --vibe-join (until the vibe panel exists; handy for trying two instances).</summary>
+    private async Task StartVibeAsync(VibeStart start)
+    {
+        try
+        {
+            if (start.JoinCode is { } code)
+            {
+                if (!Invite.TryDecode(code, out var invite)) { Log.Warn("Host", "--vibe-join: not a vibe invite"); return; }
+                await Vibe.JoinAsync(invite).ConfigureAwait(false);
+            }
+            else
+            {
+                var host = await Vibe.StartHostingAsync().ConfigureAwait(false);
+                string text = host.Invite.Encode();
+                Log.Info("Host", $"Vibe invite: {text}");
+                Console.WriteLine($"Vibe invite: {text}");
+            }
+        }
+        catch (Exception ex) { Log.Error("Host", "Could not start the vibe", ex); }
+    }
+
     public void Dispose()
     {
         _shutdown.Cancel();
+        try { Vibe.DisposeAsync().AsTask().Wait(TimeSpan.FromSeconds(3)); } catch { }
         Import.Dispose();
         Watcher.Dispose();
         Player.Dispose();
@@ -91,3 +119,6 @@ public sealed class AppHost : IDisposable
         Db.Dispose();
     }
 }
+
+/// <summary>A vibe to start with the app: host one (no code) or join one.</summary>
+public sealed record VibeStart(string? JoinCode);

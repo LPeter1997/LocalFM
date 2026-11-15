@@ -104,11 +104,15 @@ public sealed class PlaybackEngine : IDisposable
         {
             var a = _active;
             if (a?.Source is null) return TimeSpan.Zero;
-            long frames = a.StartFrame + Math.Max(0, _out.ReadIndex - a.WriteIndex);
+            long frames = a.StartFrame + Math.Max(0, _out.SmoothReadIndex - a.WriteIndex);
             var pos = TimeSpan.FromSeconds((double)frames / SampleRate);
             return a.Source.Duration is { } d && pos > d ? d : pos;
         }
     }
+
+    /// <summary>False for a moment after a start or seek, until the device takes the new audio (up to one device
+    /// period): until then <see cref="Position"/> holds still at the new spot instead of moving in real time.</summary>
+    public bool PositionIsLive => _active is not { Source: not null } a || _out.SmoothReadIndex >= a.WriteIndex;
 
     /// <summary>Linear output gain, 0..1 (callers map a UI slider to a perceptual curve).</summary>
     public float Volume
@@ -141,11 +145,12 @@ public sealed class PlaybackEngine : IDisposable
     // ------------------------------------------------------------------ commands
 
     /// <summary>Starts <paramref name="track"/> now (the current track keeps playing until it is ready).</summary>
-    public void Play(TrackHandle track, TimeSpan start = default) => Post(() => DoPlay(track, () => start));
+    public void Play(TrackHandle track, TimeSpan start = default) => Post(() => DoPlay(track, () => start, moving: false));
 
-    /// <summary>Like <see cref="Play(TrackHandle, TimeSpan)"/>, but the start position is asked for only once the
-    /// file is open, right before playback begins (following another clock: opening time adds no error).</summary>
-    public void Play(TrackHandle track, Func<TimeSpan> startAt) => Post(() => DoPlay(track, startAt));
+    /// <summary>Like <see cref="Play(TrackHandle, TimeSpan)"/>, but follows a moving target: the start position is
+    /// asked for once the file is open, and taken as where the target will be when the device next takes audio
+    /// (so neither opening time nor device periods add error). The target must move in real time.</summary>
+    public void Play(TrackHandle track, Func<TimeSpan> startAt) => Post(() => DoPlay(track, () => startAt() + _out.UntilNextTake, moving: true));
 
     /// <summary>Sets what follows the anchor track (see class remarks). Null means "stop after it".</summary>
     public void SetNext(TrackHandle? next) => Post(() => DoSetNext(next));
@@ -164,10 +169,11 @@ public sealed class PlaybackEngine : IDisposable
         SetState(PlaybackState.Playing);
     });
 
-    public void Seek(TimeSpan position) => Post(() => DoSeek(position));
+    public void Seek(TimeSpan position) => Post(() => DoSeek(() => position));
 
-    /// <summary>Seeks to a position computed on the engine thread right before the jump.</summary>
-    public void SeekTo(Func<TimeSpan> position) => Post(() => DoSeek(position()));
+    /// <summary>Seeks to a moving target (see <see cref="Play(TrackHandle, Func{TimeSpan})"/>), computed on the
+    /// engine thread right before the jump.</summary>
+    public void SeekTo(Func<TimeSpan> position) => Post(() => DoSeek(() => position() + _out.UntilNextTake));
 
     /// <summary>How long audio takes from the ring to the speaker (device buffering); zero when unknown.</summary>
     public TimeSpan OutputLatency => TimeSpan.FromSeconds((double)_out.LatencyFrames / SampleRate);
@@ -355,7 +361,7 @@ public sealed class PlaybackEngine : IDisposable
         Collect();
     }
 
-    private void DoPlay(TrackHandle track, Func<TimeSpan> startAt)
+    private void DoPlay(TrackHandle track, Func<TimeSpan> startAt, bool moving)
     {
         int gen = ++_playGen;
         _anchor = track;
@@ -369,9 +375,9 @@ public sealed class PlaybackEngine : IDisposable
             {
                 dec = track.OpenDecoder(rate);
                 long frame = (long)(startAt().TotalSeconds * rate);
-                if (frame > 0) dec.Seek(frame);
+                if (frame > 0) dec.Seek(frame); // for a moving target this fetches the bytes; it is settled later
                 var opened = dec;
-                Post(() => OnPlayOpened(gen, track, opened, Math.Max(0, frame)));
+                Post(() => OnPlayOpened(gen, track, opened, Math.Max(0, frame), moving ? startAt : null));
             }
             catch (Exception ex)
             {
@@ -382,21 +388,55 @@ public sealed class PlaybackEngine : IDisposable
         });
     }
 
-    private void OnPlayOpened(int gen, TrackHandle track, Decoder dec, long startFrame)
+    private void OnPlayOpened(int gen, TrackHandle track, Decoder dec, long startFrame, Func<TimeSpan>? retarget)
     {
         if (gen != _playGen) { dec.Dispose(); return; }
         var src = new Source(track, dec) { Pos = startFrame };
         _live.Add(src);
         _fadeIn = null;
-        _out.Flush();
         if (_active?.Source is { } prev) Emit(new TrackEnded(prev.Track, Completed: false));
-        _pending.Clear();
+        // A moving target moved while the file opened (and this was posted): settle it here, last thing.
+        if (retarget is not null) startFrame = Settle(src, startFrame, retarget);
         _current = src;
-        _active = new Segment(_out.WriteIndex, src, startFrame);
+        Jump(src, startFrame);
         _out.SetPaused(false);
         SetState(PlaybackState.Playing);
         Emit(new TrackStarted(track, src.Duration));
         Collect();
+    }
+
+    /// <summary>Seeks <paramref name="src"/> to wherever <paramref name="target"/> says, again if it moved on while
+    /// seeking (a remote file can take a while; the bytes are there the second time). Returns the frame.</summary>
+    private long Settle(Source src, long frame, Func<TimeSpan> target)
+    {
+        for (int i = 0; i < 3; i++)
+        {
+            long want = ClampFrame(src, target());
+            if (Math.Abs(want - frame) < SampleRate / 200) break; // within 5 ms
+            frame = want;
+            src.AtEnd = !src.Decoder.Seek(frame);
+            src.Pos = frame;
+        }
+        return frame;
+    }
+
+    private long ClampFrame(Source src, TimeSpan t)
+    {
+        long frame = Math.Max(0, (long)(t.TotalSeconds * SampleRate));
+        return src.Duration is { } d ? Math.Min(frame, (long)(d.TotalSeconds * SampleRate)) : frame;
+    }
+
+    /// <summary>Makes <paramref name="src"/> (already at <paramref name="frame"/>) audible from the device's next take.
+    /// The first chunk is decoded before the flush and written right after it, so the device never finds the ring
+    /// empty in between (that would delay the audio by a whole device period and put the position off by as much).</summary>
+    private void Jump(Source src, long frame)
+    {
+        int n = src.AtEnd ? 0 : Read(src, _buf, ChunkFrames);
+        if (n < ChunkFrames) src.AtEnd = true;
+        _out.Flush();
+        _pending.Clear();
+        _active = new Segment(_out.WriteIndex, src, frame);
+        if (n > 0) _out.Write(_buf.AsSpan(0, n * 2));
     }
 
     private void DoSetNext(TrackHandle? next)
@@ -481,12 +521,10 @@ public sealed class PlaybackEngine : IDisposable
         Collect();
     }
 
-    private void DoSeek(TimeSpan position)
+    private void DoSeek(Func<TimeSpan> target)
     {
         var a = _active;
         if (a?.Source is not { } src) return;
-        long frame = Math.Max(0, (long)(position.TotalSeconds * SampleRate));
-        if (src.Duration is { } d) frame = Math.Min(frame, (long)(d.TotalSeconds * SampleRate));
 
         if (_fadeIn is { } fi)
         {
@@ -514,12 +552,12 @@ public sealed class PlaybackEngine : IDisposable
             _nextFor = src.Track;
             _live.Add(cur);
         }
-        _out.Flush();
-        _pending.Clear();
+        long frame = ClampFrame(src, target());
         src.AtEnd = !src.Decoder.Seek(frame);
         src.Pos = frame;
+        frame = Settle(src, frame, target);
         _current = src;
-        _active = new Segment(_out.WriteIndex, src, frame);
+        Jump(src, frame);
         Collect();
     }
 

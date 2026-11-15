@@ -24,7 +24,7 @@ public partial class App : Application
             _shell = new DesktopShell(desktop, _host, vm, main);
             desktop.ShutdownRequested += (_, _) => Shutdown();
             desktop.Exit += (_, _) => Shutdown();
-            _host.Start(Program.AddFolders);
+            _host.Start(Program.AddFolders, Program.Vibe);
             vm.Start();
         }
         base.OnFrameworkInitializationCompleted();

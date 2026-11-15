@@ -12,6 +12,11 @@
 
 #include <math.h>
 #include <stdatomic.h>
+#if defined(_WIN32)
+#  include <windows.h>
+#elif !defined(__APPLE__)
+#  include <time.h>
+#endif
 #include <stdlib.h>
 #include <string.h>
 
@@ -35,6 +40,11 @@ typedef struct {
 typedef float lfm_eq_state[LFM_EQ_MAX_BANDS][2][2]; /* band, channel, z1/z2 (transposed direct form II) */
 
 struct lfm_output {
+    /* device clock: what the last device callback took and when (seqlock: odd = being written) */
+    _Atomic uint32_t clk_seq;
+    _Atomic int64_t  clk_idx, clk_adv, clk_frames, clk_ns;
+    int64_t          clk_prev;  /* callback-only */
+
     float*  buf;            /* capacity * LFM_CHANNELS */
     int64_t capacity;       /* frames */
     int32_t rate;
@@ -77,10 +87,67 @@ struct lfm_output {
     ma_device   device;
 };
 
+static int64_t now_ns(void)
+{
+#if defined(_WIN32)
+    static LARGE_INTEGER freq;
+    LARGE_INTEGER t;
+    if (freq.QuadPart == 0) QueryPerformanceFrequency(&freq);
+    QueryPerformanceCounter(&t);
+    return (int64_t)((double)t.QuadPart * 1e9 / (double)freq.QuadPart);
+#elif defined(__APPLE__)
+    return (int64_t)clock_gettime_nsec_np(CLOCK_UPTIME_RAW);
+#else
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return (int64_t)ts.tv_sec * 1000000000LL + ts.tv_nsec;
+#endif
+}
+
 static void data_callback(ma_device* dev, void* out, const void* in, ma_uint32 frames)
 {
     (void)in;
-    lfm_output_render((lfm_output*)dev->pUserData, (float*)out, (int32_t)frames);
+    lfm_output* o = (lfm_output*)dev->pUserData;
+    lfm_output_render(o, (float*)out, (int32_t)frames);
+
+    /* Devices take audio a period at a time (up to 100 ms here); remembering when lets readers interpolate
+     * the position in between. A flush makes the index jump, so the advance is capped at what was asked for. */
+    int64_t idx = atomic_load_explicit(&o->read_idx, memory_order_relaxed);
+    int64_t adv = idx - o->clk_prev;
+    if (adv < 0) adv = 0;
+    if (adv > (int64_t)frames) adv = frames;
+    o->clk_prev = idx;
+    uint32_t s = atomic_load_explicit(&o->clk_seq, memory_order_relaxed);
+    atomic_store_explicit(&o->clk_seq, s + 1, memory_order_relaxed);
+    atomic_thread_fence(memory_order_release);
+    atomic_store_explicit(&o->clk_idx, idx, memory_order_relaxed);
+    atomic_store_explicit(&o->clk_adv, adv, memory_order_relaxed);
+    atomic_store_explicit(&o->clk_frames, (int64_t)frames, memory_order_relaxed);
+    atomic_store_explicit(&o->clk_ns, now_ns(), memory_order_relaxed);
+    atomic_store_explicit(&o->clk_seq, s + 2, memory_order_release);
+}
+
+LFM_API int64_t lfm_output_read_clock(lfm_output* o, int64_t* advance, int64_t* period, int64_t* age_ns)
+{
+    *advance = 0;
+    *period = 0;
+    *age_ns = 0;
+    if (!o->has_device) return atomic_load_explicit(&o->read_idx, memory_order_acquire);
+    for (;;) {
+        uint32_t s1 = atomic_load_explicit(&o->clk_seq, memory_order_acquire);
+        if (s1 & 1) continue;
+        int64_t idx = atomic_load_explicit(&o->clk_idx, memory_order_relaxed);
+        int64_t adv = atomic_load_explicit(&o->clk_adv, memory_order_relaxed);
+        int64_t per = atomic_load_explicit(&o->clk_frames, memory_order_relaxed);
+        int64_t ns  = atomic_load_explicit(&o->clk_ns, memory_order_relaxed);
+        atomic_thread_fence(memory_order_acquire);
+        if (atomic_load_explicit(&o->clk_seq, memory_order_relaxed) != s1) continue;
+        if (ns == 0) return atomic_load_explicit(&o->read_idx, memory_order_acquire); /* no callback yet */
+        *advance = adv;
+        *period = per;
+        *age_ns = now_ns() - ns;
+        return idx;
+    }
 }
 
 static void init_consumer_state(lfm_output* o)

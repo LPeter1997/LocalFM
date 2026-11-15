@@ -13,6 +13,9 @@ internal static class Program
     /// <summary>Folders given with --add-folder; added as sources at startup.</summary>
     public static IReadOnlyList<string> AddFolders { get; private set; } = [];
 
+    /// <summary>--vibe-host, or --vibe-join CODE.</summary>
+    public static VibeStart? Vibe { get; private set; }
+
     [STAThread]
     public static int Main(string[] args)
     {
@@ -20,6 +23,11 @@ internal static class Program
         for (int i = 0; i < args.Length - 1; i++)
             if (args[i] == "--add-folder") folders.Add(Path.GetFullPath(args[++i]));
         AddFolders = folders;
+        for (int i = 0; i < args.Length; i++)
+        {
+            if (args[i] == "--vibe-host") Vibe = new VibeStart(null);
+            else if (args[i] == "--vibe-join" && i + 1 < args.Length) Vibe = new VibeStart(args[++i]);
+        }
         return BuildAvaloniaApp().StartWithClassicDesktopLifetime(args);
     }
 

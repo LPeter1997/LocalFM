@@ -31,6 +31,37 @@ public sealed unsafe class AudioOutput : IDisposable
     public long Writable => NativeMethods.OutputWritable(Handle);
     public long WriteIndex => NativeMethods.OutputWriteIndex(Handle);
     public long ReadIndex => NativeMethods.OutputReadIndex(Handle);
+
+    /// <summary>How long until the device takes audio again (it takes a period at a time): new audio written
+    /// after a flush is heard from then on. Zero when unknown or offline.</summary>
+    public TimeSpan UntilNextTake
+    {
+        get
+        {
+            NativeMethods.OutputReadClock(Handle, out _, out long period, out long ageNs);
+            if (period <= 0) return TimeSpan.Zero;
+            double periodS = period / (double)SampleRate;
+            double wait = periodS - ageNs / 1e9;
+            // A take due within a few ms (or overdue) will most likely happen before the new audio is written:
+            // then the one after it is the one that counts.
+            while (wait < 0.015) wait += periodS;
+            return TimeSpan.FromSeconds(wait);
+        }
+    }
+
+    /// <summary>The read index between device callbacks: the frames the last callback took are counted as they
+    /// play out (devices take whole periods of up to 100 ms, which would make positions jump in steps).
+    /// Never ahead of what the device has actually taken.</summary>
+    public long SmoothReadIndex
+    {
+        get
+        {
+            long idx = NativeMethods.OutputReadClock(Handle, out long adv, out _, out long ageNs);
+            if (adv <= 0 || ageNs <= 0) return idx;
+            long played = (long)(ageNs * (SampleRate / 1e9));
+            return idx - adv + Math.Min(adv, played);
+        }
+    }
     public long Underruns => NativeMethods.OutputUnderruns(Handle);
 
     public int Write(ReadOnlySpan<float> interleaved)

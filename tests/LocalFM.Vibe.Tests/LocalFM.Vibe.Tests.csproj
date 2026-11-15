@@ -18,5 +18,6 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\LocalFM.Vibe\LocalFM.Vibe.csproj" />
+    <Compile Include="..\LocalFM.Library.Tests\LibraryFixture.cs" Link="LibraryFixture.cs" />
   </ItemGroup>
 </Project>

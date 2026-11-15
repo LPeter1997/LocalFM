@@ -65,6 +65,12 @@ LFM_API int32_t lfm_output_truncate(lfm_output* o, int64_t write_index);
 /* Consumer position in write-index space (includes flushed frames). */
 LFM_API int64_t lfm_output_read_index(lfm_output* o);
 LFM_API int64_t lfm_output_underruns(lfm_output* o);
+/* The read index as of the last device callback, how many frames that callback took from the ring
+ * (`advance`), how many it asked for (`period`, also when the ring was empty) and how long ago it ran
+ * (`age_ns`). The taken frames play out over about one period, so idx - advance + min(advance, age * rate)
+ * is a smooth position between callbacks, and the next callback is due in about period/rate - age.
+ * Offline: read index and zeros. */
+LFM_API int64_t lfm_output_read_clock(lfm_output* o, int64_t* advance, int64_t* period, int64_t* age_ns);
 
 /* Frames between the ring's read position and the speaker (device buffer), 0 when unknown/offline.
  * Callers subtract it to get the position actually heard. */
