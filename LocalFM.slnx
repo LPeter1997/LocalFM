@@ -3,6 +3,7 @@
     <Project Path="src/LocalFM.App/LocalFM.App.csproj" />
     <Project Path="src/LocalFM.Core/LocalFM.Core.csproj" />
     <Project Path="src/LocalFM.Desktop/LocalFM.Desktop.csproj" />
+    <Project Path="src/LocalFM.Ingest/LocalFM.Ingest.csproj" />
     <Project Path="src/LocalFM.Library/LocalFM.Library.csproj" />
     <Project Path="src/LocalFM.Metadata/LocalFM.Metadata.csproj" />
     <Project Path="src/LocalFM.Native/LocalFM.Native.csproj" />
@@ -12,6 +13,7 @@
   <Folder Name="/tests/">
     <Project Path="tests/LocalFM.App.Tests/LocalFM.App.Tests.csproj" />
     <Project Path="tests/LocalFM.Desktop.Tests/LocalFM.Desktop.Tests.csproj" />
+    <Project Path="tests/LocalFM.Ingest.Tests/LocalFM.Ingest.Tests.csproj" />
     <Project Path="tests/LocalFM.Library.Tests/LocalFM.Library.Tests.csproj" />
     <Project Path="tests/LocalFM.Metadata.Tests/LocalFM.Metadata.Tests.csproj" />
     <Project Path="tests/LocalFM.Playback.Tests/LocalFM.Playback.Tests.csproj" />
