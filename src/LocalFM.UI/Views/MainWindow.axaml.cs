@@ -33,8 +33,9 @@ public partial class MainWindow : Window
         base.OnOpened(e);
         if (Program.SnapshotPath is { } path)
         {
-            if (int.TryParse(Environment.GetEnvironmentVariable("LOCALFM_SNAPSHOT_HEIGHT"), out int height)) Height = height;
-            if (int.TryParse(Environment.GetEnvironmentVariable("LOCALFM_SNAPSHOT_WIDTH"), out int width)) Width = width;
+            // Snapshots may go below the minimum size: phone-sized shots check the compact layout on the desktop.
+            if (int.TryParse(Environment.GetEnvironmentVariable("LOCALFM_SNAPSHOT_HEIGHT"), out int height)) { MinHeight = Math.Min(MinHeight, height); Height = height; }
+            if (int.TryParse(Environment.GetEnvironmentVariable("LOCALFM_SNAPSHOT_WIDTH"), out int width)) { MinWidth = Math.Min(MinWidth, width); Width = width; }
             _ = SnapshotAndExit(path);
         }
         else if (Vm is { } vm)

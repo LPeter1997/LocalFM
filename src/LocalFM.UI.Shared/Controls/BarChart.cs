@@ -58,6 +58,7 @@ public sealed class BarChart : Control
         double slot = w / d.Values.Count;
         double gap = Math.Min(slot * 0.25, 6), barW = Math.Max(1, slot - gap);
         var typeface = new Typeface(FontFamily.Default);
+        double labelEnd = double.NegativeInfinity; // labels that would touch the previous one are skipped (narrow charts)
 
         for (int i = 0; i < d.Values.Count; i++)
         {
@@ -72,7 +73,11 @@ public sealed class BarChart : Control
             {
                 var ft = new FormattedText(text, CultureInfo.CurrentCulture, FlowDirection.LeftToRight, typeface, 11, label);
                 double lx = Math.Clamp(x + barW / 2 - ft.Width / 2, 0, Math.Max(0, w - ft.Width));
-                ctx.DrawText(ft, new Point(lx, h + 3));
+                if (lx >= labelEnd + 8)
+                {
+                    ctx.DrawText(ft, new Point(lx, h + 3));
+                    labelEnd = lx + ft.Width;
+                }
             }
         }
         ctx.DrawLine(new Pen(label, 0.5), new Point(0, h + 0.5), new Point(w, h + 0.5));

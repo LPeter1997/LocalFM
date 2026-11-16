@@ -1,0 +1,34 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:LocalFM.UI.ViewModels"
+             xmlns:c="using:LocalFM.UI.Controls"
+             x:Class="LocalFM.UI.Views.MoreView"
+             x:DataType="vm:MoreViewModel">
+  <DockPanel Margin="16,0,16,12">
+    <TextBlock DockPanel.Dock="Top" Classes="h1" Text="More" Margin="8,0,0,12" />
+    <StackPanel DockPanel.Dock="Bottom" Spacing="4" Margin="8,12,8,0">
+      <TextBlock Text="{Binding MainVm.ScanStatus}" Classes="small" Foreground="{StaticResource Accent}"
+                 IsVisible="{Binding MainVm.ScanStatus, Converter={x:Static ObjectConverters.IsNotNull}}" />
+      <TextBlock Text="{Binding MainVm.Counts}" Classes="small faint" TextWrapping="Wrap" />
+    </StackPanel>
+    <ScrollViewer>
+      <ItemsControl ItemsSource="{Binding Items}">
+        <ItemsControl.ItemTemplate>
+          <DataTemplate x:DataType="vm:NavItem">
+            <Button Classes="row" HorizontalAlignment="Stretch"
+                    Command="{Binding $parent[ItemsControl].((vm:MoreViewModel)DataContext).MainVm.NavigateToCommand}"
+                    CommandParameter="{Binding}">
+              <Grid ColumnDefinitions="Auto,*,Auto">
+                <c:Icon Classes="icon" Data="{Binding Icon}" />
+                <TextBlock Grid.Column="1" Text="{Binding Name}" VerticalAlignment="Center" FontWeight="Medium" Margin="16,0,0,0" />
+                <Border Grid.Column="2" Classes="badge" IsVisible="{Binding HasBadge}">
+                  <TextBlock Text="{Binding BadgeText}" />
+                </Border>
+              </Grid>
+            </Button>
+          </DataTemplate>
+        </ItemsControl.ItemTemplate>
+      </ItemsControl>
+    </ScrollViewer>
+  </DockPanel>
+</UserControl>

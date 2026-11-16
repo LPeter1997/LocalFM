@@ -28,6 +28,8 @@ public static class Converters
 
     public static readonly IValueConverter IsZero = new FuncValueConverter<int, bool>(n => n == 0);
 
+    public static readonly IValueConverter Positive = new FuncValueConverter<int, bool>(n => n > 0);
+
     public static readonly IValueConverter NotNull =
         new FuncValueConverter<object?, bool>(o => o is not null);
 }

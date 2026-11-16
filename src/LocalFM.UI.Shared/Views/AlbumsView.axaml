@@ -5,14 +5,15 @@
              xmlns:enrich="using:LocalFM.Library.Enrich"
              xmlns:c="using:LocalFM.UI.Controls"
              xmlns:ui="using:LocalFM.UI"
+             xmlns:v="using:LocalFM.UI.Views"
              x:Class="LocalFM.UI.Views.AlbumsView"
              x:DataType="vm:AlbumsViewModel">
   <DockPanel>
-    <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Spacing="16" Margin="24,0,24,12">
-      <TextBlock Classes="h1" Text="{Binding Title}" VerticalAlignment="Center" />
+    <WrapPanel x:Name="PageHeader" DockPanel.Dock="Top" ItemSpacing="16" LineSpacing="8">
+      <TextBlock Classes="h1" Text="{Binding Title}" VerticalAlignment="Center" TextWrapping="Wrap" />
       <TextBlock Classes="muted" Text="{Binding Summary}" VerticalAlignment="Center" Margin="0,6,0,0" />
       <Button Classes="primary" Command="{Binding PlayAllCommand}" IsVisible="{Binding IsArtistPage}" VerticalAlignment="Center">Play all</Button>
-    </StackPanel>
+    </WrapPanel>
     <Panel>
       <ScrollViewer>
         <StackPanel>
@@ -125,15 +126,14 @@
             </ItemsControl>
           </StackPanel>
         </Grid>
-        <ItemsControl ItemsSource="{Binding Albums}" Margin="16,0,16,16">
-          <ItemsControl.ItemsPanel>
-            <ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate>
-          </ItemsControl.ItemsPanel>
+        <ItemsControl x:Name="AlbumGrid" ItemsSource="{Binding Albums}">
           <ItemsControl.ItemTemplate>
             <DataTemplate x:DataType="lib:AlbumSummary">
-              <Button Classes="flat albumcard" Width="184" Margin="4" Padding="8" HorizontalContentAlignment="Stretch"
+              <Button Classes="flat albumcard" Margin="4" Padding="8" HorizontalContentAlignment="Stretch"
                       Command="{Binding $parent[ItemsControl].((vm:AlbumsViewModel)DataContext).OpenCommand}" CommandParameter="{Binding}">
                 <StackPanel Spacing="8">
+                  <!-- 168 px on the desktop; on a phone the cover scales to the card (two to a row) -->
+                  <Viewbox Stretch="Uniform">
                   <Border Width="168" Height="168" CornerRadius="8" ClipToBounds="True" Background="{StaticResource Surface3}">
                     <Panel>
                       <c:Icon Classes="icon" Data="{StaticResource IcoAlbum}" Width="48" Height="48" Stroke="{StaticResource Faint}" StrokeThickness="1.2" />
@@ -149,6 +149,7 @@
                       </Button>
                     </Panel>
                   </Border>
+                  </Viewbox>
                   <StackPanel Spacing="1">
                     <TextBlock Text="{Binding Title}" FontWeight="SemiBold" Foreground="{StaticResource Text}" TextTrimming="CharacterEllipsis" />
                     <TextBlock Classes="muted small" TextTrimming="CharacterEllipsis">
@@ -169,9 +170,27 @@
     </Panel>
   </DockPanel>
   <UserControl.Styles>
-    <!-- the card's play button only shows on hover -->
+    <Style Selector="WrapPanel#PageHeader"><Setter Property="Margin" Value="24,0,24,12" /></Style>
+    <Style Selector="v|MainView.compact WrapPanel#PageHeader"><Setter Property="Margin" Value="16,0,16,12" /></Style>
+    <Style Selector="ItemsControl#AlbumGrid">
+      <Setter Property="Margin" Value="16,0,16,16" />
+      <Setter Property="ItemsPanel">
+        <ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate>
+      </Setter>
+    </Style>
+    <Style Selector="Button.albumcard"><Setter Property="Width" Value="184" /></Style>
+    <!-- Phone: two cards to a row, filling the width -->
+    <Style Selector="v|MainView.compact ItemsControl#AlbumGrid">
+      <Setter Property="Margin" Value="8,0,8,12" />
+      <Setter Property="ItemsPanel">
+        <ItemsPanelTemplate><UniformGrid Columns="2" /></ItemsPanelTemplate>
+      </Setter>
+    </Style>
+    <Style Selector="v|MainView.compact Button.albumcard"><Setter Property="Width" Value="NaN" /></Style>
+    <!-- the card's play button only shows on hover; touch has no hover, and the album page plays it -->
     <Style Selector="Button.albumcard Button.play"><Setter Property="Opacity" Value="0" /></Style>
     <Style Selector="Button.albumcard:pointerover Button.play"><Setter Property="Opacity" Value="1" /></Style>
+    <Style Selector="v|MainView.touch Button.albumcard Button.play"><Setter Property="IsVisible" Value="False" /></Style>
     <Style Selector="Border.owned">
       <Setter Property="MinWidth" Value="24" /><Setter Property="Height" Value="24" /><Setter Property="CornerRadius" Value="12" />
       <Setter Property="Padding" Value="7,0" /><Setter Property="Background" Value="#B8141418" />

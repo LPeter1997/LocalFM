@@ -16,7 +16,7 @@ The app has a built-in snapshot mode (`src/LocalFM.UI/Views/MainWindow.axaml.cs`
 `LOCALFM_SNAPSHOT=<png>` it renders its own window to a PNG and exits, so there's no screen capture and no window
 stealing focus. `LOCALFM_OUTPUT=null` keeps playback silent while the audio clock still runs, so lyrics,
 position and visualizers move as in real use. Other options: `LOCALFM_SNAPSHOT_PAGE` (a nav page,
-`album`, `album:<title>`, `match`, `match:<title>`, `move:<title>` (first two songs), `tidy-albums`, `move`, `edit`, `mini`, `artist:<name>`), `_PLAY=1`, `_LYRICS=1`, `_VIBE=1` (vibe panel; `leave` presses Leave after 4 s; pass `--vibe-host`/`--vibe-join CODE` and `LOCALFM_VIBE_MAP=0`), `_NOWPLAYING=<mode>`, `_WAIT=<ms>`,
+`album`, `more` (the phone's More tab), `album:<title>`, `match`, `match:<title>`, `move:<title>` (first two songs), `tidy-albums`, `move`, `edit`, `mini`, `artist:<name>`), `_PLAY=1`, `_LYRICS=1`, `_VIBE=1` (vibe panel; `leave` presses Leave after 4 s; pass `--vibe-host`/`--vibe-join CODE` and `LOCALFM_VIBE_MAP=0`), `_NOWPLAYING=<mode>`, `_WAIT=<ms>`,
 `_WIDTH`/`_HEIGHT`, `_SCROLL=<px>`, `_UPDATE=available|downloading|notice|whatsnew` (banner states, no network; `quit`/`restart` press the real buttons against `LOCALFM_UPDATE_SOURCE`, docs/release.md), `_IMPORT=<zip/folder/link>` (Import page preview; `_IMPORT_RUN=1` also imports it into `<home>/imported`). Add an option there when a state you need can't be reached.
 
 Snapshots need a live desktop: while the session is locked (`loginctl show-session <id> -p LockedHint`),
@@ -37,8 +37,15 @@ scratchpad; it is private data and a review must not change it.
 3. **Snapshot everything**:
    `bash .claude/skills/ui-review/scripts/snapshot-all.sh <scratchpad>/uitest/home <scratchpad>/ui-<n>`
    (third argument: an AOT binary to check the release build). It covers every page, playing states,
-   each visualizer mode, lyrics, miniplayer, the minimum window size and scrolled long pages. When reviewing
-   one change, you can run just the relevant shots by copying the `shot` lines.
+   each visualizer mode, lyrics, miniplayer, the minimum window size, scrolled long pages and `phone-*` shots
+   (412×860: the compact layout Android uses). When reviewing one change, you can run just the relevant shots by
+   copying the `shot` lines.
+   **Phone (Android):** below 640 px `MainView` gets the `compact` class (bottom bar, mini player, full-screen
+   sheets); `touch` is set on Android. Pages adapt with `v|MainView.compact …` styles, so sizes that change go in
+   styles, not local values (a local value beats a style). For the real thing, with the emulator running and the
+   test music pushed (`adb push <lib>/music/. /sdcard/Music/`):
+   `bash .claude/skills/ui-review/scripts/snapshot-android.sh <scratchpad>/android-<n>` (needs the Android head
+   built; toolchain in docs/android.md). Check that wide shots did not change when touching compact styles.
 4. **Read the screenshots** with the Read tool, one by one, against `references/checklist.md`. Crop and
    enlarge (Python PIL) when judging text rendering, alignment within a few pixels, or a highlight effect.
    Compare equivalent screens side by side for consistency.

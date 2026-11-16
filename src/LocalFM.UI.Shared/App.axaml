@@ -46,6 +46,7 @@
     <StreamGeometry x:Key="IcoDown">M6 9l6 6 6-6</StreamGeometry>
     <StreamGeometry x:Key="IcoSearch">M10.5 4a6.5 6.5 0 1 1 0 13 6.5 6.5 0 1 1 0-13M15.5 15.5l5 5</StreamGeometry>
     <StreamGeometry x:Key="IcoBack">M15 5l-7 7 7 7</StreamGeometry>
+    <StreamGeometry x:Key="IcoMore">M5 11a1 1 0 1 0 0 2a1 1 0 1 0 0-2zM12 11a1 1 0 1 0 0 2a1 1 0 1 0 0-2zM19 11a1 1 0 1 0 0 2a1 1 0 1 0 0-2z</StreamGeometry>
     <StreamGeometry x:Key="IcoRefresh">M19.5 12a7.5 7.5 0 1 1-2.2-5.3M19.5 4v4.5H15</StreamGeometry>
     <StreamGeometry x:Key="IcoPlayNext">M4 6h11M4 11h11M4 16h6M14 14.5v6l5-3z</StreamGeometry>
     <StreamGeometry x:Key="IcoSave">M5 4h11l3 3v13H5zM8 4v5h7V4M8 20v-6h8v6</StreamGeometry>
@@ -144,6 +145,41 @@
       <Setter Property="CornerRadius" Value="18" />
       <Setter Property="Padding" Value="14,8" />
     </Style>
+
+    <!-- A full-width list row (the phone's More page) -->
+    <Style Selector="Button.row">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="Foreground" Value="{StaticResource Text}" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="Padding" Value="12,14" />
+      <Setter Property="CornerRadius" Value="8" />
+      <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+    </Style>
+    <Style Selector="Button.row:pointerover /template/ ContentPresenter, Button.row:pressed /template/ ContentPresenter">
+      <Setter Property="Background" Value="{StaticResource Surface2}" />
+      <Setter Property="Foreground" Value="{StaticResource Text}" />
+    </Style>
+
+    <!-- The phone's bottom bar: icon over a small label; the shown page gets a pill behind its icon -->
+    <Style Selector="Button.tab">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="Foreground" Value="{StaticResource Muted}" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="Padding" Value="0,8,0,6" />
+      <Setter Property="HorizontalAlignment" Value="Stretch" />
+      <Setter Property="HorizontalContentAlignment" Value="Center" />
+    </Style>
+    <Style Selector="Button.tab:pointerover /template/ ContentPresenter, Button.tab:pressed /template/ ContentPresenter">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="Foreground" Value="{StaticResource Text}" />
+    </Style>
+    <Style Selector="Button.tab Border.pill">
+      <Setter Property="CornerRadius" Value="14" />
+      <Setter Property="Padding" Value="18,4" />
+      <Setter Property="Background" Value="Transparent" />
+    </Style>
+    <Style Selector="Button.tab.on"><Setter Property="Foreground" Value="{StaticResource Text}" /></Style>
+    <Style Selector="Button.tab.on Border.pill"><Setter Property="Background" Value="{StaticResource Surface3}" /></Style>
 
     <!-- Sidebar navigation -->
     <Style Selector="ListBox.nav">

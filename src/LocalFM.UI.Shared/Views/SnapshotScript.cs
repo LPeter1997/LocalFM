@@ -34,6 +34,7 @@ public static class SnapshotScript
                      && vm.Host.Queries.AlbumTracks(m.ReleaseId).FirstOrDefault() is { } first) vm.MoveTrack(first);
             else if (page == "edit" && vm.Albums.Albums.FirstOrDefault() is { } e) vm.EditAlbum(e.ReleaseId);
             else if (page == "mini") openMiniplayer?.Invoke();
+            else if (page == "more") vm.ShowMoreCommand.Execute(null);
             else if (page.StartsWith("artist:", StringComparison.Ordinal)
                      && vm.Host.Queries.Artists(page[7..]).FirstOrDefault() is { } artist)
             {

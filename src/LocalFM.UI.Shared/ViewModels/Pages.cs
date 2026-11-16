@@ -14,6 +14,9 @@ public abstract partial class PageViewModel(MainViewModel main) : ObservableObje
 
     public abstract string Title { get; }
 
+    /// <summary>Library editing (match, edit, merge, move) is offered on this platform.</summary>
+    public bool CanEdit => Main.Capabilities.Editing;
+
     /// <summary>Whether the toolbar search box applies to this page.</summary>
     public virtual bool Searchable => false;
 

@@ -19,10 +19,13 @@ public partial class MainView : UserControl
     public MainView()
     {
         InitializeComponent();
-        // The slider follows playback until the user grabs it; the seek happens on release.
-        SeekSlider.AddHandler(PointerPressedEvent, (_, _) => { if (Vm is { } vm) vm.NowPlaying.IsSeeking = true; }, RoutingStrategies.Tunnel, handledEventsToo: true);
-        SeekSlider.AddHandler(PointerReleasedEvent, (_, _) => CommitSeek(), RoutingStrategies.Tunnel, handledEventsToo: true);
-        SeekSlider.AddHandler(PointerCaptureLostEvent, (_, _) => CommitSeek(), RoutingStrategies.Tunnel, handledEventsToo: true);
+        // The sliders follow playback until the user grabs one; the seek happens on release.
+        foreach (var slider in new[] { SeekSlider, CompactSeekSlider })
+        {
+            slider.AddHandler(PointerPressedEvent, (_, _) => { if (Vm is { } vm) vm.NowPlaying.IsSeeking = true; }, RoutingStrategies.Tunnel, handledEventsToo: true);
+            slider.AddHandler(PointerReleasedEvent, (_, _) => CommitSeek(slider), RoutingStrategies.Tunnel, handledEventsToo: true);
+            slider.AddHandler(PointerCaptureLostEvent, (_, _) => CommitSeek(slider), RoutingStrategies.Tunnel, handledEventsToo: true);
+        }
         MiniButton.Click += (_, _) => MiniPlayerRequested?.Invoke();
         // Scroll over the volume icon or slider: 5% a notch (touchpads scroll in finer steps).
         VolumeArea.AddHandler(PointerWheelChangedEvent, (_, e) =>
@@ -46,13 +49,19 @@ public partial class MainView : UserControl
         {
             if ((e.Source as Control)?.DataContext is LyricLineViewModel line) Vm?.Lyrics.SeekTo(line);
         }, RoutingStrategies.Bubble, handledEventsToo: true);
-        SizeChanged += (_, e) =>
-        {
-            // Narrow windows: a slimmer lyrics panel and volume slider, so the page and player bar still fit.
-            bool narrow = e.NewSize.Width < 1100;
-            LyricsPanel.Width = narrow ? 300 : 380;
-            VolumeSlider.Width = narrow ? 80 : 120;
-        };
+        SizeChanged += (_, e) => ApplyWidth(e.NewSize.Width);
+    }
+
+    /// <summary>Below this width the phone layout is used (bottom bar, mini player, full-screen panels).</summary>
+    public const double CompactWidth = 640;
+
+    private void ApplyWidth(double width)
+    {
+        bool compact = width < CompactWidth;
+        Classes.Set("compact", compact);
+        // Narrow windows: a slimmer lyrics panel and volume slider (styles), so the page and player bar still fit.
+        Classes.Set("narrow", !compact && width < 1100);
+        if (Vm is { } vm) vm.IsCompact = compact;
     }
 
     /// <summary>The row the desktop window drags by.</summary>
@@ -104,6 +113,8 @@ public partial class MainView : UserControl
     {
         base.OnDataContextChanged(e);
         if (Vm is not { } vm) return;
+        Classes.Set("touch", vm.Capabilities.Touch);
+        if (Bounds.Width > 0) ApplyWidth(Bounds.Width);
         vm.PickFolder = async () =>
         {
             if (Storage is not { } storage) return null;
@@ -167,11 +178,11 @@ public partial class MainView : UserControl
         LyricsScroll.Offset = new Vector(0, target);
     }
 
-    private void CommitSeek()
+    private void CommitSeek(Slider slider)
     {
         if (Vm is not { } vm || !vm.NowPlaying.IsSeeking) return;
         vm.NowPlaying.IsSeeking = false;
-        vm.NowPlaying.CommitSeek(SeekSlider.Value);
+        vm.NowPlaying.CommitSeek(slider.Value);
     }
 
     private void OnKeyDownTunnel(object? sender, KeyEventArgs e)

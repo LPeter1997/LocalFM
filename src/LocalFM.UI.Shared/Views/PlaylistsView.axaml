@@ -4,10 +4,12 @@
              xmlns:lib="using:LocalFM.Library"
              xmlns:c="using:LocalFM.UI.Controls"
              xmlns:ui="using:LocalFM.UI"
+             xmlns:v="using:LocalFM.UI.Views"
              x:Class="LocalFM.UI.Views.PlaylistsView"
              x:DataType="vm:PlaylistsViewModel">
-  <Grid ColumnDefinitions="260,*">
-    <DockPanel Margin="24,0,8,12">
+  <!-- The playlists beside the open one; on a phone above it -->
+  <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,*">
+    <DockPanel x:Name="PlaylistList" Grid.RowSpan="2">
       <TextBlock DockPanel.Dock="Top" Classes="h1" Text="Playlists" Margin="0,0,0,12" />
       <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto" Margin="0,0,0,8">
         <TextBox Text="{Binding NewName}" PlaceholderText="New playlist name">
@@ -34,14 +36,14 @@
         </ListBox.ItemTemplate>
       </ListBox>
     </DockPanel>
-    <StackPanel Grid.Column="1" VerticalAlignment="Center" HorizontalAlignment="Center" Spacing="8" MaxWidth="360"
+    <StackPanel Classes="detail" VerticalAlignment="Center" HorizontalAlignment="Center" Spacing="8" MaxWidth="360"
                 IsVisible="{Binding Playlists.Count, Converter={x:Static ui:Converters.IsZero}}">
       <c:Icon Classes="icon" Data="{StaticResource IcoPlaylist}" Width="40" Height="40" Stroke="{StaticResource Faint}" HorizontalAlignment="Center" />
       <TextBlock Classes="h2" Text="No playlists yet" HorizontalAlignment="Center" />
       <TextBlock Classes="muted" TextWrapping="Wrap" TextAlignment="Center"
-                 Text="Name one on the left, save the queue from the Queue page, or right-click any track and add it to a playlist." />
+                 Text="Name a new one, save the queue from the Queue page, or open any track's menu and add it to a playlist." />
     </StackPanel>
-    <DockPanel Grid.Column="1">
+    <DockPanel Classes="detail">
       <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Spacing="12" Margin="16,0,24,12"
                   IsVisible="{Binding Selected, Converter={x:Static ObjectConverters.IsNotNull}}">
         <TextBlock Classes="h2" Text="{Binding Selected.Name}" VerticalAlignment="Center" />
@@ -70,4 +72,29 @@
       </ListBox>
     </DockPanel>
   </Grid>
+  <UserControl.Styles>
+    <Style Selector="DockPanel#PlaylistList">
+      <Setter Property="Width" Value="228" />
+      <Setter Property="Margin" Value="24,0,8,12" />
+    </Style>
+    <Style Selector=":is(Control).detail">
+      <Setter Property="Grid.Column" Value="1" />
+      <Setter Property="Grid.RowSpan" Value="2" />
+    </Style>
+    <!-- Phone: the list on top (a few rows), the open playlist below -->
+    <Style Selector="v|MainView.compact DockPanel#PlaylistList">
+      <Setter Property="Width" Value="NaN" />
+      <Setter Property="MaxHeight" Value="300" />
+      <Setter Property="VerticalAlignment" Value="Top" />
+      <Setter Property="Grid.RowSpan" Value="1" />
+      <Setter Property="Grid.ColumnSpan" Value="2" />
+      <Setter Property="Margin" Value="16,0,16,8" />
+    </Style>
+    <Style Selector="v|MainView.compact :is(Control).detail">
+      <Setter Property="Grid.Row" Value="1" />
+      <Setter Property="Grid.Column" Value="0" />
+      <Setter Property="Grid.RowSpan" Value="1" />
+      <Setter Property="Grid.ColumnSpan" Value="2" />
+    </Style>
+  </UserControl.Styles>
 </UserControl>

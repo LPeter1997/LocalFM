@@ -22,16 +22,20 @@
     <DataTemplate DataType="vm:TidyViewModel"><v:TidyView /></DataTemplate>
     <DataTemplate DataType="vm:SoundViewModel"><v:SoundView /></DataTemplate>
     <DataTemplate DataType="vm:StatsViewModel"><v:StatsView /></DataTemplate>
+    <DataTemplate DataType="vm:MoreViewModel"><v:MoreView /></DataTemplate>
   </UserControl.DataTemplates>
 
-  <Grid RowDefinitions="Auto,*,Auto,Auto" Background="{StaticResource Surface}">
+  <!-- Rows: title, pages, update banner, player bar, (phone) bottom bar. On a phone a full-screen sheet (now
+       playing, lyrics, the vibe) collapses the other rows, so the page row fills the screen. -->
+  <Grid RowDefinitions="Auto,*,Auto,Auto,Auto" Background="{StaticResource Surface}">
     <!-- Our own title bar: drag to move, double-click to maximize; the page sheet below tucks into it -->
-    <Grid x:Name="TitleBar" Height="48" ColumnDefinitions="216,Auto,*,*,Auto" Background="{StaticResource Surface}">
-      <StackPanel Orientation="Horizontal" Spacing="8" Margin="20,0,0,0" VerticalAlignment="Center">
+    <Grid x:Name="TitleBar" Height="48" ColumnDefinitions="Auto,Auto,*,*,Auto" Background="{StaticResource Surface}"
+          IsVisible="{Binding !SheetOpen}">
+      <StackPanel x:Name="Brand" Orientation="Horizontal" Spacing="8" Margin="20,0,0,0" VerticalAlignment="Center">
         <Border Width="26" Height="26" CornerRadius="7" Background="{StaticResource Accent}">
           <c:Icon Classes="icon" Data="{StaticResource IcoNote}" Width="15" Height="15" Stroke="White" />
         </Border>
-        <TextBlock Text="LocalFM" FontSize="18" FontWeight="Bold" VerticalAlignment="Center" />
+        <TextBlock Classes="wideonly" Text="LocalFM" FontSize="18" FontWeight="Bold" VerticalAlignment="Center" />
       </StackPanel>
       <Button Grid.Column="1" Classes="flat" Command="{Binding BackCommand}" IsVisible="{Binding CanGoBack}" Margin="8,0,0,0" ToolTip.Tip="Back (Alt+Left)">
         <c:Icon Classes="icon" Data="{StaticResource IcoBack}" />
@@ -44,9 +48,9 @@
       <ContentControl Grid.Column="4" x:Name="CaptionSlot" />
     </Grid>
 
-    <Grid Grid.Row="1" ColumnDefinitions="216,*">
+    <Grid Grid.Row="1" ColumnDefinitions="Auto,*">
       <!-- Sidebar -->
-      <Border Background="{StaticResource Surface}">
+      <Border x:Name="Sidebar" Width="216" Background="{StaticResource Surface}">
         <DockPanel Margin="12,6,12,12">
           <StackPanel DockPanel.Dock="Bottom" Spacing="4" Margin="8,0">
             <TextBlock Text="{Binding ScanStatus}" Classes="small" Foreground="{StaticResource Accent}"
@@ -70,8 +74,7 @@
       </Border>
 
       <!-- The page sheet: pages, the now-playing view and the lyrics panel -->
-      <Border Grid.Column="1" Background="{StaticResource Bg}" BorderBrush="{StaticResource Line}" BorderThickness="1,1,0,0"
-              CornerRadius="10,0,0,0" ClipToBounds="True">
+      <Border Grid.Column="1" x:Name="Sheet" Background="{StaticResource Bg}" BorderBrush="{StaticResource Line}" ClipToBounds="True">
       <Grid ColumnDefinitions="*,Auto">
       <ContentControl Content="{Binding CurrentPage}" Margin="0,20,0,0" />
 
@@ -88,7 +91,7 @@
             </LinearGradientBrush>
           </Border.Background>
         </Border>
-        <Grid RowDefinitions="Auto,*,Auto" Margin="32,18,32,24">
+        <Grid Classes="wideonly" RowDefinitions="Auto,*,Auto" Margin="32,18,32,24">
           <!-- Closed with the same player-bar button that opened it (or V / Esc) -->
           <Grid ColumnDefinitions="*,Auto,Auto">
             <TextBlock Classes="h2" Text="Now playing" VerticalAlignment="Center" />
@@ -122,19 +125,96 @@
             </StackPanel>
           </Grid>
           <c:Visualizer Grid.Row="2" Height="200" Source="{Binding Host.Player}" Mode="{Binding VisualizerMode}"
-                        Active="{Binding NowPlayingOpen}" BarBrush="{StaticResource Accent}" />
+                        Active="{Binding WideVisualizerActive}" BarBrush="{StaticResource Accent}" />
+        </Grid>
+
+        <!-- Phone: the whole screen, top to bottom; the player controls live here instead of the bar -->
+        <Grid Classes="compactonly" RowDefinitions="Auto,*,Auto,Auto,Auto,Auto,Auto" Margin="16,4,16,12">
+          <Grid ColumnDefinitions="Auto,*,Auto">
+            <Button Classes="flat" Command="{Binding ToggleNowPlayingCommand}" ToolTip.Tip="Close">
+              <c:Icon Classes="icon" Data="{StaticResource IcoDown}" />
+            </Button>
+            <ListBox Grid.Column="2" Classes="segmented" ItemsSource="{Binding VisualizerModes}" SelectedItem="{Binding VisualizerMode}">
+              <ListBox.ItemsPanel><ItemsPanelTemplate><StackPanel Orientation="Horizontal" /></ItemsPanelTemplate></ListBox.ItemsPanel>
+            </ListBox>
+          </Grid>
+          <Viewbox Grid.Row="1" Stretch="Uniform" StretchDirection="DownOnly" Margin="8,16,8,8" VerticalAlignment="Center">
+            <Border Width="420" Height="420" CornerRadius="12" ClipToBounds="True"
+                    Background="{StaticResource Surface3}" BoxShadow="0 18 50 0 #A0000000">
+              <Panel>
+                <c:Icon Classes="icon" Data="{StaticResource IcoNote}" Width="80" Height="80" Stroke="{StaticResource Faint}" />
+                <c:CoverImage Path="{Binding NowPlaying.CoverPath}" DecodeWidth="840" />
+              </Panel>
+            </Border>
+          </Viewbox>
+          <c:Visualizer Grid.Row="2" Height="72" Margin="0,4,0,8" Source="{Binding Host.Player}" Mode="{Binding VisualizerMode}"
+                        Active="{Binding CompactVisualizerActive}" BarBrush="{StaticResource Accent}" />
+          <StackPanel Grid.Row="3" Spacing="3" DataContext="{Binding NowPlaying}" x:DataType="vm:NowPlayingViewModel">
+            <TextBlock Text="{Binding Title}" FontSize="22" FontWeight="Bold" TextTrimming="CharacterEllipsis" />
+            <TextBlock Text="{Binding Artist}" FontSize="16" Foreground="{StaticResource Accent}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+            <TextBlock Text="{Binding Album}" Classes="muted" TextTrimming="CharacterEllipsis" />
+          </StackPanel>
+          <Grid Grid.Row="4" RowDefinitions="Auto,Auto" ColumnDefinitions="*,*" Margin="0,10,0,0"
+                DataContext="{Binding NowPlaying}" x:DataType="vm:NowPlayingViewModel">
+            <Slider Grid.ColumnSpan="2" x:Name="CompactSeekSlider" Classes="seek" Minimum="0" Maximum="{Binding Duration}"
+                    Value="{Binding Position, Mode=OneWay}" IsEnabled="{Binding HasOwnTrack}" />
+            <TextBlock Grid.Row="1" Text="{Binding PositionText}" Classes="faint small" />
+            <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding DurationText}" Classes="faint small" HorizontalAlignment="Right" />
+          </Grid>
+          <Grid Grid.Row="5" ColumnDefinitions="*,*,Auto,*,*" Margin="0,6,0,8" IsEnabled="{Binding !IsFollowing}"
+                DataContext="{Binding NowPlaying}" x:DataType="vm:NowPlayingViewModel">
+            <Button Classes="flat" HorizontalAlignment="Center" Classes.on="{Binding Shuffle}" Command="{Binding ToggleShuffleCommand}">
+              <c:Icon Classes="icon" Data="{StaticResource IcoShuffle}" />
+            </Button>
+            <Button Grid.Column="1" Classes="flat" HorizontalAlignment="Center" Command="{Binding PreviousCommand}">
+              <c:Icon Classes="icon fill" Data="{StaticResource IcoPrev}" Width="26" Height="26" />
+            </Button>
+            <Button Grid.Column="2" Classes="play big" Command="{Binding PlayPauseCommand}">
+              <Panel>
+                <c:Icon Classes="icon fill" Data="{StaticResource IcoPlay}" Width="26" Height="26" Margin="4,0,0,0" IsVisible="{Binding !IsPlaying}" />
+                <c:Icon Classes="icon fill" Data="{StaticResource IcoPause}" Width="24" Height="24" IsVisible="{Binding IsPlaying}" />
+              </Panel>
+            </Button>
+            <Button Grid.Column="3" Classes="flat" HorizontalAlignment="Center" Command="{Binding NextCommand}">
+              <c:Icon Classes="icon fill" Data="{StaticResource IcoNext}" Width="26" Height="26" />
+            </Button>
+            <Button Grid.Column="4" Classes="flat" HorizontalAlignment="Center" Classes.on="{Binding RepeatOn}" Command="{Binding CycleRepeatCommand}">
+              <Panel>
+                <c:Icon Classes="icon" Data="{StaticResource IcoRepeat}" />
+                <TextBlock Text="1" FontSize="9" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center"
+                           IsVisible="{Binding RepeatOne}" />
+              </Panel>
+            </Button>
+          </Grid>
+          <Grid Grid.Row="6" ColumnDefinitions="*,*,*,*">
+            <Button Classes="flat" HorizontalAlignment="Center" Classes.on="{Binding Lyrics.IsOpen}" Command="{Binding ToggleLyricsCommand}">
+              <c:Icon Classes="icon" Data="{StaticResource IcoLyrics}" />
+            </Button>
+            <Button Grid.Column="1" Classes="flat" HorizontalAlignment="Center" Command="{Binding OpenQueueCommand}">
+              <c:Icon Classes="icon" Data="{StaticResource IcoQueue}" />
+            </Button>
+            <Button Grid.Column="2" Classes="flat" HorizontalAlignment="Center" Classes.on="{Binding Vibe.InVibe}" Command="{Binding ToggleVibeCommand}">
+              <c:Icon Classes="icon" Data="{StaticResource IcoVibe}" />
+            </Button>
+            <ToggleButton Grid.Column="3" Classes="chip icononly" HorizontalAlignment="Center" IsChecked="{Binding CoverColours}">
+              <c:Icon Classes="icon" Data="{StaticResource IcoPalette}" Width="18" Height="18" />
+            </ToggleButton>
+          </Grid>
         </Grid>
       </Panel>
 
       <!-- Lyrics -->
-      <Border Grid.Column="1" x:Name="LyricsPanel" Width="380" Background="{StaticResource Surface}" BorderBrush="{StaticResource Line}" BorderThickness="1,0,0,0"
-              IsVisible="{Binding Lyrics.IsOpen}">
+      <Border x:Name="LyricsPanel" Classes="sidepanel" IsVisible="{Binding Lyrics.IsOpen}">
         <DockPanel DataContext="{Binding Lyrics}" x:DataType="vm:LyricsViewModel" Margin="0,14,0,0">
-          <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto,Auto" Margin="20,0,12,8">
-            <TextBlock Classes="h2" Text="Lyrics" VerticalAlignment="Center" />
-            <Button Grid.Column="1" Classes="flat" Content="Timing off?" FontSize="12" IsVisible="{Binding Synced}"
+          <Grid DockPanel.Dock="Top" ColumnDefinitions="Auto,*,Auto,Auto" Margin="20,0,12,8">
+            <Button Classes="flat compactonly" Margin="-12,0,4,0" ToolTip.Tip="Close"
+                    Command="{Binding $parent[v:MainView].((vm:MainViewModel)DataContext).ToggleLyricsCommand}">
+              <c:Icon Classes="icon" Data="{StaticResource IcoBack}" />
+            </Button>
+            <TextBlock Grid.Column="1" Classes="h2" Text="Lyrics" VerticalAlignment="Center" />
+            <Button Grid.Column="2" Classes="flat" Content="Timing off?" FontSize="12" IsVisible="{Binding Synced}"
                     Command="{Binding OtherVersionCommand}" ToolTip.Tip="Try another synced version from LRCLIB" />
-            <Button Grid.Column="2" Classes="flat" Command="{Binding RefetchCommand}" ToolTip.Tip="Look up again">
+            <Button Grid.Column="3" Classes="flat" Command="{Binding RefetchCommand}" ToolTip.Tip="Look up again">
               <c:Icon Classes="icon" Data="{StaticResource IcoRefresh}" Width="16" Height="16" />
             </Button>
           </Grid>
@@ -162,10 +242,14 @@
 
 
       <!-- What's new (once, after an update) -->
-      <Border Grid.Column="1" Width="380" Background="{StaticResource Surface}" BorderBrush="{StaticResource Line}" BorderThickness="1,0,0,0"
-              IsVisible="{Binding Updater.WhatsNewOpen}">
+      <Border Classes="sidepanel" IsVisible="{Binding Updater.WhatsNewOpen}">
         <DockPanel DataContext="{Binding Updater}" x:DataType="vm:UpdaterViewModel" Margin="0,14,0,0">
-          <TextBlock DockPanel.Dock="Top" Classes="h2" Text="{Binding WhatsNewTitle}" Margin="20,0,20,8" />
+          <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="20,0,20,8">
+            <Button Classes="flat compactonly" Margin="-12,0,4,0" ToolTip.Tip="Close" Command="{Binding CloseWhatsNewCommand}">
+              <c:Icon Classes="icon" Data="{StaticResource IcoBack}" />
+            </Button>
+            <TextBlock Classes="h2" Text="{Binding WhatsNewTitle}" VerticalAlignment="Center" />
+          </StackPanel>
           <Button DockPanel.Dock="Bottom" Classes="primary" Content="Got it" Command="{Binding CloseWhatsNewCommand}" HorizontalAlignment="Left" Margin="20,8,20,16" />
           <ScrollViewer HorizontalScrollBarVisibility="Disabled">
             <c:MarkdownView Markdown="{Binding WhatsNew}" Margin="20,4,20,12" />
@@ -173,10 +257,15 @@
         </DockPanel>
       </Border>
       <!-- Vibe together -->
-      <Border Grid.Column="1" x:Name="VibePanel" Width="380" Background="{StaticResource Surface}" BorderBrush="{StaticResource Line}" BorderThickness="1,0,0,0"
-              IsVisible="{Binding Vibe.IsOpen}">
+      <Border x:Name="VibePanel" Classes="sidepanel" IsVisible="{Binding Vibe.IsOpen}">
         <DockPanel DataContext="{Binding Vibe}" x:DataType="vm:VibeViewModel" Margin="0,14,0,0">
-          <TextBlock DockPanel.Dock="Top" Classes="h2" Text="Vibe together" Margin="20,0,20,8" />
+          <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="20,0,20,8">
+            <Button Classes="flat compactonly" Margin="-12,0,4,0" ToolTip.Tip="Close"
+                    Command="{Binding $parent[v:MainView].((vm:MainViewModel)DataContext).ToggleVibeCommand}">
+              <c:Icon Classes="icon" Data="{StaticResource IcoBack}" />
+            </Button>
+            <TextBlock Classes="h2" Text="Vibe together" VerticalAlignment="Center" />
+          </StackPanel>
           <ScrollViewer>
             <StackPanel Margin="20,4,20,20" Spacing="14">
               <!-- Not in a vibe: start one or join one -->
@@ -279,8 +368,13 @@
     </Grid>
 
     <!-- Update banner (Updater) -->
-    <Border Grid.Row="2" Background="{StaticResource Surface2}" BorderBrush="{StaticResource Line}" BorderThickness="0,1,0,0" Padding="16,7"
-            IsVisible="{Binding Updater.ShowBanner}">
+    <Border Grid.Row="2" Background="{StaticResource Surface2}" BorderBrush="{StaticResource Line}" BorderThickness="0,1,0,0" Padding="16,7">
+      <Border.IsVisible>
+        <MultiBinding Converter="{x:Static BoolConverters.And}">
+          <Binding Path="Updater.ShowBanner" />
+          <Binding Path="!SheetOpen" />
+        </MultiBinding>
+      </Border.IsVisible>
       <Grid ColumnDefinitions="Auto,*,Auto" DataContext="{Binding Updater}" x:DataType="vm:UpdaterViewModel">
         <c:Icon Classes="icon" Data="{StaticResource IcoImport}" Width="16" Height="16" Stroke="{StaticResource Accent}" Margin="0,0,10,0" VerticalAlignment="Center" />
         <TextBlock Grid.Column="1" Text="{Binding BannerText}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
@@ -299,8 +393,8 @@
       </Grid>
     </Border>
 
-    <!-- Now playing -->
-    <Border Grid.Row="3" Background="{StaticResource Surface}" BorderBrush="{StaticResource Line}" BorderThickness="0,1,0,0" Padding="14,10">
+    <!-- Player bar -->
+    <Border Grid.Row="3" Classes="wideonly" Background="{StaticResource Surface}" BorderBrush="{StaticResource Line}" BorderThickness="0,1,0,0" Padding="14,10">
       <!-- The right-hand buttons keep their size; title and transport share what is left -->
       <Grid ColumnDefinitions="*,2*,Auto" DataContext="{Binding NowPlaying}" x:DataType="vm:NowPlayingViewModel">
         <Grid ColumnDefinitions="Auto,*" VerticalAlignment="Center">
@@ -385,14 +479,80 @@
                 <c:Icon Classes="icon" Data="{StaticResource IcoVolumeMute}" IsVisible="{Binding Muted}" />
               </Panel>
             </Button>
-            <Slider x:Name="VolumeSlider" Width="120" Minimum="0" Maximum="100" Value="{Binding Volume}" Classes="seek" VerticalAlignment="Center" />
+            <Slider x:Name="VolumeSlider" Minimum="0" Maximum="100" Value="{Binding Volume}" Classes="seek" VerticalAlignment="Center" />
           </StackPanel>
         </StackPanel>
       </Grid>
     </Border>
 
+    <!-- Phone: the mini player; tap it for the full now-playing screen -->
+    <Border Grid.Row="3" Classes="compactonly">
+      <Border IsVisible="{Binding !SheetOpen}" Background="{StaticResource Surface}" BorderBrush="{StaticResource Line}" BorderThickness="0,1,0,0">
+        <Grid RowDefinitions="Auto,Auto" DataContext="{Binding NowPlaying}" x:DataType="vm:NowPlayingViewModel">
+          <ProgressBar Classes="thin" Minimum="0" Maximum="{Binding Duration}" Value="{Binding Position}" />
+          <Grid Grid.Row="1" ColumnDefinitions="*,Auto,Auto" Margin="8,6,6,6">
+            <Button Classes="row" Padding="4" Command="{Binding $parent[v:MainView].((vm:MainViewModel)DataContext).ToggleNowPlayingCommand}">
+              <Grid ColumnDefinitions="Auto,*">
+                <Border Width="44" Height="44" CornerRadius="6" ClipToBounds="True" Background="{StaticResource Surface3}">
+                  <Panel>
+                    <c:Icon Classes="icon" Data="{StaticResource IcoNote}" Width="20" Height="20" Stroke="{StaticResource Faint}" />
+                    <c:CoverImage Path="{Binding CoverPath}" DecodeWidth="96" />
+                  </Panel>
+                </Border>
+                <StackPanel Grid.Column="1" Margin="12,0,0,0" VerticalAlignment="Center" Spacing="2">
+                  <TextBlock Text="{Binding Title}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                  <TextBlock Text="{Binding Artist}" Classes="muted small" TextTrimming="CharacterEllipsis" />
+                </StackPanel>
+              </Grid>
+            </Button>
+            <Button Grid.Column="1" Classes="flat" Command="{Binding PlayPauseCommand}" IsEnabled="{Binding !IsFollowing}" Margin="4,0,0,0">
+              <Panel>
+                <c:Icon Classes="icon fill" Data="{StaticResource IcoPlay}" Width="24" Height="24" IsVisible="{Binding !IsPlaying}" />
+                <c:Icon Classes="icon fill" Data="{StaticResource IcoPause}" Width="22" Height="22" IsVisible="{Binding IsPlaying}" />
+              </Panel>
+            </Button>
+            <Button Grid.Column="2" Classes="flat" Command="{Binding NextCommand}" IsEnabled="{Binding !IsFollowing}">
+              <c:Icon Classes="icon fill" Data="{StaticResource IcoNext}" Width="22" Height="22" />
+            </Button>
+          </Grid>
+        </Grid>
+      </Border>
+    </Border>
+
+    <!-- Phone: the bottom bar -->
+    <Border Grid.Row="4" Classes="compactonly">
+      <Border IsVisible="{Binding !SheetOpen}" Background="{StaticResource Surface}">
+        <Grid ColumnDefinitions="4*,*">
+          <ItemsControl ItemsSource="{Binding PrimaryNav}">
+            <ItemsControl.ItemsPanel><ItemsPanelTemplate><UniformGrid Rows="1" /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="vm:NavItem">
+                <Button Classes="tab" Classes.on="{Binding IsSelected}" CommandParameter="{Binding}"
+                        Command="{Binding $parent[v:MainView].((vm:MainViewModel)DataContext).NavigateToCommand}">
+                  <StackPanel Spacing="3">
+                    <Border Classes="pill" HorizontalAlignment="Center">
+                      <c:Icon Classes="icon" Data="{Binding Icon}" Width="20" Height="20" />
+                    </Border>
+                    <TextBlock Text="{Binding Name}" FontSize="11" FontWeight="Medium" HorizontalAlignment="Center" />
+                  </StackPanel>
+                </Button>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+          <Button Grid.Column="1" Classes="tab" Classes.on="{Binding MoreSelected}" Command="{Binding ShowMoreCommand}">
+            <StackPanel Spacing="3">
+              <Border Classes="pill" HorizontalAlignment="Center">
+                <c:Icon Classes="icon" Data="{StaticResource IcoMore}" Width="20" Height="20" />
+              </Border>
+              <TextBlock Text="More" FontSize="11" FontWeight="Medium" HorizontalAlignment="Center" />
+            </StackPanel>
+          </Button>
+        </Grid>
+      </Border>
+    </Border>
+
     <!-- Toast -->
-    <Border Grid.RowSpan="4" HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,100"
+    <Border Grid.RowSpan="5" HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,100"
             Background="{StaticResource Surface3}" CornerRadius="10" Padding="16,10" MaxWidth="560"
             IsVisible="{Binding Notice, Converter={x:Static ObjectConverters.IsNotNull}}" BoxShadow="0 6 24 0 #80000000">
       <TextBlock Text="{Binding Notice}" TextWrapping="Wrap" />
@@ -400,6 +560,54 @@
   </Grid>
 
   <UserControl.Styles>
+    <!-- Wide (desktop) sizes; the phone layout below overrides them. -->
+    <Style Selector="StackPanel#Brand"><Setter Property="Width" Value="196" /></Style>
+    <Style Selector="Border#Sheet">
+      <Setter Property="BorderThickness" Value="1,1,0,0" />
+      <Setter Property="CornerRadius" Value="10,0,0,0" />
+    </Style>
+    <Style Selector="Border.sidepanel">
+      <Setter Property="Grid.Column" Value="1" />
+      <Setter Property="Width" Value="380" />
+      <Setter Property="Background" Value="{StaticResource Surface}" />
+      <Setter Property="BorderBrush" Value="{StaticResource Line}" />
+      <Setter Property="BorderThickness" Value="1,0,0,0" />
+    </Style>
+    <Style Selector="Slider#VolumeSlider"><Setter Property="Width" Value="120" /></Style>
+    <!-- Narrow windows: a slimmer lyrics panel and volume slider, so the page and player bar still fit. -->
+    <Style Selector="v|MainView.narrow Border#LyricsPanel"><Setter Property="Width" Value="300" /></Style>
+    <Style Selector="v|MainView.narrow Slider#VolumeSlider"><Setter Property="Width" Value="80" /></Style>
+
+    <!-- Phone-sized: bottom bar and mini player instead of the sidebar and player bar; panels fill the screen. -->
+    <Style Selector=":is(Control).compactonly"><Setter Property="IsVisible" Value="False" /></Style>
+    <Style Selector="v|MainView.compact :is(Control).compactonly"><Setter Property="IsVisible" Value="True" /></Style>
+    <Style Selector="v|MainView.compact :is(Control).wideonly"><Setter Property="IsVisible" Value="False" /></Style>
+    <Style Selector="v|MainView.compact Border#Sidebar"><Setter Property="IsVisible" Value="False" /></Style>
+    <Style Selector="v|MainView.compact StackPanel#Brand"><Setter Property="Width" Value="NaN" /></Style>
+    <Style Selector="v|MainView.compact Border#Sheet">
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="CornerRadius" Value="0" />
+    </Style>
+    <Style Selector="v|MainView.compact Border.sidepanel">
+      <Setter Property="Grid.Column" Value="0" />
+      <Setter Property="Grid.ColumnSpan" Value="2" />
+      <Setter Property="Width" Value="NaN" />
+      <Setter Property="BorderThickness" Value="0" />
+    </Style>
+    <Style Selector="Button.play.big">
+      <Setter Property="Width" Value="64" />
+      <Setter Property="Height" Value="64" />
+      <Setter Property="CornerRadius" Value="32" />
+      <Setter Property="Margin" Value="8,0" />
+    </Style>
+    <Style Selector="ToggleButton.chip.icononly"><Setter Property="Padding" Value="10,8" /></Style>
+    <Style Selector="ProgressBar.thin">
+      <Setter Property="Height" Value="2" />
+      <Setter Property="MinHeight" Value="2" />
+      <Setter Property="CornerRadius" Value="0" />
+      <Setter Property="Foreground" Value="{StaticResource Accent}" />
+      <Setter Property="Background" Value="{StaticResource Surface3}" />
+    </Style>
     <Style Selector="TextBlock.lyric">
       <Setter Property="FontSize" Value="20" />
       <Setter Property="FontWeight" Value="SemiBold" />

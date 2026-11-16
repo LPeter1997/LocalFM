@@ -33,7 +33,7 @@ shot() { # name, then KEY=value settings
   [ -s "$out/$name.png" ] && echo "$out/$name.png" || echo "FAILED $name"
 }
 
-for p in albums artists tracks playlists queue stats sound sources album; do
+for p in albums artists tracks playlists queue stats sound sources album more; do
   shot "phone-$p" LOCALFM_SNAPSHOT_PAGE=$p
 done
 shot phone-playing LOCALFM_SNAPSHOT_PAGE=albums LOCALFM_SNAPSHOT_PLAY=1 LOCALFM_SNAPSHOT_WAIT=3000

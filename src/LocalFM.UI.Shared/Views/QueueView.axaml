@@ -4,16 +4,17 @@
              xmlns:lib="using:LocalFM.Library"
              xmlns:c="using:LocalFM.UI.Controls"
              xmlns:ui="using:LocalFM.UI"
+             xmlns:v="using:LocalFM.UI.Views"
              x:Class="LocalFM.UI.Views.QueueView"
              x:DataType="vm:QueueViewModel">
   <DockPanel>
-    <Grid DockPanel.Dock="Top" ColumnDefinitions="Auto,*" Margin="24,0,24,12">
+    <Grid x:Name="QueueHeader" DockPanel.Dock="Top" ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto">
       <StackPanel Orientation="Horizontal" Spacing="16" VerticalAlignment="Top">
         <TextBlock Classes="h1" Text="Queue" />
         <TextBlock Classes="muted" Text="{Binding Summary}" VerticalAlignment="Center" Margin="0,6,0,0" />
       </StackPanel>
       <!-- Wraps onto a second row in a narrow window instead of running off the edge -->
-      <WrapPanel Grid.Column="1" ItemSpacing="6" LineSpacing="6" HorizontalAlignment="Right" ItemsAlignment="End" Margin="12,0,0,0">
+      <WrapPanel x:Name="QueueActions" ItemSpacing="6" LineSpacing="6">
         <Button Classes="ghost" Command="{Binding ReshuffleCommand}" ToolTip.Tip="Shuffle what is up next">Shuffle upcoming</Button>
         <Button Classes="ghost" Command="{Binding ClearUpcomingCommand}">Clear upcoming</Button>
         <TextBox Text="{Binding PlaylistName}" PlaceholderText="Playlist name" Width="160">
@@ -23,7 +24,7 @@
         <Button Classes="ghost" Command="{Binding SaveSessionCommand}" ToolTip.Tip="Save everything played this session as a playlist">Save session</Button>
       </WrapPanel>
     </Grid>
-    <ListBox x:Name="List" Classes="rows" ItemsSource="{Binding Rows}" Margin="16,0,16,8">
+    <ListBox x:Name="List" Classes="rows" ItemsSource="{Binding Rows}">
       <ListBox.ItemTemplate>
         <DataTemplate x:DataType="vm:QueueRow">
           <Grid ColumnDefinitions="44,2*,1.4*,64,Auto" Opacity="{Binding Opacity}">
@@ -39,11 +40,11 @@
                 <c:Icon Classes="icon fill" Data="{StaticResource IcoPlay}" Width="14" Height="14" Fill="{StaticResource Accent}" />
               </Border>
             </Panel>
-            <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="4,0,12,0">
+            <StackPanel Grid.Column="1" Classes="titlecol" VerticalAlignment="Center" Margin="4,0,12,0">
               <TextBlock Text="{Binding Track.Title}" TextTrimming="CharacterEllipsis" Classes.current="{Binding IsCurrent}" />
               <TextBlock Text="{Binding Track.Artist}" Classes="muted small" TextTrimming="CharacterEllipsis" />
             </StackPanel>
-            <TextBlock Grid.Column="2" Text="{Binding Track.Album}" Classes="muted" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+            <TextBlock Grid.Column="2" Text="{Binding Track.Album}" Classes="muted albumcol" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
             <TextBlock Grid.Column="3" Text="{Binding Track.DurationMs, Converter={x:Static ui:Converters.Duration}}" Classes="muted" VerticalAlignment="Center" HorizontalAlignment="Right" />
             <StackPanel Grid.Column="4" Classes="actions" Orientation="Horizontal" Spacing="2" Margin="14,0,0,0">
               <Button Classes="flat" Padding="4" ToolTip.Tip="Move up" Command="{Binding $parent[UserControl].((vm:QueueViewModel)DataContext).MoveUpCommand}" CommandParameter="{Binding}">
@@ -62,6 +63,29 @@
     </ListBox>
   </DockPanel>
   <UserControl.Styles>
+    <Style Selector="Grid#QueueHeader"><Setter Property="Margin" Value="24,0,24,12" /></Style>
+    <Style Selector="ListBox#List"><Setter Property="Margin" Value="16,0,16,8" /></Style>
+    <!-- Phone: no album column, so the title has the room -->
+    <Style Selector="v|MainView.compact StackPanel.titlecol"><Setter Property="Grid.ColumnSpan" Value="2" /></Style>
+    <Style Selector="v|MainView.compact TextBlock.albumcol"><Setter Property="IsVisible" Value="False" /></Style>
+    <Style Selector="v|MainView.compact ListBox#List"><Setter Property="Margin" Value="8,0,8,8" /></Style>
+    <Style Selector="WrapPanel#QueueActions">
+      <Setter Property="Grid.Column" Value="1" />
+      <Setter Property="HorizontalAlignment" Value="Right" />
+      <Setter Property="ItemsAlignment" Value="End" />
+      <Setter Property="Margin" Value="12,0,0,0" />
+    </Style>
+    <!-- Phone: the actions on their own rows under the title -->
+    <Style Selector="v|MainView.compact Grid#QueueHeader"><Setter Property="Margin" Value="16,0,16,8" /></Style>
+    <Style Selector="v|MainView.compact WrapPanel#QueueActions">
+      <Setter Property="Grid.Row" Value="1" />
+      <Setter Property="Grid.Column" Value="0" />
+      <Setter Property="Grid.ColumnSpan" Value="2" />
+      <Setter Property="HorizontalAlignment" Value="Left" />
+      <Setter Property="ItemsAlignment" Value="Start" />
+      <Setter Property="Margin" Value="0,10,0,0" />
+    </Style>
+
     <!-- Row buttons appear on the row under the pointer (or the selected one) -->
     <Style Selector="ListBoxItem StackPanel.actions"><Setter Property="Opacity" Value="0" /></Style>
     <Style Selector="ListBoxItem:pointerover StackPanel.actions, ListBoxItem:selected StackPanel.actions"><Setter Property="Opacity" Value="1" /></Style>
@@ -72,6 +96,8 @@
       <Setter Property="BoxShadow" Value="0 6 18 0 #60000000" />
     </Style>
     <Style Selector="ListBox.dragging ListBoxItem:pointerover StackPanel.actions"><Setter Property="Opacity" Value="0" /></Style>
+    <!-- Touch has no hover: the row buttons are always there -->
+    <Style Selector="v|MainView.touch ListBoxItem StackPanel.actions"><Setter Property="Opacity" Value="1" /></Style>
     <Style Selector="TextBlock.current"><Setter Property="Foreground" Value="{StaticResource Accent}" /><Setter Property="FontWeight" Value="SemiBold" /></Style>
   </UserControl.Styles>
 </UserControl>

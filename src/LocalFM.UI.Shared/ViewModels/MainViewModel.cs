@@ -18,6 +18,9 @@ public sealed partial class NavItem(string name, Geometry? icon, PageViewModel p
     public Geometry? Icon { get; } = icon;
     public PageViewModel Page { get; } = page;
 
+    /// <summary>The page shown is this one (the phone's bottom bar highlights it).</summary>
+    [ObservableProperty] private bool _isSelected;
+
     /// <summary>A count shown as a red dot next to the name (fixes waiting in Tidy up); 0 hides it.</summary>
     [ObservableProperty] [NotifyPropertyChangedFor(nameof(HasBadge), nameof(BadgeText))] private int _badge;
     public bool HasBadge => Badge > 0;
@@ -53,16 +56,24 @@ public sealed partial class MainViewModel : ObservableObject
         // One side panel at a time: lyrics, the vibe, or What's new.
         Lyrics.PropertyChanged += (_, e) =>
         {
-            if (e.PropertyName == nameof(LyricsViewModel.IsOpen) && Lyrics.IsOpen) { Vibe.IsOpen = false; Updater.WhatsNewOpen = false; }
+            if (e.PropertyName != nameof(LyricsViewModel.IsOpen)) return;
+            if (Lyrics.IsOpen) { Vibe.IsOpen = false; Updater.WhatsNewOpen = false; }
+            OnPropertyChanged(nameof(SheetOpen));
         };
         Vibe.PropertyChanged += (_, e) =>
         {
-            if (e.PropertyName == nameof(VibeViewModel.IsOpen) && Vibe.IsOpen) Updater.WhatsNewOpen = false;
+            if (e.PropertyName == nameof(VibeViewModel.IsOpen))
+            {
+                if (Vibe.IsOpen) Updater.WhatsNewOpen = false;
+                OnPropertyChanged(nameof(SheetOpen));
+            }
             if (e.PropertyName == nameof(VibeViewModel.InVibe)) Updater.VibeChanged();
         };
         Updater.PropertyChanged += (_, e) =>
         {
-            if (e.PropertyName == nameof(UpdaterViewModel.WhatsNewOpen) && Updater.WhatsNewOpen) { Lyrics.IsOpen = false; Vibe.IsOpen = false; }
+            if (e.PropertyName != nameof(UpdaterViewModel.WhatsNewOpen)) return;
+            if (Updater.WhatsNewOpen) { Lyrics.IsOpen = false; Vibe.IsOpen = false; }
+            OnPropertyChanged(nameof(SheetOpen));
         };
         host.Player.IgnoredWhileFollowing += () => Dispatcher.UIThread.Post(() =>
             Notify($"You're listening to {Host.Vibe.HostName ?? "someone"}'s vibe. Leave it to play your own music."));
@@ -85,7 +96,11 @@ public sealed partial class MainViewModel : ObservableObject
             new("Sources", Icon("IcoFolder"), Sources),
         ];
         _selectedNav = Nav[0];
+        Nav[0].IsSelected = true;
         _currentPage = Albums;
+        // The phone's bottom bar: the first four pages, then "More" for the rest.
+        PrimaryNav = Nav.Take(4).ToList();
+        More = new MoreViewModel(this, Nav.Skip(4).ToList());
 
         _searchDebounce = new DispatcherTimer(TimeSpan.FromMilliseconds(250), DispatcherPriority.Background, (_, _) =>
         {
@@ -137,7 +152,47 @@ public sealed partial class MainViewModel : ObservableObject
     public IReadOnlyList<VisualizerMode> VisualizerModes { get; } = [VisualizerMode.Spectrum, VisualizerMode.Mirror, VisualizerMode.Wave, VisualizerMode.Off];
 
     /// <summary>The large now-playing view with the visualizer.</summary>
-    [ObservableProperty] private bool _nowPlayingOpen;
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(SheetOpen), nameof(WideVisualizerActive), nameof(CompactVisualizerActive))]
+    private bool _nowPlayingOpen;
+
+    /// <summary>Set by the view: a phone-sized layout (bottom bar, mini player, full-screen sheets).</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(SheetOpen), nameof(WideVisualizerActive), nameof(CompactVisualizerActive))]
+    private bool _isCompact;
+
+    /// <summary>On a phone: something covers the whole screen (now playing, lyrics, the vibe, What's new), so the
+    /// title row, mini player and bottom bar step aside.</summary>
+    public bool SheetOpen => IsCompact && (NowPlayingOpen || Lyrics.IsOpen || Vibe.IsOpen || Updater.WhatsNewOpen);
+
+    public bool WideVisualizerActive => NowPlayingOpen && !IsCompact;
+    public bool CompactVisualizerActive => NowPlayingOpen && IsCompact;
+
+    /// <summary>The bottom bar's pages; the others are under <see cref="More"/>.</summary>
+    public IReadOnlyList<NavItem> PrimaryNav { get; }
+    public MoreViewModel More { get; }
+
+    /// <summary>"More" is lit while it or one of its pages is shown.</summary>
+    public bool MoreSelected => CurrentPage == More || (SelectedNav is { } n && !PrimaryNav.Contains(n) && CurrentPage == n.Page);
+
+    [RelayCommand]
+    private void ShowMore()
+    {
+        _back.Clear();
+        CanGoBack = false;
+        if (SelectedNav is { } old) old.IsSelected = false;
+        SelectedNav = null;
+        Show(More);
+    }
+
+    [RelayCommand]
+    private void NavigateTo(NavItem item)
+    {
+        if (SelectedNav == item && CurrentPage != item.Page) { _back.Clear(); CanGoBack = false; Show(item.Page); return; }
+        SelectedNav = item;
+    }
+
+    partial void OnCurrentPageChanged(PageViewModel value) => OnPropertyChanged(nameof(MoreSelected));
     [ObservableProperty] private VisualizerMode _visualizerMode;
     /// <summary>Tint the app with the playing album's colours.</summary>
     [ObservableProperty] private bool _coverColours;
@@ -200,8 +255,11 @@ public sealed partial class MainViewModel : ObservableObject
 
     private bool Sources_Empty() => Library.Sources.List(Host.Db).Count == 0;
 
-    partial void OnSelectedNavChanged(NavItem? value)
+    partial void OnSelectedNavChanged(NavItem? oldValue, NavItem? newValue)
     {
+        if (oldValue is not null) oldValue.IsSelected = false;
+        if (newValue is not null) newValue.IsSelected = true;
+        var value = newValue;
         if (value is null) return;
         _back.Clear();
         CanGoBack = false;
@@ -247,6 +305,8 @@ public sealed partial class MainViewModel : ObservableObject
         else if (Lyrics.IsOpen) Lyrics.IsOpen = false;
         else if (NowPlayingOpen) NowPlayingOpen = false;
         else if (CanGoBack) Back();
+        // Like other phone apps: back from another tab goes to the first one before leaving.
+        else if (CurrentPage != Nav[0].Page) Navigate(Nav[0]);
         else return false;
         return true;
     }
@@ -311,6 +371,14 @@ public sealed partial class MainViewModel : ObservableObject
     }
 
     [RelayCommand] private void ToggleLyrics() => Lyrics.IsOpen = !Lyrics.IsOpen;
+
+    /// <summary>The phone's now-playing screen: the queue page.</summary>
+    [RelayCommand]
+    private void OpenQueue()
+    {
+        NowPlayingOpen = false;
+        if (Nav.FirstOrDefault(n => n.Page == Queue) is { } queue) NavigateTo(queue);
+    }
     [RelayCommand] private void ToggleVibe() => Vibe.IsOpen = !Vibe.IsOpen;
 
     public async Task RefreshPlaylistsAsync()

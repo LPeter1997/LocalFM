@@ -4,12 +4,14 @@
              xmlns:lib="using:LocalFM.Library"
              xmlns:c="using:LocalFM.UI.Controls"
              xmlns:ui="using:LocalFM.UI"
+             xmlns:v="using:LocalFM.UI.Views"
              xmlns:enrich="using:LocalFM.Library.Enrich"
              x:Class="LocalFM.UI.Views.AlbumDetailView"
              x:DataType="vm:AlbumDetailViewModel">
   <DockPanel>
-    <Grid DockPanel.Dock="Top" ColumnDefinitions="Auto,*" Margin="24,4,24,16">
-      <Border Width="200" Height="200" CornerRadius="10" ClipToBounds="True" Background="{StaticResource Surface3}" BoxShadow="0 8 30 0 #60000000">
+    <!-- Cover beside the title; on a phone above it -->
+    <Grid x:Name="Header" DockPanel.Dock="Top" ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto">
+      <Border x:Name="HeaderCover" Width="200" Height="200" CornerRadius="10" ClipToBounds="True" Background="{StaticResource Surface3}" BoxShadow="0 8 30 0 #60000000">
         <Panel>
           <c:Icon Classes="icon" Data="{StaticResource IcoAlbum}" Width="64" Height="64" Stroke="{StaticResource Faint}" StrokeThickness="1.2" />
           <c:CoverImage Path="{Binding Album.CoverPath}" DecodeWidth="400" />
@@ -17,9 +19,9 @@
                   Command="{Binding FetchCoverCommand}" IsVisible="{Binding Album.CoverPath, Converter={x:Static ObjectConverters.IsNull}}">Fetch cover</Button>
         </Panel>
       </Border>
-      <StackPanel Grid.Column="1" Margin="24,0,0,0" VerticalAlignment="Bottom" Spacing="6">
+      <StackPanel x:Name="HeaderInfo" VerticalAlignment="Bottom" Spacing="6">
         <TextBlock Classes="muted small" Text="ALBUM" FontWeight="SemiBold" LetterSpacing="1" />
-        <TextBlock Classes="h1" FontSize="34" Text="{Binding Album.Title}" TextWrapping="Wrap" />
+        <TextBlock x:Name="HeaderTitle" FontWeight="Bold" Text="{Binding Album.Title}" TextWrapping="Wrap" />
         <TextBlock>
           <!-- One line: a line break between runs would add a space before the dot -->
           <Run Text="{Binding Album.Artist}" FontWeight="SemiBold" /><Run Text="  ·  " Foreground="{StaticResource Faint}" /><Run Text="{Binding Summary}" Foreground="{StaticResource Muted}" />
@@ -29,13 +31,13 @@
           <Button Classes="ghost" Command="{Binding ShuffleAllCommand}">Shuffle</Button>
           <Button Classes="ghost" Command="{Binding PlayAlbumNextCommand}">Play next</Button>
           <Button Classes="ghost" Command="{Binding EnqueueAlbumCommand}">Add to queue</Button>
-          <Button Classes="ghost" Command="{Binding ToggleMatchCommand}" ToolTip.Tip="Match this album with MusicBrainz">
+          <Button Classes="ghost" Command="{Binding ToggleMatchCommand}" ToolTip.Tip="Match this album with MusicBrainz" IsVisible="{Binding CanEdit}">
             <StackPanel Orientation="Horizontal" Spacing="6">
               <c:Icon Classes="icon" Data="{StaticResource IcoMagic}" Width="15" Height="15" />
               <TextBlock Text="Find metadata" />
             </StackPanel>
           </Button>
-          <Button Classes="ghost" Command="{Binding EditCommand}" ToolTip.Tip="Edit titles, artists and numbers by hand">
+          <Button Classes="ghost" Command="{Binding EditCommand}" ToolTip.Tip="Edit titles, artists and numbers by hand" IsVisible="{Binding CanEdit}">
             <StackPanel Orientation="Horizontal" Spacing="6">
               <c:Icon Classes="icon" Data="{StaticResource IcoEdit}" Width="15" Height="15" />
               <TextBlock Text="Edit" />
@@ -45,8 +47,13 @@
         <TextBlock Text="{Binding CoverStatus}" Classes="muted small" IsVisible="{Binding CoverStatus, Converter={x:Static ObjectConverters.IsNotNull}}" />
       </StackPanel>
     </Grid>
-    <Border DockPanel.Dock="Top" Margin="24,0,24,12" Padding="14,10" CornerRadius="10" Background="{StaticResource Surface}"
-            IsVisible="{Binding Copies.Count}">
+    <Border DockPanel.Dock="Top" Margin="24,0,24,12" Padding="14,10" CornerRadius="10" Background="{StaticResource Surface}">
+      <Border.IsVisible>
+        <MultiBinding Converter="{x:Static BoolConverters.And}">
+          <Binding Path="CanEdit" />
+          <Binding Path="Copies.Count" Converter="{x:Static ui:Converters.Positive}" />
+        </MultiBinding>
+      </Border.IsVisible>
       <StackPanel Spacing="6">
         <TextBlock Classes="muted small" Text="Another copy of this album is in your library. Merging moves its songs here." TextWrapping="Wrap" />
         <ItemsControl ItemsSource="{Binding Copies}">
@@ -248,4 +255,25 @@
       </ListBox.ItemTemplate>
     </ListBox>
   </DockPanel>
+  <UserControl.Styles>
+    <Style Selector="Grid#Header"><Setter Property="Margin" Value="24,4,24,16" /></Style>
+    <Style Selector="StackPanel#HeaderInfo">
+      <Setter Property="Grid.Column" Value="1" />
+      <Setter Property="Margin" Value="24,0,0,0" />
+    </Style>
+    <Style Selector="TextBlock#HeaderTitle"><Setter Property="FontSize" Value="34" /></Style>
+    <!-- Phone: the cover above the title, centred -->
+    <Style Selector="v|MainView.compact Grid#Header"><Setter Property="Margin" Value="16,0,16,12" /></Style>
+    <Style Selector="v|MainView.compact Border#HeaderCover">
+      <Setter Property="Grid.ColumnSpan" Value="2" />
+      <Setter Property="HorizontalAlignment" Value="Center" />
+    </Style>
+    <Style Selector="v|MainView.compact StackPanel#HeaderInfo">
+      <Setter Property="Grid.Row" Value="1" />
+      <Setter Property="Grid.Column" Value="0" />
+      <Setter Property="Grid.ColumnSpan" Value="2" />
+      <Setter Property="Margin" Value="0,16,0,0" />
+    </Style>
+    <Style Selector="v|MainView.compact TextBlock#HeaderTitle"><Setter Property="FontSize" Value="26" /></Style>
+  </UserControl.Styles>
 </UserControl>
