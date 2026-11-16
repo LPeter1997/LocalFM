@@ -5,7 +5,8 @@
 #
 #   native/ffmpeg/build.sh <rid> <prefix>        e.g. linux-x64 /tmp/ffmpeg-linux-x64
 #
-# Linux and macOS build natively. Windows runs this in MSYS2 with the MSVC environment loaded (cl.exe on PATH):
+# Linux and macOS build natively. Android (android-arm64, android-x64 for the emulator) cross-compiles with the NDK
+# in $ANDROID_NDK_HOME (or $ANDROID_NDK_ROOT): unversioned sonames, since an APK only carries lib*.so files. Windows runs this in MSYS2 with the MSVC environment loaded (cl.exe on PATH):
 # --toolchain=msvc gives DLLs plus .lib import libraries for the MSVC-built localfm_native.
 # The libraries find each other next to the app: $ORIGIN (Linux) and @rpath (macOS) are built in.
 # SOURCE_DIR=<dir> reuses an unpacked source tree; otherwise the pinned release is downloaded and checked.
@@ -68,12 +69,29 @@ case "$rid" in
     # MSVC's ARM assembler cannot take FFmpeg's GNU-syntax assembly without gas-preprocessor.pl; the C versions
     # decode audio more than fast enough.
     win-arm64) args+=(--toolchain=msvc --target-os=win64 --arch=aarch64 --disable-asm) ;;
+    android-*)
+        ndk=${ANDROID_NDK_HOME:-${ANDROID_NDK_ROOT:?set ANDROID_NDK_HOME to the NDK}}
+        host_tag=$(uname -s | tr '[:upper:]' '[:lower:]')-x86_64
+        bin="$ndk/toolchains/llvm/prebuilt/$host_tag/bin"
+        case "$rid" in
+            android-arm64) triple=aarch64-linux-android; ff_arch=aarch64 ;;
+            # The x86-64 assembly is not position-independent enough for Android's linker; the emulator only.
+            android-x64) triple=x86_64-linux-android; ff_arch=x86_64; args+=(--disable-x86asm) ;;
+            *) echo "unknown rid: $rid" >&2; exit 2 ;;
+        esac
+        api=${ANDROID_API:-26}
+        args+=(--enable-cross-compile --target-os=android --arch="$ff_arch"
+               --cc="$bin/$triple$api-clang" --cxx="$bin/$triple$api-clang++"
+               --ar="$bin/llvm-ar" --nm="$bin/llvm-nm" --ranlib="$bin/llvm-ranlib" --strip="$bin/llvm-strip"
+               # 16 KB pages: required by Google Play and by Android 15+ devices that use them.
+               --extra-ldflags='-Wl,-z,max-page-size=16384')
+        ;;
     *) echo "unknown rid: $rid" >&2; exit 2 ;;
 esac
 
 # Hand-written assembly speeds up some decoders a little; without nasm (x86) the C versions are used.
 case "$rid" in
-    *-x64) command -v nasm > /dev/null || { echo "nasm not found: building without x86 assembly" >&2; args+=(--disable-x86asm); } ;;
+    linux-x64|osx-x64|win-x64) command -v nasm > /dev/null || { echo "nasm not found: building without x86 assembly" >&2; args+=(--disable-x86asm); } ;;
 esac
 
 build="$work/build"
