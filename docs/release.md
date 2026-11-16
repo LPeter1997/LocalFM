@@ -40,6 +40,7 @@ until `build.sh` changes (`.github/workflows/ffmpeg.yml`, `.github/actions/nativ
 | Windows | `package.ps1 -Version x.y.z [-Rid win-arm64] [-FfmpegPrefix dir]` | `LocalFM-<rid>-Setup.exe` (per user, no admin), `-Portable.zip`, `.nupkg` (+ delta) |
 | macOS | `package.sh x.y.z` | Velopack `.pkg`, portable zip, `.nupkg`, and a `.dmg` with an Applications link |
 | Linux | `package.sh x.y.z` | AppImage + `.nupkg` (in-app updates); distro tarball, `.deb`, `.rpm` (nfpm, or its container through podman/docker) |
+| Android | `release.yml`'s `android` job (docs/android.md) | `LocalFM-<version>.apk` (arm64 and x64), signed with the release keystore |
 
 - Native AOT does not cross-compile between operating systems; Windows needs the MSVC linker ("Desktop development
   with C++") and CMake. `package.ps1` needs `native\out\<rid>\` built, or `-FfmpegPrefix` to build it in Git Bash.
@@ -62,7 +63,7 @@ until `build.sh` changes (`.github/workflows/ffmpeg.yml`, `.github/actions/nativ
 | Copy | Mode | Behaviour |
 |---|---|---|
 | Setup.exe, portable zip, AppImage, macOS package (Velopack) | In-app | Banner: **When I quit** (download now, install once LocalFM quits; closing to the tray is not quitting), **Restart now** (pause, save the queue and position, install, and play on), **Skip** (remembered), × (ask again next start) |
-| deb, rpm, AUR, Flatpak | Notice | The banner says a version exists and links to its release page |
+| deb, rpm, AUR, Flatpak, Android APK | Notice | The banner says a version exists and links to its release page |
 | Dev builds, publish folders | None | No checks |
 
 - **Restart now is hidden in a vibe**: restarting would end it (for everyone, when hosting). "When I quit" stays.
@@ -99,6 +100,10 @@ until `build.sh` changes (`.github/workflows/ffmpeg.yml`, `.github/actions/nativ
   their own runners, fills the manifests (kept as an artifact), and creates the release with every file at once.
   Optional secrets, listed in its header, enable macOS signing and notarization, Windows signing and winget updates.
   Without them, packages are unsigned: macOS Gatekeeper and Windows SmartScreen warn on first launch.
+  The Android APK needs `ANDROID_KEYSTORE_B64` and `ANDROID_KEYSTORE_PASS`; **back up the keystore**: phones only
+  update an app signed with the same key (docs/android.md).
+- `ci.yml` also builds the Release APK (trimmed, AOT) with its size check; FFmpeg for `android-arm64`/`android-x64`
+  is built with the NDK pinned in `.github/actions/ndk`.
 
 ## Making a release
 

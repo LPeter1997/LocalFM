@@ -11,6 +11,9 @@
 #            SignPath or Azure Trusted Signing's CLI).
 #   winget:  WINGET_TOKEN (a classic PAT with public_repo) updates the winget manifest after the first one
 #            has been submitted by hand from the release's manifests artifact.
+#   Android: ANDROID_KEYSTORE_B64 (the release keystore, base64), ANDROID_KEYSTORE_PASS (its password; the key
+#            "localfm" uses the same one). Not optional in practice: phones only update an app signed with the
+#            same key, so without it the APK is left out of the release (docs/android.md).
 name: release
 
 on:
@@ -51,7 +54,7 @@ jobs:
     needs: check
     uses: ./.github/workflows/ffmpeg.yml
     with:
-      targets: '[{"os":"ubuntu-22.04","rid":"linux-x64"},{"os":"ubuntu-22.04-arm","rid":"linux-arm64"},{"os":"windows-latest","rid":"win-x64"},{"os":"windows-11-arm","rid":"win-arm64"},{"os":"macos-latest","rid":"osx-arm64"},{"os":"macos-15-intel","rid":"osx-x64"}]'
+      targets: '[{"os":"ubuntu-22.04","rid":"linux-x64"},{"os":"ubuntu-22.04-arm","rid":"linux-arm64"},{"os":"windows-latest","rid":"win-x64"},{"os":"windows-11-arm","rid":"win-arm64"},{"os":"macos-latest","rid":"osx-arm64"},{"os":"macos-15-intel","rid":"osx-x64"},{"os":"ubuntu-22.04","rid":"android-arm64"},{"os":"ubuntu-22.04","rid":"android-x64"}]'
 
   build:
     needs: ffmpeg
@@ -155,8 +158,60 @@ jobs:
           path: out/releases/
           if-no-files-found: error
 
+  # The phone app: LocalFM-<version>.apk, signed with the release key.
+  android:
+    needs: ffmpeg
+    env:
+      HAS_ANDROID_KEYSTORE: ${{ secrets.ANDROID_KEYSTORE_B64 != '' }}
+    runs-on: ubuntu-22.04
+    timeout-minutes: 60
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: global.json
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "21"
+      - if: env.HAS_ANDROID_KEYSTORE != 'true'
+        run: echo "::warning::No ANDROID_KEYSTORE_B64 secret; the release has no APK (docs/android.md)"
+      - uses: ./.github/actions/native
+        with:
+          rid: android-arm64
+      - uses: ./.github/actions/native
+        with:
+          rid: android-x64
+      - name: Android workload and SDK packages
+        run: |
+          dotnet workload install android
+          dotnet build src/LocalFM.Android -t:InstallAndroidDependencies -p:AndroidSdkDirectory="$ANDROID_HOME" -p:AcceptAndroidSDKLicenses=true
+      - name: Signed APK
+        if: env.HAS_ANDROID_KEYSTORE == 'true'
+        env:
+          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_B64 }}
+          ANDROID_KEYSTORE_PASS: ${{ secrets.ANDROID_KEYSTORE_PASS }}
+        run: |
+          printf '%s' "$KEYSTORE_B64" | base64 --decode > "$RUNNER_TEMP/release.keystore"
+          dotnet publish src/LocalFM.Android -c Release -o "$RUNNER_TEMP/apk" --nologo -p:Version="$VERSION" \
+            -p:AndroidSdkDirectory="$ANDROID_HOME" -p:AndroidKeyStore=true -p:AndroidSigningKeyStore="$RUNNER_TEMP/release.keystore" \
+            -p:AndroidSigningKeyAlias=localfm -p:AndroidSigningStorePass=env:ANDROID_KEYSTORE_PASS -p:AndroidSigningKeyPass=env:ANDROID_KEYSTORE_PASS
+          rm "$RUNNER_TEMP/release.keystore"
+          mkdir -p out/releases
+          cp "$RUNNER_TEMP"/apk/*-Signed.apk "out/releases/LocalFM-$VERSION.apk"
+          ./check-size.sh out/releases android
+      - if: env.HAS_ANDROID_KEYSTORE == 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: release-android
+          path: out/releases/
+          if-no-files-found: error
+
   publish:
-    needs: build
+    needs: [build, android]
     runs-on: ubuntu-latest
     env:
       HAS_WINGET_TOKEN: ${{ secrets.WINGET_TOKEN != '' }}

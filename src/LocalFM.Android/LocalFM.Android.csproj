@@ -17,6 +17,10 @@
     <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
     <!-- One APK for both ABIs (arm64 phones, x64 emulators). -->
     <AndroidPackageFormat>apk</AndroidPackageFormat>
+    <!-- IL2104 only summarises another assembly's own trim warnings: here Avalonia.DesignerSupport and SQLitePCLRaw's
+         Android bundle, which the desktop publish does not trim. Our code's IL warnings stay errors, and the trimmed
+         Release APK is run on the emulator before a release (docs/android.md). -->
+    <WarningsAsErrors>$(WarningsAsErrors.Replace('IL2104;', ''))</WarningsAsErrors>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)' == 'Debug'">
     <!-- adb install works without the IDE's fast deployment. -->
@@ -39,6 +43,11 @@
   <ItemGroup>
     <AndroidNativeLibrary Include="$(NativeOutDir)android-arm64/*.so" Abi="arm64-v8a" />
     <AndroidNativeLibrary Include="$(NativeOutDir)android-x64/*.so" Abi="x86_64" />
+  </ItemGroup>
+  <!-- Licences travel with the app: LocalFM's own and the LGPL of the bundled FFmpeg (assets/licenses/). -->
+  <ItemGroup>
+    <AndroidAsset Include="$(RepoRoot)LICENSE" Link="Assets/licenses/LICENSE.txt" />
+    <AndroidAsset Include="$(NativeOutDir)android-arm64/FFmpeg-COPYING.LGPLv2.1.txt" Link="Assets/licenses/FFmpeg-COPYING.LGPLv2.1.txt" />
   </ItemGroup>
   <Target Name="CheckNativeLibs" BeforeTargets="Build">
     <Error Condition="!Exists('$(NativeOutDir)android-arm64/liblocalfm_native.so') Or !Exists('$(NativeOutDir)android-x64/liblocalfm_native.so')"

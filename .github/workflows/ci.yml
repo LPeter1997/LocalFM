@@ -1,5 +1,6 @@
 # Tests on all three OSes against the bundled FFmpeg, the AOT publish with its size budget, and a screenshot of
-# the published app on each OS (docs/release.md).
+# the published app on each OS (docs/release.md). The Android head is built as a Release APK (trimmed, AOT) with
+# its size budget (docs/android.md).
 name: ci
 
 on:
@@ -18,7 +19,7 @@ jobs:
   ffmpeg:
     uses: ./.github/workflows/ffmpeg.yml
     with:
-      targets: '[{"os":"ubuntu-22.04","rid":"linux-x64"},{"os":"windows-latest","rid":"win-x64"},{"os":"macos-latest","rid":"osx-arm64"}]'
+      targets: '[{"os":"ubuntu-22.04","rid":"linux-x64"},{"os":"windows-latest","rid":"win-x64"},{"os":"macos-latest","rid":"osx-arm64"},{"os":"ubuntu-22.04","rid":"android-arm64"},{"os":"ubuntu-22.04","rid":"android-x64"}]'
 
   test:
     needs: ffmpeg
@@ -99,3 +100,43 @@ jobs:
           name: screenshot-${{ matrix.rid }}
           path: ${{ runner.temp }}/screenshot-${{ matrix.rid }}.png
           if-no-files-found: warn
+
+  # The phone app: a Release APK (both ABIs), signed with the build's debug key since nothing is published.
+  android:
+    needs: ffmpeg
+    runs-on: ubuntu-22.04
+    timeout-minutes: 60
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: global.json
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "21"
+      - uses: ./.github/actions/native
+        with:
+          rid: android-arm64
+      - uses: ./.github/actions/native
+        with:
+          rid: android-x64
+      - name: Android workload and SDK packages
+        run: |
+          dotnet workload install android
+          dotnet build src/LocalFM.Android -t:InstallAndroidDependencies -p:AndroidSdkDirectory="$ANDROID_HOME" -p:AcceptAndroidSDKLicenses=true
+      - name: Release APK
+        run: dotnet publish src/LocalFM.Android -c Release -o "$RUNNER_TEMP/apk" -p:AndroidSdkDirectory="$ANDROID_HOME" --nologo
+      - name: Size budget
+        run: |
+          mkdir -p "$RUNNER_TEMP/apk-size"
+          cp "$RUNNER_TEMP"/apk/*-Signed.apk "$RUNNER_TEMP/apk-size/"
+          ./check-size.sh "$RUNNER_TEMP/apk-size" android
+      - uses: actions/upload-artifact@v7
+        with:
+          name: apk
+          path: ${{ runner.temp }}/apk-size/
+          if-no-files-found: error

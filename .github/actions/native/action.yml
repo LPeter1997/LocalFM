@@ -8,6 +8,8 @@ inputs:
 runs:
   using: composite
   steps:
+    - if: startsWith(inputs.rid, 'android-')
+      uses: ./.github/actions/ndk
     - uses: actions/download-artifact@v8
       with:
         name: ffmpeg-${{ inputs.rid }}
@@ -17,7 +19,8 @@ runs:
       env:
         RID: ${{ inputs.rid }}
       run: |
-        prefix="$RUNNER_TEMP/ffmpeg"
+        # Per RID: the Android job builds two RIDs in one runner.
+        prefix="$RUNNER_TEMP/ffmpeg-$RID"
         local=""
         # GNU tar reads "D:/…" as a remote host; --force-local keeps it a file.
         if [ "$RUNNER_OS" = Windows ]; then prefix=$(cygpath -m "$prefix"); local=--force-local; fi
