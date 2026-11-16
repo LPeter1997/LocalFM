@@ -41,7 +41,7 @@ public sealed partial class UpdaterViewModel(IUpdaterHost host, IUpdateService s
     public bool IsNoticeOnly => service.Mode == UpdateMode.NoticeOnly;
     public string CurrentVersion => currentVersion;
 
-    public string ModeText => service.Mode switch
+    public string ModeText => service.HowToUpdate ?? service.Mode switch
     {
         UpdateMode.InApp => "Updates install themselves when you quit, or right away if you choose.",
         UpdateMode.NoticeOnly => "Your package manager installs updates; you are told when there is one.",

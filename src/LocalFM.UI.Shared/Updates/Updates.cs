@@ -25,6 +25,9 @@ public interface IUpdateService
 {
     UpdateMode Mode { get; }
 
+    /// <summary>How updates reach this copy, for the Sources page (null: the mode's usual wording).</summary>
+    string? HowToUpdate => null;
+
     /// <summary>Null when the app is up to date. Throws when the check fails (offline, rate limited).</summary>
     Task<AvailableUpdate?> CheckAsync(CancellationToken ct = default);
 
@@ -99,11 +102,13 @@ public sealed class NoUpdateService : IUpdateService
 
 
 /// <summary>Asks GitHub for the latest release and compares versions; never downloads anything.</summary>
-public sealed class ReleaseNoticeService(string currentVersion) : IUpdateService
+public sealed class ReleaseNoticeService(string currentVersion, string? howToUpdate = null) : IUpdateService
 {
     private static readonly HttpClient Http = CreateClient();
 
     public UpdateMode Mode => UpdateMode.NoticeOnly;
+
+    public string? HowToUpdate => howToUpdate;
 
     public async Task<AvailableUpdate?> CheckAsync(CancellationToken ct = default)
     {

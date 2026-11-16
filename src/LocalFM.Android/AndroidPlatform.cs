@@ -58,7 +58,8 @@ public sealed class AndroidPlatform : IAppPlatform
 
     private static Context Context => global::Android.App.Application.Context;
 
-    public IUpdateService CreateUpdateService() => new ReleaseNoticeService(AppInfo.Version);
+    public IUpdateService CreateUpdateService() => new ReleaseNoticeService(AppInfo.Version,
+        "New versions are on GitHub as an APK; you are told when there is one, and installing it keeps your library.");
 
     public void Launch(LocalFM.UI.App app, IApplicationLifetime? lifetime)
     {
