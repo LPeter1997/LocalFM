@@ -79,11 +79,18 @@ public partial class MainView : UserControl
         // Shortcuts work wherever focus is, also when nothing has it (keys then go to the top level).
         _topLevel = TopLevel.GetTopLevel(this);
         _topLevel?.AddHandler(KeyDownEvent, OnKeyDownTunnel, RoutingStrategies.Tunnel);
+        if (_topLevel is not null) _topLevel.BackRequested += OnBackRequested;
+    }
+
+    private void OnBackRequested(object? sender, RoutedEventArgs e)
+    {
+        if (Vm?.HandleSystemBack() == true) e.Handled = true;
     }
 
     protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
     {
         _topLevel?.RemoveHandler(KeyDownEvent, OnKeyDownTunnel);
+        if (_topLevel is not null) _topLevel.BackRequested -= OnBackRequested;
         _topLevel = null;
         base.OnDetachedFromVisualTree(e);
     }

@@ -238,6 +238,19 @@ public sealed partial class MainViewModel : ObservableObject
         CanGoBack = _back.Count > 0;
     }
 
+    /// <summary>The system's back (Android's gesture or button): closes what is on top, then goes back a page.
+    /// False when there is nothing left to close, so the system can leave the app.</summary>
+    public bool HandleSystemBack()
+    {
+        if (Updater.WhatsNewOpen) Updater.WhatsNewOpen = false;
+        else if (Vibe.IsOpen) Vibe.IsOpen = false;
+        else if (Lyrics.IsOpen) Lyrics.IsOpen = false;
+        else if (NowPlayingOpen) NowPlayingOpen = false;
+        else if (CanGoBack) Back();
+        else return false;
+        return true;
+    }
+
     public void ShowAlbum(AlbumSummary album, bool openMatch = false) => Push(new AlbumDetailViewModel(this, album, openMatch));
 
     /// <summary>Shows an album in place of the current page (the current one no longer exists, e.g. after a merge).</summary>
