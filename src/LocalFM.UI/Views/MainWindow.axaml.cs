@@ -1,9 +1,7 @@
 using Avalonia;
 using Avalonia.Controls;
-using Avalonia.Input;
-using Avalonia.Interactivity;
+using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Media.Imaging;
-using Avalonia.Platform.Storage;
 using Avalonia.Rendering.Composition;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
@@ -11,121 +9,24 @@ using LocalFM.UI.ViewModels;
 
 namespace LocalFM.UI.Views;
 
+/// <summary>The desktop window: our own chrome around <see cref="MainView"/>.</summary>
 public partial class MainWindow : Window
 {
     public MainWindow()
     {
         InitializeComponent();
+        View.CaptionButtonSlot.Content = new CaptionButtons { Margin = new Thickness(0, 0, 9, 0) };
         WindowChrome.MakeBorderless(this);
-        WindowChrome.TitleBar(this, TitleBar);
+        WindowChrome.TitleBar(this, View.TitleRow);
         WindowChrome.ResizeGrips(this, RootPanel);
         WindowChrome.Outline(this, Frame);
-        // The slider follows playback until the user grabs it; the seek happens on release.
-        SeekSlider.AddHandler(PointerPressedEvent, (_, _) => { if (Vm is { } vm) vm.NowPlaying.IsSeeking = true; }, RoutingStrategies.Tunnel, handledEventsToo: true);
-        SeekSlider.AddHandler(PointerReleasedEvent, (_, _) => CommitSeek(), RoutingStrategies.Tunnel, handledEventsToo: true);
-        SeekSlider.AddHandler(PointerCaptureLostEvent, (_, _) => CommitSeek(), RoutingStrategies.Tunnel, handledEventsToo: true);
-        AddHandler(KeyDownEvent, OnKeyDownTunnel, RoutingStrategies.Tunnel);
-        MiniButton.Click += (_, _) => MiniPlayerRequested?.Invoke();
-        // Scroll over the volume icon or slider: 5% a notch (touchpads scroll in finer steps).
-        VolumeArea.AddHandler(PointerWheelChangedEvent, (_, e) =>
-        {
-            if (Vm is not { } vm) return;
-            vm.NowPlaying.NudgeVolume(e.Delta.Y * 5);
-            e.Handled = true;
-        }, RoutingStrategies.Tunnel);
-        // The mouse's back button goes back, like in a browser.
-        AddHandler(PointerPressedEvent, (_, e) =>
-        {
-            if (e.GetCurrentPoint(this).Properties.IsXButton1Pressed && Vm is { CanGoBack: true } vm)
-            {
-                vm.BackCommand.Execute(null);
-                e.Handled = true;
-            }
-        }, RoutingStrategies.Tunnel);
-        BarTitle.Tapped += (_, _) => Vm?.ShowNowPlayingAlbumCommand.Execute(null);
-        BarArtist.Tapped += (_, _) => Vm?.ShowNowPlayingArtistCommand.Execute(null);
-        LyricsList.AddHandler(PointerPressedEvent, (_, e) =>
-        {
-            if ((e.Source as Control)?.DataContext is LyricLineViewModel line) Vm?.Lyrics.SeekTo(line);
-        }, RoutingStrategies.Bubble, handledEventsToo: true);
-    }
-
-    /// <summary>Keeps the sung line about a third from the top of the lyrics panel.</summary>
-    private void ScrollLyricTo(int index)
-    {
-        if (index < 0 || LyricsList.ContainerFromIndex(index) is not Control c) return;
-        var p = c.TranslatePoint(new Point(0, 0), LyricsList);
-        if (p is null) return;
-        double target = Math.Max(0, p.Value.Y - LyricsScroll.Viewport.Height / 3);
-        LyricsScroll.Offset = new Vector(0, target);
+        View.MiniPlayerRequested += () => MiniPlayerRequested?.Invoke();
     }
 
     private MainViewModel? Vm => DataContext as MainViewModel;
 
-    private static readonly FilePickerFileType BundleType = new("LocalFM knowledge base") { Patterns = ["*.localfm-kb"] };
-
-    private static readonly FilePickerFileType ImportType = new("Music and zips")
-    {
-        Patterns = ["*.zip", .. LocalFM.Library.Import.Scanner.AudioExtensions.Select(e => "*" + e)],
-    };
-
     /// <summary>The person asked to switch to the miniplayer.</summary>
     public event Action? MiniPlayerRequested;
-
-    protected override void OnDataContextChanged(EventArgs e)
-    {
-        base.OnDataContextChanged(e);
-        if (Vm is { } vm)
-        {
-            vm.PickFolder = PickFolderAsync;
-            vm.PickSaveFile = async name =>
-            {
-                var file = await StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
-                {
-                    Title = "Export knowledge base", SuggestedFileName = name, DefaultExtension = "localfm-kb",
-                    FileTypeChoices = [BundleType],
-                });
-                return file?.TryGetLocalPath();
-            };
-            vm.PickOpenFile = async () =>
-            {
-                var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
-                {
-                    Title = "Import knowledge base", AllowMultiple = false, FileTypeFilter = [BundleType, FilePickerFileTypes.All],
-                });
-                return files.Count > 0 ? files[0].TryGetLocalPath() : null;
-            };
-            vm.PickImportFiles = async () =>
-            {
-                var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
-                {
-                    Title = "Import music", AllowMultiple = true, FileTypeFilter = [ImportType, FilePickerFileTypes.All],
-                });
-                return files.Select(f => f.TryGetLocalPath()).OfType<string>().ToList();
-            };
-            vm.PickProgram = async () =>
-            {
-                var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions { Title = "Locate yt-dlp", AllowMultiple = false });
-                return files.Count > 0 ? files[0].TryGetLocalPath() : null;
-            };
-            vm.OpenUrl = url =>
-            {
-                // Only web links: the URLs come from online sources.
-                if (Uri.TryCreate(url, UriKind.Absolute, out var uri) && (uri.Scheme == Uri.UriSchemeHttps || uri.Scheme == Uri.UriSchemeHttp))
-                    _ = Launcher.LaunchUriAsync(uri);
-            };
-            vm.Lyrics.CurrentLineChanged += ScrollLyricTo;
-        }
-    }
-
-    /// <summary>Narrow windows: a slimmer lyrics panel and volume slider, so the page and player bar still fit.</summary>
-    protected override void OnSizeChanged(SizeChangedEventArgs e)
-    {
-        base.OnSizeChanged(e);
-        bool compact = e.NewSize.Width < 1100;
-        LyricsPanel.Width = compact ? 300 : 380;
-        VolumeSlider.Width = compact ? 80 : 120;
-    }
 
     protected override void OnOpened(EventArgs e)
     {
@@ -144,159 +45,16 @@ public partial class MainWindow : Window
         }
     }
 
-    private void CommitSeek()
-    {
-        if (Vm is not { } vm || !vm.NowPlaying.IsSeeking) return;
-        vm.NowPlaying.IsSeeking = false;
-        vm.NowPlaying.CommitSeek(SeekSlider.Value);
-    }
-
-    private async Task<string?> PickFolderAsync()
-    {
-        var result = await StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions { Title = "Add music folder", AllowMultiple = false });
-        return result.Count > 0 ? result[0].TryGetLocalPath() : null;
-    }
-
-    private void OnKeyDownTunnel(object? sender, KeyEventArgs e)
-    {
-        if (Vm is not { } vm) return;
-        bool typing = TopLevel.GetTopLevel(this)?.FocusManager?.GetFocusedElement() is TextBox;
-        var ctrl = e.KeyModifiers.HasFlag(KeyModifiers.Control);
-
-        if (ctrl && e.Key == Key.F) { Search.Focus(); Search.SelectAll(); e.Handled = true; return; }
-        if (e.KeyModifiers.HasFlag(KeyModifiers.Alt) && e.Key == Key.Left) { vm.BackCommand.Execute(null); e.Handled = true; return; }
-        if (typing)
-        {
-            if (e.Key == Key.Escape) { vm.SearchText = ""; Focus(); e.Handled = true; }
-            return;
-        }
-        switch (e.Key)
-        {
-            case Key.Space: vm.NowPlaying.PlayPauseCommand.Execute(null); break;
-            case Key.MediaPlayPause: vm.NowPlaying.PlayPauseCommand.Execute(null); break;
-            case Key.MediaNextTrack: vm.NowPlaying.NextCommand.Execute(null); break;
-            case Key.MediaPreviousTrack: vm.NowPlaying.PreviousCommand.Execute(null); break;
-            case Key.Up when ctrl: vm.NowPlaying.NudgeVolume(5); break;
-            case Key.Down when ctrl: vm.NowPlaying.NudgeVolume(-5); break;
-            case Key.VolumeMute: vm.NowPlaying.ToggleMuteCommand.Execute(null); break;
-            case Key.Right when ctrl: vm.NowPlaying.NextCommand.Execute(null); break;
-            case Key.Left when ctrl: vm.NowPlaying.PreviousCommand.Execute(null); break;
-            case Key.Right: vm.NowPlaying.SeekBy(5); break;
-            case Key.Left: vm.NowPlaying.SeekBy(-5); break;
-            case Key.L: vm.ToggleLyricsCommand.Execute(null); break;
-            case Key.V: vm.ToggleNowPlayingCommand.Execute(null); break;
-            case Key.Escape when vm.Vibe.IsOpen: vm.Vibe.IsOpen = false; break;
-            case Key.Escape when vm.Lyrics.IsOpen: vm.Lyrics.IsOpen = false; break;
-            case Key.Escape when vm.NowPlayingOpen: vm.NowPlayingOpen = false; break;
-            case Key.M when ctrl: MiniPlayerRequested?.Invoke(); break;
-            default: return;
-        }
-        e.Handled = true;
-    }
-
     // ------------------------------------------------------------------ snapshot mode
 
     private async Task SnapshotAndExit(string path)
     {
         try
         {
-            if (Vm is { } vm && Program.SnapshotPage is { } page)
-            {
-                await Task.Delay(800);
-                if (page is "album" or "match" && vm.Albums.Albums.FirstOrDefault() is { } a) vm.ShowAlbum(a, openMatch: page == "match");
-                else if (page.StartsWith("album:", StringComparison.Ordinal)
-                         && vm.Albums.Albums.FirstOrDefault(x => x.Title == page[6..]) is { } named) vm.ShowAlbum(named);
-                else if (page.StartsWith("match:", StringComparison.Ordinal)
-                         && vm.Albums.Albums.FirstOrDefault(x => x.Title == page[6..]) is { } toMatch) vm.ShowAlbum(toMatch, openMatch: true);
-                else if (page.StartsWith("move:", StringComparison.Ordinal)
-                         && vm.Albums.Albums.FirstOrDefault(x => x.Title == page[5..]) is { } moveFrom)
-                    vm.MoveTracks(vm.Host.Queries.AlbumTracks(moveFrom.ReleaseId).Take(2).ToList());
-                else if (page == "tidy-albums" && vm.Nav.FirstOrDefault(n => n.Page is TidyViewModel) is { } tidy)
-                {
-                    vm.Navigate(tidy);
-                    ((TidyViewModel)tidy.Page).Tab = 1;
-                }
-                else if (page == "move" && vm.Albums.Albums.FirstOrDefault() is { } m
-                         && vm.Host.Queries.AlbumTracks(m.ReleaseId).FirstOrDefault() is { } first) vm.MoveTrack(first);
-                else if (page == "edit" && vm.Albums.Albums.FirstOrDefault() is { } e) vm.EditAlbum(e.ReleaseId);
-                else if (page == "mini") MiniPlayerRequested?.Invoke();
-                else if (page.StartsWith("artist:", StringComparison.Ordinal)
-                         && vm.Host.Queries.Artists(page[7..]).FirstOrDefault() is { } artist)
-                {
-                    vm.ShowArtist(artist);
-                    if (vm.CurrentPage is AlbumsViewModel { Profile: { } profile }) await profile.LookUpCommand.ExecuteAsync(null);
-                }
-                else if (vm.Nav.FirstOrDefault(n => n.Name.StartsWith(page, StringComparison.OrdinalIgnoreCase)) is { } nav) vm.Navigate(nav);
-            }
-            // Import page states: a preview of <path>, optionally imported (into the snapshot home, never ~/Music).
-            if (Environment.GetEnvironmentVariable("LOCALFM_SNAPSHOT_IMPORT") is { Length: > 0 } importPath
-                && Vm is { CurrentPage: ImportViewModel import } vi)
-            {
-                await vi.Host.Import.SetImportFolderAsync(Path.Combine(vi.Host.Paths.Root, "imported"));
-                await import.ResolveManyAsync([importPath]);
-                if (Environment.GetEnvironmentVariable("LOCALFM_SNAPSHOT_IMPORT_RUN") == "1")
-                {
-                    await import.ImportSelectedCommand.ExecuteAsync(null);
-                    await Task.Delay(2500);
-                }
-            }
-            // Not when playback already carries on (resumed after "Restart now").
-            if (Environment.GetEnvironmentVariable("LOCALFM_SNAPSHOT_PLAY") == "1" && Vm is { } v2
-                && v2.Host.Player.State != LocalFM.Playback.PlaybackState.Playing)
-            {
-                await Task.Delay(500);
-                if (v2.Albums.Albums.FirstOrDefault() is { } first) v2.Albums.PlayCommand.Execute(first);
-            }
-            if (Environment.GetEnvironmentVariable("LOCALFM_SNAPSHOT_LYRICS") == "1" && Vm is { } v3) v3.Lyrics.IsOpen = true;
-            if (Environment.GetEnvironmentVariable("LOCALFM_SNAPSHOT_UPDATE") is { Length: > 0 } update && Vm is { } v6)
-            {
-                if (update is "quit" or "restart")
-                {
-                    // A real start shows the installed version's notes, then the buttons are pressed.
-                    v6.Updater.ShowWhatsNewIfUpdated();
-                    await v6.Updater.CheckNowCommand.ExecuteAsync(null);
-                    Console.WriteLine($"update: {v6.Updater.CurrentVersion}, offered {v6.Updater.Available?.Version ?? "nothing"}, {v6.Host.Player.State}");
-                    if (v6.Updater.Available is not null)
-                    {
-                        if (update == "quit") await v6.Updater.UpdateOnQuitCommand.ExecuteAsync(null);
-                        else await v6.Updater.RestartNowCommand.ExecuteAsync(null);
-                    }
-                }
-                else if (update == "whatsnew")
-                {
-                    v6.Updater.WhatsNew = LocalFM.UI.Updates.SnapshotUpdateService.SnapshotNotes;
-                    v6.Updater.WhatsNewOpen = true;
-                }
-                else
-                {
-                    await v6.Updater.CheckNowCommand.ExecuteAsync(null);
-                    if (update == "downloading") { v6.Updater.IsDownloading = true; v6.Updater.Progress = 42; }
-                }
-            }
-            if (Environment.GetEnvironmentVariable("LOCALFM_SNAPSHOT_VIBE") is "1" or "leave" && Vm is { } v5)
-            {
-                v5.Vibe.IsOpen = true;
-                if (Environment.GetEnvironmentVariable("LOCALFM_SNAPSHOT_VIBE") == "leave")
-                {
-                    await Task.Delay(4000); // joined and playing
-                    v5.Vibe.StopCommand.Execute(null);
-                }
-            }
-            if (Environment.GetEnvironmentVariable("LOCALFM_SNAPSHOT_NOWPLAYING") is { Length: > 0 } np && Vm is { } v4)
-            {
-                v4.NowPlayingOpen = true;
-                if (Enum.TryParse<LocalFM.UI.Controls.VisualizerMode>(np, out var mode)) v4.VisualizerMode = mode;
-            }
-            int wait = int.TryParse(Environment.GetEnvironmentVariable("LOCALFM_SNAPSHOT_WAIT"), out int w) ? w : 2500;
-            await Task.Delay(wait); // let pages, covers and lookups finish
-            if (double.TryParse(Environment.GetEnvironmentVariable("LOCALFM_SNAPSHOT_SCROLL"), out double scroll)
-                && this.GetVisualDescendants().OfType<ScrollViewer>().FirstOrDefault(sv => sv.Extent.Height > sv.Viewport.Height + 1) is { } scroller)
-            {
-                scroller.Offset = new Vector(0, scroll);
-                await Task.Delay(400);
-            }
+            if (Vm is { } vm)
+                await SnapshotScript.RunAsync(vm, View, Environment.GetEnvironmentVariable, () => MiniPlayerRequested?.Invoke());
             // The miniplayer replaces this window when it is open.
-            Window shown = (Application.Current?.ApplicationLifetime as Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime)?
+            Window shown = (Application.Current?.ApplicationLifetime as IClassicDesktopStyleApplicationLifetime)?
                 .Windows.FirstOrDefault(w => w is MiniPlayerWindow && w.IsVisible) ?? this;
             var root = (Visual?)shown.GetVisualDescendants().OfType<Avalonia.Controls.Primitives.VisualLayerManager>().FirstOrDefault() ?? (Visual)shown.Content!;
             var visual = ElementComposition.GetElementVisual(root)!;
@@ -310,7 +68,7 @@ public partial class MainWindow : Window
         }
         Dispatcher.UIThread.Post(() =>
         {
-            foreach (var w in (Application.Current?.ApplicationLifetime as Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime)?.Windows.ToList() ?? [])
+            foreach (var w in (Application.Current?.ApplicationLifetime as IClassicDesktopStyleApplicationLifetime)?.Windows.ToList() ?? [])
                 if (w != this) w.Close();
             Close();
         });

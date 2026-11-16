@@ -1,4 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
+  <!-- The desktop app (Linux, Windows, macOS): window chrome, tray, miniplayer, MPRIS, Velopack. The pages, view
+       models and the rest of the UI are in LocalFM.UI.Shared, which the Android head uses too. -->
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
     <AssemblyName>LocalFM</AssemblyName>
@@ -12,9 +14,6 @@
   <ItemGroup>
     <PackageReference Include="Avalonia" />
     <PackageReference Include="Avalonia.Desktop" />
-    <PackageReference Include="Avalonia.Themes.Fluent" />
-    <PackageReference Include="Avalonia.Fonts.Inter" />
-    <PackageReference Include="CommunityToolkit.Mvvm" />
     <PackageReference Include="Velopack" />
   </ItemGroup>
   <!-- Distro packages (deb, rpm, AUR, Flatpak) are updated by the system: -p:LocalFMUpdater=false compiles the
@@ -36,10 +35,8 @@
     <AvaloniaResource Include="Assets\icon.png" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\LocalFM.App\LocalFM.App.csproj" />
+    <ProjectReference Include="..\LocalFM.UI.Shared\LocalFM.UI.Shared.csproj" />
     <ProjectReference Include="..\LocalFM.Desktop\LocalFM.Desktop.csproj" />
-    <ProjectReference Include="..\LocalFM.Ingest\LocalFM.Ingest.csproj" />
-    <ProjectReference Include="..\LocalFM.Vibe\LocalFM.Vibe.csproj" />
   </ItemGroup>
 
   <!-- The Windows icon (exe resource, Setup.exe, shortcuts) and the macOS one (vpk's .app bundle) are generated

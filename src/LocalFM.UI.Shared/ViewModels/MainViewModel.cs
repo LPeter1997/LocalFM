@@ -69,6 +69,8 @@ public sealed partial class MainViewModel : ObservableObject
         Albums = new AlbumsViewModel(this);
         Queue = new QueueViewModel(this);
         Sources = new SourcesViewModel(this);
+        Tidy = new TidyViewModel(this);
+        var caps = host.Capabilities;
         Nav =
         [
             new("Albums", Icon("IcoAlbum"), Albums),
@@ -77,9 +79,9 @@ public sealed partial class MainViewModel : ObservableObject
             new("Playlists", Icon("IcoPlaylist"), new PlaylistsViewModel(this)),
             new("Queue", Icon("IcoQueue"), Queue),
             new("Stats", Icon("IcoStats"), new StatsViewModel(this)),
-            new("Tidy up", Icon("IcoMagic"), Tidy = new TidyViewModel(this)),
+            .. caps.Editing ? [new NavItem("Tidy up", Icon("IcoMagic"), Tidy)] : Array.Empty<NavItem>(),
             new("Sound", Icon("IcoSliders"), new SoundViewModel(this)),
-            new("Import", Icon("IcoImport"), new ImportViewModel(this)),
+            .. caps.Import ? [new NavItem("Import", Icon("IcoImport"), new ImportViewModel(this))] : Array.Empty<NavItem>(),
             new("Sources", Icon("IcoFolder"), Sources),
         ];
         _selectedNav = Nav[0];
@@ -110,7 +112,7 @@ public sealed partial class MainViewModel : ObservableObject
         {
             ScanStatus = p.Done ? null : $"Scanning… {p.Processed:N0} / {p.Found:N0}";
             // New or changed songs may need tidying: look again in the background and count what is found.
-            if (p.Done) { _tidyDebounce!.Stop(); _tidyDebounce.Start(); }
+            if (p.Done && Capabilities.Editing) { _tidyDebounce!.Stop(); _tidyDebounce.Start(); }
         });
         _tidyDebounce = new DispatcherTimer(TimeSpan.FromSeconds(3), DispatcherPriority.Background, (_, _) =>
         {
@@ -118,11 +120,12 @@ public sealed partial class MainViewModel : ObservableObject
             _ = Tidy.CheckInBackgroundAsync(CurrentPage == Tidy);
         });
         _tidyDebounce.Stop();
-        var tidyNav = Nav.First(n => n.Page == Tidy);
-        Tidy.PropertyChanged += (_, e) => { if (e.PropertyName == nameof(TidyViewModel.FixCount)) tidyNav.Badge = Tidy.FixCount; };
+        if (Nav.FirstOrDefault(n => n.Page == Tidy) is { } tidyNav)
+            Tidy.PropertyChanged += (_, e) => { if (e.PropertyName == nameof(TidyViewModel.FixCount)) tidyNav.Badge = Tidy.FixCount; };
     }
 
     public AppHost Host { get; }
+    public PlatformCapabilities Capabilities => Host.Capabilities;
     public TidyViewModel Tidy { get; }
     public TrackActions Actions { get; }
     public NowPlayingViewModel NowPlaying { get; }
@@ -174,6 +177,9 @@ public sealed partial class MainViewModel : ObservableObject
 
     /// <summary>Set by the window: opens a web link in the person's browser.</summary>
     public Action<string>? OpenUrl { get; set; }
+
+    /// <summary>Set by the view: puts text on the clipboard.</summary>
+    public Func<string, Task>? CopyText { get; set; }
 
     [ObservableProperty] private NavItem? _selectedNav;
     [ObservableProperty] private PageViewModel _currentPage;
@@ -322,12 +328,12 @@ public sealed partial class MainViewModel : ObservableObject
     private static Geometry? Icon(string key) =>
         Application.Current!.TryGetResource(key, null, out var g) ? g as Geometry : null;
 
-    /// <summary>GitHub releases (or LOCALFM_UPDATE_SOURCE); snapshot runs get a canned update and no network.</summary>
+    /// <summary>The platform's updater (Velopack or a release notice); snapshot runs get a canned update and no network.</summary>
     private static IUpdateService CreateUpdateService() =>
         // quit/restart press the real buttons (against LOCALFM_UPDATE_SOURCE): the local update round trip.
         Environment.GetEnvironmentVariable("LOCALFM_SNAPSHOT_UPDATE") is { Length: > 0 } shot and not ("quit" or "restart")
             ? new SnapshotUpdateService(shot == "notice" ? UpdateMode.NoticeOnly : UpdateMode.InApp)
-            : ReleaseSource.Create(AppInfo.Version);
+            : App.Platform?.CreateUpdateService() ?? new NoUpdateService();
 
     /// <summary>The app as the updater sees it.</summary>
     private sealed class UpdaterHost(MainViewModel main) : IUpdaterHost

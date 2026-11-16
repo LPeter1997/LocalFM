@@ -30,6 +30,7 @@ internal static class Program
             if (args[i] == "--vibe-host") Vibe = new VibeStart(null);
             else if (args[i] == "--vibe-join" && i + 1 < args.Length) Vibe = new VibeStart(args[++i]);
         }
+        App.Platform = new DesktopPlatform();
         return BuildAvaloniaApp().StartWithClassicDesktopLifetime(args);
     }
 

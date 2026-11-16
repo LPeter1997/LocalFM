@@ -14,9 +14,10 @@ namespace LocalFM.UI;
 /// <summary>Composition root: builds and owns every service for the lifetime of the app.</summary>
 public sealed class AppHost : IDisposable
 {
-    public AppHost()
+    public AppHost(PlatformCapabilities? capabilities = null, AppPaths? paths = null)
     {
-        Paths = AppPaths.Default();
+        Capabilities = capabilities ?? PlatformCapabilities.Desktop;
+        Paths = paths ?? AppPaths.Default();
         Db = new Database(Paths.Database);
         Images = new ImageStore(Paths.ImagesDir);
         Queries = new LibraryQueries(Db, Images);
@@ -48,6 +49,8 @@ public sealed class AppHost : IDisposable
     }
 
     public VibeService Vibe { get; }
+
+    public PlatformCapabilities Capabilities { get; }
 
     public SoundSettings Sound { get; }
 
@@ -87,13 +90,28 @@ public sealed class AppHost : IDisposable
             {
                 foreach (var f in addFolders ?? [])
                     if (Directory.Exists(f)) await Sources.AddFolderAsync(Db, f).ConfigureAwait(false);
-                foreach (var s in Sources.List(Db).Where(s => s.Enabled)) Watcher.Watch(s);
+                if (Capabilities.WatchFolders)
+                    foreach (var s in Sources.List(Db).Where(s => s.Enabled)) Watcher.Watch(s);
                 await Scanner.ScanAllAsync().ConfigureAwait(false);
-                Import.Start(); // after the startup scan, so resumed imports do not compete with it
+                if (Capabilities.Import) Import.Start(); // after the startup scan, so resumed imports do not compete with it
             }
             catch (Exception ex) { Log.Error("Host", "Startup scan failed", ex); }
         });
     }
+
+    /// <summary>Where folders are not watched (Android): look for changes when the app comes back.</summary>
+    public void Rescan()
+    {
+        if (Interlocked.Exchange(ref _rescanning, 1) == 1) return;
+        _ = Task.Run(async () =>
+        {
+            try { await Scanner.ScanAllAsync().ConfigureAwait(false); }
+            catch (Exception ex) { Log.Error("Host", "Rescan failed", ex); }
+            finally { Volatile.Write(ref _rescanning, 0); }
+        });
+    }
+
+    private int _rescanning;
 
     /// <summary>--vibe-host / --vibe-join: handy for trying two instances. LOCALFM_VIBE_MAP=0 leaves the router alone.</summary>
     private async Task StartVibeAsync(VibeStart start)

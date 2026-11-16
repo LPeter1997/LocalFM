@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Everything the app heads share: App (styles, resources), MainView and the pages, view models, controls and
+       the composition root (AppHost). The desktop head (LocalFM.UI) adds the window chrome, tray, miniplayer, MPRIS
+       and Velopack; the Android head (LocalFM.Android) the activity, media session and permissions. -->
+  <PropertyGroup>
+    <RootNamespace>LocalFM.UI</RootNamespace>
+    <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Avalonia" />
+    <PackageReference Include="Avalonia.Themes.Fluent" />
+    <PackageReference Include="Avalonia.Fonts.Inter" />
+    <PackageReference Include="CommunityToolkit.Mvvm" />
+  </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="LocalFM" />
+    <InternalsVisibleTo Include="LocalFM.UI.Tests" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\LocalFM.App\LocalFM.App.csproj" />
+    <ProjectReference Include="..\LocalFM.Ingest\LocalFM.Ingest.csproj" />
+    <ProjectReference Include="..\LocalFM.Vibe\LocalFM.Vibe.csproj" />
+  </ItemGroup>
+</Project>

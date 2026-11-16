@@ -14,7 +14,8 @@ A local-first music player and music knowledge base: Native AOT .NET 10 + Avalon
 | `src/LocalFM.Metadata` | Provider contract (implementations are the next phase) |
 | `src/LocalFM.App` | Play queue, player service (history, ReplayGain, resume) |
 | `src/LocalFM.Vibe` | "Vibe together": host shares playback, listeners follow in sync (TLS, invite codes, remote file streaming) |
-| `src/LocalFM.UI` | Avalonia app (`LocalFM` executable; `--vibe-host` / `--vibe-join CODE` until the vibe panel exists) |
+| `src/LocalFM.UI.Shared` | The UI every app head shares: `App` (styles), `MainView` and the pages, view models, controls, `AppHost` (composition root) |
+| `src/LocalFM.UI` | Desktop app (`LocalFM` executable): window chrome, tray, miniplayer, MPRIS, Velopack; `--vibe-host` / `--vibe-join CODE` |
 | `tools/LocalFM.VibeCli` | Headless vibe harness: `host [--null] a.flac b.mp3` prints an invite, `join [--null] [--debug] CODE` follows it |
 | `tools/LocalFM.EngineCli` | Headless engine harness: `dotnet run --project tools/LocalFM.EngineCli -- a.flac b.mp3` |
 

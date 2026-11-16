@@ -9,6 +9,7 @@
     <Project Path="src/LocalFM.Native/LocalFM.Native.csproj" />
     <Project Path="src/LocalFM.Playback/LocalFM.Playback.csproj" />
     <Project Path="src/LocalFM.UI/LocalFM.UI.csproj" />
+    <Project Path="src/LocalFM.UI.Shared/LocalFM.UI.Shared.csproj" />
     <Project Path="src/LocalFM.Vibe/LocalFM.Vibe.csproj" />
   </Folder>
   <Folder Name="/tests/">

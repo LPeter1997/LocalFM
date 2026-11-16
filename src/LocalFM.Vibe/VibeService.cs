@@ -66,13 +66,19 @@ public sealed class VibeService : IAsyncDisposable
     /// <summary>Raised (on a background thread) when the role, listeners, reachability or session change.</summary>
     public event Action? Changed;
 
+    private static string? _defaultName;
+
+    /// <summary>What others see when the person has not picked a name.</summary>
     public static string DefaultName
     {
         get
         {
+            if (_defaultName is { } set) return set;
             string n = Environment.UserName;
             return string.IsNullOrWhiteSpace(n) ? "LocalFM" : char.ToUpperInvariant(n[0]) + n[1..];
         }
+        // Where the user name means nothing (Android): the device's name.
+        set => _defaultName = string.IsNullOrWhiteSpace(value) ? null : value;
     }
 
     // ------------------------------------------------------------------ hosting

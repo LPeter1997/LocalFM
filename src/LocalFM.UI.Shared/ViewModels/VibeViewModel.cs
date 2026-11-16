@@ -1,7 +1,4 @@
 using System.Collections.ObjectModel;
-using Avalonia;
-using Avalonia.Controls.ApplicationLifetimes;
-using Avalonia.Input.Platform;
 using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -125,9 +122,9 @@ public sealed partial class VibeViewModel : ObservableObject
     private async Task CopyInvite()
     {
         if (InviteCode is null) return;
-        if (Application.Current?.ApplicationLifetime is IClassicDesktopStyleApplicationLifetime { MainWindow.Clipboard: { } clipboard })
+        if (_main.CopyText is { } copy)
         {
-            await clipboard.SetTextAsync(InviteCode);
+            await copy(InviteCode);
             _main.Notify("Invite copied. Send it to your friends.");
         }
     }
