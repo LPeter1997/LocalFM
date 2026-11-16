@@ -92,14 +92,22 @@ public static class SnapshotScript
                 if (update == "downloading") { vm.Updater.IsDownloading = true; vm.Updater.Progress = 42; }
             }
         }
-        if (setting("LOCALFM_SNAPSHOT_VIBE") is "1" or "leave")
+        if (setting("LOCALFM_SNAPSHOT_VIBE") is "1" or "leave" or "host")
         {
             vm.Vibe.IsOpen = true;
+            if (setting("LOCALFM_SNAPSHOT_VIBE") == "host") await vm.Vibe.StartHostingCommand.ExecuteAsync(null);
             if (setting("LOCALFM_SNAPSHOT_VIBE") == "leave")
             {
                 await Task.Delay(4000); // joined and playing
                 vm.Vibe.StopCommand.Execute(null);
             }
+        }
+        // Joins the vibe with this invite (Android has no command line for --vibe-join).
+        if (setting("LOCALFM_SNAPSHOT_VIBE_JOIN") is { Length: > 0 } code)
+        {
+            vm.Vibe.IsOpen = true;
+            vm.Vibe.JoinCode = code;
+            await vm.Vibe.JoinCommand.ExecuteAsync(null);
         }
         if (setting("LOCALFM_SNAPSHOT_NOWPLAYING") is { Length: > 0 } np)
         {

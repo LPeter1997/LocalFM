@@ -3,6 +3,10 @@
   <!-- Online metadata, lyrics and covers; vibes (TLS between phones and computers). -->
   <uses-permission android:name="android.permission.INTERNET" />
   <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+  <!-- Vibes on the local network: receiving multicast announcements needs a multicast lock; a Wi-Fi lock keeps a
+       vibe's connection up with the screen off. -->
+  <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+  <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" />
   <!-- The phone's own music, read by path (Android 13+; older versions use the storage permission). -->
   <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
   <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />

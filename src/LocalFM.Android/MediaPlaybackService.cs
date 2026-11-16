@@ -7,6 +7,7 @@ using Android.Media.Session;
 using Android.OS;
 using LocalFM.App;
 using LocalFM.Core;
+using LocalFM.Vibe;
 using PlaybackState = LocalFM.Playback.PlaybackState;
 using SessionState = Android.Media.Session.PlaybackState;
 
@@ -28,9 +29,11 @@ public sealed class MediaPlaybackService : Service
         ActionPrevious = "localfm.previous", ActionDismiss = "localfm.dismiss";
 
     private static PlayerService? _watched;
+    private static VibeService? _watchedVibe;
     private static bool _running;
 
     private PlayerService? _player;
+    private VibeService? _vibe;
     private MediaSession? _session;
     private NotificationManager? _notifications;
     private AudioManager? _audio;
@@ -42,19 +45,22 @@ public sealed class MediaPlaybackService : Service
     private string? _coverPath;
     private Bitmap? _cover;
 
-    /// <summary>Starts the service whenever playback starts (it stops itself when it is no longer needed).</summary>
-    public static void Watch(PlayerService player)
+    /// <summary>Starts the service whenever playback or a vibe starts (it stops itself when no longer needed).</summary>
+    public static void Watch(PlayerService player, VibeService vibe)
     {
         if (_watched is not null) return;
         _watched = player;
+        _watchedVibe = vibe;
         var main = new Handler(Looper.MainLooper!);
-        player.Changed += () => main.Post(() =>
+        void Check() => main.Post(() =>
         {
-            if (_running || player.State != PlaybackState.Playing) return;
+            if (_running || (player.State != PlaybackState.Playing && vibe.Role == VibeRole.None)) return;
             var context = global::Android.App.Application.Context;
             try { context.StartForegroundService(new Intent(context, typeof(MediaPlaybackService))); }
             catch (Exception ex) { Log.Warn("Android", "Could not start the playback service", ex); }
         });
+        player.Changed += Check;
+        vibe.Changed += Check;
     }
 
     public override IBinder? OnBind(Intent? intent) => null;
@@ -64,6 +70,7 @@ public sealed class MediaPlaybackService : Service
         base.OnCreate();
         _running = true;
         _player = AndroidPlatform.Instance.Host?.Player;
+        _vibe = AndroidPlatform.Instance.Host?.Vibe;
         _notifications = (NotificationManager?)GetSystemService(NotificationService);
         _notifications?.CreateNotificationChannel(new NotificationChannel(Channel, "Playback", NotificationImportance.Low)
         {
@@ -85,6 +92,7 @@ public sealed class MediaPlaybackService : Service
             _player.Changed += OnPlayerChanged;
             _player.Seeked += OnSeeked;
         }
+        if (_vibe is not null) _vibe.Changed += OnPlayerChanged;
     }
 
     public override StartCommandResult OnStartCommand(Intent? intent, StartCommandFlags flags, int startId)
@@ -95,7 +103,7 @@ public sealed class MediaPlaybackService : Service
             case ActionNext: _player?.Next(); break;
             case ActionPrevious: _player?.Previous(); break;
             case ActionDismiss:
-                if (_player?.State != PlaybackState.Playing) StopSelf();
+                if (_player?.State != PlaybackState.Playing && !InVibe) StopSelf();
                 return StartCommandResult.NotSticky;
         }
         // A start for a foreground service must reach startForeground in a few seconds, whatever the state.
@@ -107,8 +115,10 @@ public sealed class MediaPlaybackService : Service
     public override void OnTaskRemoved(Intent? rootIntent)
     {
         base.OnTaskRemoved(rootIntent);
-        if (_player?.State != PlaybackState.Playing) StopSelf();
+        if (_player?.State != PlaybackState.Playing && !InVibe) StopSelf();
     }
+
+    private bool InVibe => _vibe is { Role: not VibeRole.None };
 
     public override void OnDestroy()
     {
@@ -118,7 +128,8 @@ public sealed class MediaPlaybackService : Service
             _player.Changed -= OnPlayerChanged;
             _player.Seeked -= OnSeeked;
         }
-        SetPlayingResources(false);
+        if (_vibe is not null) _vibe.Changed -= OnPlayerChanged;
+        SetPlayingResources(false, awake: false);
         AbandonFocus();
         _session?.Release();
         _session = null;
@@ -168,24 +179,26 @@ public sealed class MediaPlaybackService : Service
         if (cover is not null) meta.PutBitmap(MediaMetadata.MetadataKeyAlbumArt, cover);
         _session.SetMetadata(meta.Build());
 
+        // A vibe keeps us in the foreground even while paused: a host stays reachable, a listener keeps up.
+        bool keep = playing || InVibe;
         var notification = BuildNotification(track, playing, own, cover);
-        if (playing || forceForeground)
+        if (keep || forceForeground)
         {
             // Android 14 wants the service type named here as well as in the manifest.
             if (Build.VERSION.SdkInt >= BuildVersionCodes.Q) StartForeground(NotificationId, notification, ForegroundService.TypeMediaPlayback);
             else StartForeground(NotificationId, notification);
             _foreground = true;
         }
-        if (!playing && _foreground)
+        if (!keep && _foreground)
         {
             // Paused: the notification stays (swipeable) so play is one tap away, but nothing keeps us alive.
             StopForeground(StopForegroundFlags.Detach);
             _foreground = false;
         }
-        if (!playing) _notifications?.Notify(NotificationId, notification);
+        if (!keep) _notifications?.Notify(NotificationId, notification);
 
         if (playing) RequestFocus();
-        SetPlayingResources(playing);
+        SetPlayingResources(playing, awake: keep);
     }
 
     private Notification BuildNotification(LocalFM.Library.TrackInfo? track, bool playing, bool own, Bitmap? cover)
@@ -194,9 +207,9 @@ public sealed class MediaPlaybackService : Service
             .SetSmallIcon(Resource.Drawable.ic_stat_note)!
             .SetContentTitle(track?.Title ?? "LocalFM")!
             .SetContentText(track?.Artist ?? "")!
-            .SetSubText(own ? null : "In a vibe")!
+            .SetSubText(_vibe?.Role switch { VibeRole.Hosting => "Your vibe", VibeRole.Listening => $"With {_vibe.HostName}", _ => null })!
             .SetVisibility(NotificationVisibility.Public)!
-            .SetOngoing(playing)!
+            .SetOngoing(playing || InVibe)!
             .SetShowWhen(false)!
             .SetDeleteIntent(ServiceIntent(ActionDismiss, 4));
         if (_session?.Controller?.SessionActivity is { } open) builder.SetContentIntent(open);
@@ -249,11 +262,13 @@ public sealed class MediaPlaybackService : Service
 
     // ------------------------------------------------------------------ while playing
 
-    private void SetPlayingResources(bool playing)
+    /// <param name="awake">Keep the CPU running: while playing, and for the whole of a vibe.</param>
+    private void SetPlayingResources(bool playing, bool awake)
     {
+        if (awake && _wakeLock is { IsHeld: false }) _wakeLock.Acquire();
+        if (!awake && _wakeLock is { IsHeld: true }) _wakeLock.Release();
         if (playing)
         {
-            if (_wakeLock is { IsHeld: false }) _wakeLock.Acquire();
             if (_noisy is null)
             {
                 _noisy = new NoisyReceiver(this);
@@ -264,7 +279,6 @@ public sealed class MediaPlaybackService : Service
         }
         else
         {
-            if (_wakeLock is { IsHeld: true }) _wakeLock.Release();
             if (_noisy is not null)
             {
                 UnregisterReceiver(_noisy);

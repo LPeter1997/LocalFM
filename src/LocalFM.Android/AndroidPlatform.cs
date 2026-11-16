@@ -73,7 +73,8 @@ public sealed class AndroidPlatform : IAppPlatform
             if (HasMusicPermission()) AddDefaultSourceIfNone();
             _host.Start();
             _vm.Start();
-            MediaPlaybackService.Watch(_host.Player);
+            MediaPlaybackService.Watch(_host.Player, _host.Vibe);
+            WatchNetwork(_host, _vm);
         }
         single.MainView = _view;
     }
@@ -87,6 +88,28 @@ public sealed class AndroidPlatform : IAppPlatform
         return maker.Length == 0 || model.StartsWith(maker, StringComparison.OrdinalIgnoreCase) || maker.Equals("google", StringComparison.OrdinalIgnoreCase)
             ? model
             : $"{char.ToUpperInvariant(maker[0])}{maker[1..]} {model}";
+    }
+
+    // ------------------------------------------------------------------ vibes
+
+    private NetworkLocks? _locks;
+
+    private void WatchNetwork(AppHost host, MainViewModel vm)
+    {
+        _locks = new NetworkLocks(Context);
+        void Update() => Dispatcher.UIThread.Post(() =>
+            _locks.Update(discovering: vm.Vibe.IsOpen || host.Vibe.VisibleOnNetwork, inVibe: NetworkLocks.InVibe(host.Vibe)));
+        host.Vibe.Changed += Update;
+        vm.Vibe.PropertyChanged += (_, e) => { if (e.PropertyName == nameof(VibeViewModel.IsOpen)) Update(); };
+    }
+
+    public bool CanShare => true;
+
+    public void Share(string text)
+    {
+        if (_activity is null || !_activity.TryGetTarget(out var activity)) return;
+        var send = new Intent(Intent.ActionSend).SetType("text/plain")!.PutExtra(Intent.ExtraText, text)!;
+        activity.StartActivity(Intent.CreateChooser(send, "Share the invite"));
     }
 
     // ------------------------------------------------------------------ activity

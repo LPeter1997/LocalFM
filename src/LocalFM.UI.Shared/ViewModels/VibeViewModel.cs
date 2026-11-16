@@ -129,6 +129,15 @@ public sealed partial class VibeViewModel : ObservableObject
         }
     }
 
+    public bool CanShare => App.Platform?.CanShare ?? false;
+
+    /// <summary>The phone's share sheet: a message app, mail, nearby share.</summary>
+    [RelayCommand]
+    private void ShareInvite()
+    {
+        if (InviteCode is { } code) App.Platform?.Share($"Join my LocalFM vibe: {code}");
+    }
+
     [RelayCommand]
     private Task Kick(ListenerInfo listener) => _vibe.Host is { } h ? Task.Run(() => h.KickAsync(listener.Id)) : Task.CompletedTask;
 

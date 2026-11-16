@@ -56,4 +56,9 @@ public interface IAppPlatform
     /// <summary>Asks for music access (Android: the permission prompt, or the app's settings once Android no
     /// longer shows the prompt).</summary>
     void RequestMusicAccess() { }
+
+    /// <summary>The system share sheet (Android); desktops copy instead.</summary>
+    bool CanShare => false;
+
+    void Share(string text) { }
 }
