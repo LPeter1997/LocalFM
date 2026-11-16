@@ -399,6 +399,26 @@ public sealed partial class SourcesViewModel(MainViewModel main) : PageViewModel
 
     public string DataFolder => Host.Paths.Root;
 
+    public string Intro => Host.Capabilities.WatchFolders
+        ? "Folders LocalFM scans for music. They are watched for changes; moved or renamed files keep their metadata " +
+          "and play history because files are identified by their audio content, not their path."
+        : "Folders LocalFM scans for music. They are checked again whenever you come back to LocalFM; moved or renamed " +
+          "files keep their metadata and play history because files are identified by their audio content, not their path.";
+
+    public bool CanExport => Host.Capabilities.ExportKnowledge;
+
+    /// <summary>The phone has not allowed reading its music yet.</summary>
+    [ObservableProperty] private bool _musicAccessMissing = App.Platform is { HasMusicAccess: false };
+
+    [RelayCommand] private void AllowMusicAccess() => App.Platform?.RequestMusicAccess();
+
+    /// <summary>After the permission prompt (or coming back from the app's settings).</summary>
+    public void RefreshMusicAccess()
+    {
+        MusicAccessMissing = App.Platform is { HasMusicAccess: false };
+        _ = RefreshAsync();
+    }
+
     public bool OnlineEnabled
     {
         get => Host.Metadata.OnlineEnabled;
@@ -425,7 +445,7 @@ public sealed partial class SourcesViewModel(MainViewModel main) : PageViewModel
         if (Main.PickFolder is null || await Main.PickFolder() is not { } path) return;
         var source = await Library.Sources.AddFolderAsync(Host.Db, path);
         await RefreshAsync();
-        Host.Watcher.Watch(source);
+        if (Host.Capabilities.WatchFolders) Host.Watcher.Watch(source);
         _ = Task.Run(() => Host.Scanner.ScanAsync(source));
     }
 

@@ -49,4 +49,11 @@ public interface IAppPlatform
     /// <summary>A path the app can read for a picked file or folder (null when there is none). The desktop's
     /// pickers return local files; Android's return content URIs, which the head turns into paths or copies.</summary>
     Task<string?> LocalPathAsync(IStorageItem item);
+
+    /// <summary>Whether the app may read the music folders. Android asks the person; desktops always may.</summary>
+    bool HasMusicAccess => true;
+
+    /// <summary>Asks for music access (Android: the permission prompt, or the app's settings once Android no
+    /// longer shows the prompt).</summary>
+    void RequestMusicAccess() { }
 }

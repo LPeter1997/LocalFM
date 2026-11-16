@@ -30,7 +30,7 @@ public sealed class AndroidPlatform : IAppPlatform
     private MainViewModel? _vm;
     private MainView? _view;
     private WeakReference<Activity>? _activity;
-    private bool _resumedOnce;
+    private bool _resumedOnce, _askedOnce, _blocked;
 
     private AndroidPlatform()
     {
@@ -93,7 +93,8 @@ public sealed class AndroidPlatform : IAppPlatform
     public void ActivityCreated(Activity activity, Intent? intent)
     {
         _activity = new WeakReference<Activity>(activity);
-        if (!HasMusicPermission()) RequestMusicPermission(activity);
+        // The first start asks right away; after that the Sources page has the button.
+        if (!HasMusicPermission() && !_askedOnce) RequestMusicPermission(activity);
         if (intent?.GetStringExtra("LOCALFM_SNAPSHOT") is { Length: > 0 }) RunSnapshot(intent);
     }
 
@@ -101,19 +102,38 @@ public sealed class AndroidPlatform : IAppPlatform
     public void Resumed()
     {
         if (!_resumedOnce) { _resumedOnce = true; return; } // the start already scans
+        // Back from the app's settings, perhaps with access granted there.
+        if (_vm?.Sources is { MusicAccessMissing: true }) { PermissionsChanged(); return; }
         if (HasMusicPermission()) _host?.Rescan();
     }
 
     public void PermissionsChanged()
     {
-        if (!HasMusicPermission() || _host is null) return;
+        bool granted = HasMusicPermission();
+        // Refused, and Android will not show the prompt again: the button opens the app's settings instead.
+        _blocked = !granted && _activity?.TryGetTarget(out var activity) == true
+                   && !activity.ShouldShowRequestPermissionRationale(MusicPermission);
+        Dispatcher.UIThread.Post(() => _vm?.Sources.RefreshMusicAccess());
+        if (!granted || _host is null) return;
         AddDefaultSourceIfNone();
         _host.Rescan();
         Dispatcher.UIThread.Post(() =>
         {
+            _vm?.Sources.RefreshMusicAccess();
             // The first run lands on Sources while there is no folder; go to the music once there is one.
             if (_vm is { CurrentPage: SourcesViewModel } vm) vm.Navigate(vm.Nav[0]);
         });
+    }
+
+    public bool HasMusicAccess => HasMusicPermission();
+
+    public void RequestMusicAccess()
+    {
+        if (_activity is null || !_activity.TryGetTarget(out var activity)) return;
+        if (!_blocked) { RequestMusicPermission(activity); return; }
+        var settings = new Intent(global::Android.Provider.Settings.ActionApplicationDetailsSettings,
+                                  AndroidUri.FromParts("package", activity.PackageName, null));
+        activity.StartActivity(settings);
     }
 
     private static string MusicPermission =>
@@ -121,7 +141,11 @@ public sealed class AndroidPlatform : IAppPlatform
 
     private static bool HasMusicPermission() => Context.CheckSelfPermission(MusicPermission) == Permission.Granted;
 
-    private static void RequestMusicPermission(Activity activity) => activity.RequestPermissions([MusicPermission], PermissionRequest);
+    private void RequestMusicPermission(Activity activity)
+    {
+        _askedOnce = true;
+        activity.RequestPermissions([MusicPermission], PermissionRequest);
+    }
 
     private void AddDefaultSourceIfNone()
     {

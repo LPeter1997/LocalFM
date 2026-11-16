@@ -488,7 +488,14 @@
 
     <!-- Phone: the mini player; tap it for the full now-playing screen -->
     <Border Grid.Row="3" Classes="compactonly">
-      <Border IsVisible="{Binding !SheetOpen}" Background="{StaticResource Surface}" BorderBrush="{StaticResource Line}" BorderThickness="0,1,0,0">
+      <!-- Only once something is loaded, as phone players do -->
+      <Border Background="{StaticResource Surface}" BorderBrush="{StaticResource Line}" BorderThickness="0,1,0,0">
+        <Border.IsVisible>
+          <MultiBinding Converter="{x:Static BoolConverters.And}">
+            <Binding Path="NowPlaying.HasTrack" />
+            <Binding Path="!SheetOpen" />
+          </MultiBinding>
+        </Border.IsVisible>
         <Grid RowDefinitions="Auto,Auto" DataContext="{Binding NowPlaying}" x:DataType="vm:NowPlayingViewModel">
           <ProgressBar Classes="thin" Minimum="0" Maximum="{Binding Duration}" Value="{Binding Position}" />
           <Grid Grid.Row="1" ColumnDefinitions="*,Auto,Auto" Margin="8,6,6,6">
