@@ -55,10 +55,16 @@ public static class SnapshotScript
             }
         }
         // Not when playback already carries on (resumed after "Restart now").
-        if (setting("LOCALFM_SNAPSHOT_PLAY") == "1" && vm.Host.Player.State != LocalFM.Playback.PlaybackState.Playing)
+        // "1" plays the first album; "all" every track (a queue long enough for background playback checks).
+        if (setting("LOCALFM_SNAPSHOT_PLAY") is "1" or "all" && vm.Host.Player.State != LocalFM.Playback.PlaybackState.Playing)
         {
             await Task.Delay(500);
-            if (vm.Albums.Albums.FirstOrDefault() is { } first) vm.Albums.PlayCommand.Execute(first);
+            if (setting("LOCALFM_SNAPSHOT_PLAY") == "all")
+            {
+                vm.Host.Player.Repeat = LocalFM.App.RepeatMode.All;
+                vm.Host.Player.PlayTracks(vm.Host.Queries.Tracks(""));
+            }
+            else if (vm.Albums.Albums.FirstOrDefault() is { } first) vm.Albums.PlayCommand.Execute(first);
         }
         if (setting("LOCALFM_SNAPSHOT_LYRICS") == "1") vm.Lyrics.IsOpen = true;
         if (setting("LOCALFM_SNAPSHOT_UPDATE") is { Length: > 0 } update)

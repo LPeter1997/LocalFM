@@ -72,6 +72,7 @@ public sealed class AndroidPlatform : IAppPlatform
             if (HasMusicPermission()) AddDefaultSourceIfNone();
             _host.Start();
             _vm.Start();
+            MediaPlaybackService.Watch(_host.Player);
         }
         single.MainView = _view;
     }

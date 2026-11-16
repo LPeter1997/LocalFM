@@ -49,15 +49,17 @@ public partial class MainView : UserControl
         {
             if ((e.Source as Control)?.DataContext is LyricLineViewModel line) Vm?.Lyrics.SeekTo(line);
         }, RoutingStrategies.Bubble, handledEventsToo: true);
-        SizeChanged += (_, e) => ApplyWidth(e.NewSize.Width);
+        SizeChanged += (_, e) => ApplySize(e.NewSize);
     }
 
-    /// <summary>Below this width the phone layout is used (bottom bar, mini player, full-screen panels).</summary>
-    public const double CompactWidth = 640;
+    /// <summary>Below this width, or this height (a phone on its side), the phone layout is used: bottom bar, mini
+    /// player, full-screen panels.</summary>
+    public const double CompactWidth = 640, CompactHeight = 480;
 
-    private void ApplyWidth(double width)
+    private void ApplySize(Size size)
     {
-        bool compact = width < CompactWidth;
+        double width = size.Width;
+        bool compact = width < CompactWidth || size.Height < CompactHeight;
         Classes.Set("compact", compact);
         // Narrow windows: a slimmer lyrics panel and volume slider (styles), so the page and player bar still fit.
         Classes.Set("narrow", !compact && width < 1100);
@@ -114,7 +116,7 @@ public partial class MainView : UserControl
         base.OnDataContextChanged(e);
         if (Vm is not { } vm) return;
         Classes.Set("touch", vm.Capabilities.Touch);
-        if (Bounds.Width > 0) ApplyWidth(Bounds.Width);
+        if (Bounds.Width > 0) ApplySize(Bounds.Size);
         vm.PickFolder = async () =>
         {
             if (Storage is not { } storage) return null;

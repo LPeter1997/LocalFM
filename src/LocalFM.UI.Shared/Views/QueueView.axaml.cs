@@ -17,9 +17,14 @@ public partial class QueueView : UserControl
     public QueueView()
     {
         InitializeComponent();
-        List.DoubleTapped += (_, _) =>
+        List.DoubleTapped += (_, e) =>
         {
-            if (List.SelectedItem is QueueRow row && DataContext is QueueViewModel vm) vm.PlayCommand.Execute(row);
+            if (e.Pointer.Type != PointerType.Touch && List.SelectedItem is QueueRow row && DataContext is QueueViewModel vm) vm.PlayCommand.Execute(row);
+        };
+        List.Tapped += (_, e) =>
+        {
+            if (TrackMenu.IsTouchRowTap(e) && (e.Source as Control)?.FindAncestorOfType<ListBoxItem>(includeSelf: true)?.DataContext is QueueRow row
+                && DataContext is QueueViewModel vm) vm.PlayCommand.Execute(row);
         };
         List.KeyDown += (_, e) =>
         {

@@ -16,7 +16,7 @@ The app has a built-in snapshot mode (`src/LocalFM.UI/Views/MainWindow.axaml.cs`
 `LOCALFM_SNAPSHOT=<png>` it renders its own window to a PNG and exits, so there's no screen capture and no window
 stealing focus. `LOCALFM_OUTPUT=null` keeps playback silent while the audio clock still runs, so lyrics,
 position and visualizers move as in real use. Other options: `LOCALFM_SNAPSHOT_PAGE` (a nav page,
-`album`, `more` (the phone's More tab), `album:<title>`, `match`, `match:<title>`, `move:<title>` (first two songs), `tidy-albums`, `move`, `edit`, `mini`, `artist:<name>`), `_PLAY=1`, `_LYRICS=1`, `_VIBE=1` (vibe panel; `leave` presses Leave after 4 s; pass `--vibe-host`/`--vibe-join CODE` and `LOCALFM_VIBE_MAP=0`), `_NOWPLAYING=<mode>`, `_WAIT=<ms>`,
+`album`, `more` (the phone's More tab), `album:<title>`, `match`, `match:<title>`, `move:<title>` (first two songs), `tidy-albums`, `move`, `edit`, `mini`, `artist:<name>`), `_PLAY=1` (`all`: every track, repeating), `_LYRICS=1`, `_VIBE=1` (vibe panel; `leave` presses Leave after 4 s; pass `--vibe-host`/`--vibe-join CODE` and `LOCALFM_VIBE_MAP=0`), `_NOWPLAYING=<mode>`, `_WAIT=<ms>`,
 `_WIDTH`/`_HEIGHT`, `_SCROLL=<px>`, `_UPDATE=available|downloading|notice|whatsnew` (banner states, no network; `quit`/`restart` press the real buttons against `LOCALFM_UPDATE_SOURCE`, docs/release.md), `_IMPORT=<zip/folder/link>` (Import page preview; `_IMPORT_RUN=1` also imports it into `<home>/imported`). Add an option there when a state you need can't be reached.
 
 Snapshots need a live desktop: while the session is locked (`loginctl show-session <id> -p LockedHint`),

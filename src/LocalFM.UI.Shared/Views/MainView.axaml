@@ -451,6 +451,7 @@
 
         <StackPanel Grid.Column="2" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center" Spacing="6">
           <Button Classes="flat" ToolTip.Tip="Find metadata for this album" IsEnabled="{Binding HasOwnTrack}"
+                  IsVisible="{Binding $parent[v:MainView].((vm:MainViewModel)DataContext).Capabilities.Editing}"
                   Command="{Binding $parent[v:MainView].((vm:MainViewModel)DataContext).MatchNowPlayingCommand}">
             <c:Icon Classes="icon" Data="{StaticResource IcoMagic}" />
           </Button>
@@ -577,6 +578,8 @@
     <!-- Narrow windows: a slimmer lyrics panel and volume slider, so the page and player bar still fit. -->
     <Style Selector="v|MainView.narrow Border#LyricsPanel"><Setter Property="Width" Value="300" /></Style>
     <Style Selector="v|MainView.narrow Slider#VolumeSlider"><Setter Property="Width" Value="80" /></Style>
+    <!-- Touch devices have volume keys -->
+    <Style Selector="v|MainView.touch StackPanel#VolumeArea"><Setter Property="IsVisible" Value="False" /></Style>
 
     <!-- Phone-sized: bottom bar and mini player instead of the sidebar and player bar; panels fill the screen. -->
     <Style Selector=":is(Control).compactonly"><Setter Property="IsVisible" Value="False" /></Style>

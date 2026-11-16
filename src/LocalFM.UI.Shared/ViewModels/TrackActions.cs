@@ -9,6 +9,9 @@ public sealed partial class TrackActions(MainViewModel main)
 {
     public ObservableCollection<PlaylistSummary> Playlists => main.PlaylistList;
 
+    /// <summary>Edit and move are offered (not on a phone).</summary>
+    public bool CanEdit => main.Capabilities.Editing;
+
     [RelayCommand] private void PlayNext(TrackInfo t) => main.Host.Player.PlayNext([t]);
     [RelayCommand] private void Enqueue(TrackInfo t) => main.Host.Player.Enqueue([t]);
     [RelayCommand] private void ShowAlbum(TrackInfo t) => main.ShowAlbumOf(t);

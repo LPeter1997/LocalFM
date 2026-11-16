@@ -6,5 +6,11 @@
   <!-- The phone's own music, read by path (Android 13+; older versions use the storage permission). -->
   <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
   <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
+  <!-- Playing in the background: a media playback foreground service with its notification, and the CPU kept
+       awake while playing (the screen may be off). -->
+  <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+  <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+  <uses-permission android:name="android.permission.WAKE_LOCK" />
+  <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
   <application android:label="LocalFM" android:icon="@drawable/icon" android:allowBackup="false" />
 </manifest>

@@ -6,14 +6,25 @@ using LocalFM.UI.ViewModels;
 
 namespace LocalFM.UI.Views;
 
-/// <summary>Right-click menu and double-click-to-play for any ListBox of <see cref="TrackInfo"/> rows.</summary>
+/// <summary>Right-click (long-press) menu and double-click-to-play (tap on a touchscreen) for any ListBox of
+/// <see cref="TrackInfo"/> rows.</summary>
 public static class TrackMenu
 {
+    /// <summary>A finger's tap on a row, not on a button inside it: touch has no double-click, so a tap plays.</summary>
+    public static bool IsTouchRowTap(TappedEventArgs e) =>
+        e.Pointer.Type == PointerType.Touch
+        && (e.Source as Control)?.FindAncestorOfType<Avalonia.Controls.Primitives.ToggleButton>(includeSelf: true) is null
+        && (e.Source as Control)?.FindAncestorOfType<Button>(includeSelf: true) is null;
+
     public static void Attach(ListBox list, Func<TrackActions?> actions, Action<TrackInfo> play, Action<TrackInfo>? remove = null, string removeLabel = "Remove")
     {
         list.DoubleTapped += (_, e) =>
         {
-            if (Row(e.Source) is { } t) play(t);
+            if (e.Pointer.Type != PointerType.Touch && Row(e.Source) is { } t) play(t);
+        };
+        list.Tapped += (_, e) =>
+        {
+            if (IsTouchRowTap(e) && Row(e.Source) is { } t) play(t);
         };
         list.KeyDown += (_, e) =>
         {
@@ -34,13 +45,16 @@ public static class TrackMenu
             menu.Items.Add(playlists);
             menu.Items.Add(new Separator());
             menu.Items.Add(Item("Go to album", () => a.ShowAlbumCommand.Execute(track)));
-            menu.Items.Add(Item("Edit…", () => a.EditCommand.Execute(track)));
-            // Right-clicking one of several selected songs moves them all (songs of one album).
-            var selected = list.SelectedItems?.OfType<TrackInfo>().ToList() ?? [];
-            if (selected.Count > 1 && selected.Contains(track) && selected.All(t => t.ReleaseId == track.ReleaseId))
-                menu.Items.Add(Item($"Move {selected.Count} songs to album…", () => a.MoveMany(selected)));
-            else
-                menu.Items.Add(Item("Move to album…", () => a.MoveCommand.Execute(track)));
+            if (a.CanEdit)
+            {
+                menu.Items.Add(Item("Edit…", () => a.EditCommand.Execute(track)));
+                // Right-clicking one of several selected songs moves them all (songs of one album).
+                var selected = list.SelectedItems?.OfType<TrackInfo>().ToList() ?? [];
+                if (selected.Count > 1 && selected.Contains(track) && selected.All(t => t.ReleaseId == track.ReleaseId))
+                    menu.Items.Add(Item($"Move {selected.Count} songs to album…", () => a.MoveMany(selected)));
+                else
+                    menu.Items.Add(Item("Move to album…", () => a.MoveCommand.Execute(track)));
+            }
             if (remove is not null) menu.Items.Add(Item(removeLabel, () => remove(track)));
             menu.Open(target);
             e.Handled = true;
