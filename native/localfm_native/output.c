@@ -17,6 +17,7 @@
 #elif !defined(__APPLE__)
 #  include <time.h>
 #endif
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -44,6 +45,12 @@ struct lfm_output {
     _Atomic uint32_t clk_seq;
     _Atomic int64_t  clk_idx, clk_adv, clk_frames, clk_ns;
     int64_t          clk_prev;  /* callback-only */
+    int64_t          fed_until_ns; /* callback-only: when the audio handed to the device so far runs out */
+    int64_t          dev_buffer_ns; /* the most the device can hold ahead */
+
+    /* diagnostics (see lfm_output_stats) */
+    _Atomic int64_t late_callbacks, worst_gap_ns;
+    _Atomic int64_t dev_stopped, dev_rerouted, dev_interruptions;
 
     float*  buf;            /* capacity * LFM_CHANNELS */
     int64_t capacity;       /* frames */
@@ -110,6 +117,19 @@ static void data_callback(ma_device* dev, void* out, const void* in, ma_uint32 f
     lfm_output* o = (lfm_output*)dev->pUserData;
     lfm_output_render(o, (float*)out, (int32_t)frames);
 
+    /* Everything handed over so far lasts until fed_until (never more than the device can hold ahead).
+     * A callback well after that means the device, or the sound server behind it, ran dry in between: the
+     * system did not run the audio thread in time. Bursts of callbacks that fill several periods are fine. */
+    int64_t t = now_ns();
+    if (o->fed_until_ns != 0 && t > o->fed_until_ns + 20000000LL) {
+        int64_t gap = t - o->fed_until_ns;
+        atomic_fetch_add_explicit(&o->late_callbacks, 1, memory_order_relaxed);
+        if (gap > atomic_load_explicit(&o->worst_gap_ns, memory_order_relaxed))
+            atomic_store_explicit(&o->worst_gap_ns, gap, memory_order_relaxed);
+    }
+    int64_t fed = (o->fed_until_ns > t ? o->fed_until_ns : t) + (int64_t)frames * 1000000000LL / o->rate;
+    o->fed_until_ns = fed < t + o->dev_buffer_ns ? fed : t + o->dev_buffer_ns;
+
     /* Devices take audio a period at a time (up to 100 ms here); remembering when lets readers interpolate
      * the position in between. A flush makes the index jump, so the advance is capped at what was asked for. */
     int64_t idx = atomic_load_explicit(&o->read_idx, memory_order_relaxed);
@@ -123,8 +143,46 @@ static void data_callback(ma_device* dev, void* out, const void* in, ma_uint32 f
     atomic_store_explicit(&o->clk_idx, idx, memory_order_relaxed);
     atomic_store_explicit(&o->clk_adv, adv, memory_order_relaxed);
     atomic_store_explicit(&o->clk_frames, (int64_t)frames, memory_order_relaxed);
-    atomic_store_explicit(&o->clk_ns, now_ns(), memory_order_relaxed);
+    atomic_store_explicit(&o->clk_ns, t, memory_order_relaxed);
     atomic_store_explicit(&o->clk_seq, s + 2, memory_order_release);
+}
+
+/* Any thread miniaudio likes: only counts. */
+static void notification_callback(const ma_device_notification* n)
+{
+    lfm_output* o = (lfm_output*)n->pDevice->pUserData;
+    if (!o) return;
+    switch (n->type) {
+    case ma_device_notification_type_stopped:            atomic_fetch_add(&o->dev_stopped, 1); break;
+    case ma_device_notification_type_rerouted:           atomic_fetch_add(&o->dev_rerouted, 1); break;
+    case ma_device_notification_type_interruption_began: atomic_fetch_add(&o->dev_interruptions, 1); break;
+    default: break;
+    }
+}
+
+LFM_API void lfm_output_get_stats(lfm_output* o, lfm_output_stats* s)
+{
+    s->underruns = atomic_load(&o->underruns);
+    s->late_callbacks = atomic_load(&o->late_callbacks);
+    s->worst_gap_ns = atomic_exchange(&o->worst_gap_ns, 0);
+    s->stopped = atomic_load(&o->dev_stopped);
+    s->rerouted = atomic_load(&o->dev_rerouted);
+    s->interruptions = atomic_load(&o->dev_interruptions);
+}
+
+LFM_API void lfm_output_describe(lfm_output* o, char* buf, int32_t size)
+{
+    if (!buf || size <= 0) return;
+    if (!o->has_device) {
+        snprintf(buf, (size_t)size, "offline, %d Hz", o->rate);
+        return;
+    }
+    const ma_device* d = &o->device;
+    snprintf(buf, (size_t)size, "%s, \"%s\", %d Hz (device %u Hz, %u ch), period %u x %u frames, ring %lld ms",
+             ma_get_backend_name(o->context.backend), d->playback.name, o->rate,
+             d->playback.internalSampleRate, d->playback.internalChannels,
+             d->playback.internalPeriodSizeInFrames, d->playback.internalPeriods,
+             (long long)(o->capacity * 1000 / o->rate));
 }
 
 LFM_API int64_t lfm_output_read_clock(lfm_output* o, int64_t* advance, int64_t* period, int64_t* age_ns)
@@ -275,6 +333,7 @@ LFM_API int lfm_output_open(int32_t mode, int32_t rate, int32_t ring_ms, lfm_out
         cfg.playback.channels = LFM_CHANNELS;
         cfg.sampleRate        = (ma_uint32)(rate > 0 ? rate : 0);
         cfg.dataCallback      = data_callback;
+        cfg.notificationCallback = notification_callback;
         cfg.pUserData         = o;
         cfg.performanceProfile = ma_performance_profile_conservative;
         if (ma_device_init(&o->context, &cfg, &o->device) != MA_SUCCESS) {
@@ -283,6 +342,9 @@ LFM_API int lfm_output_open(int32_t mode, int32_t rate, int32_t ring_ms, lfm_out
         }
         o->has_device = 1;
         o->rate = (int32_t)o->device.sampleRate;
+        ma_uint32 per = o->device.playback.internalPeriodSizeInFrames, n = o->device.playback.internalPeriods,
+                  irate = o->device.playback.internalSampleRate;
+        o->dev_buffer_ns = per && irate ? (int64_t)per * (n ? n : 1) * 1000000000LL / irate : 200000000LL;
     } else {
         o->rate = rate > 0 ? rate : 48000;
     }

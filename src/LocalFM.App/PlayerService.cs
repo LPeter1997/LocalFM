@@ -76,28 +76,34 @@ public sealed class PlayerService : IDisposable
 
     // ------------------------------------------------------------------ transport
 
-    public void PlayTracks(IReadOnlyList<TrackInfo> tracks, int startIndex = 0)
+    // Every transport call says who asked (source): "app" for the UI, "MPRIS :1.42" for desktop media controls
+    // and so on, so the session log can tell a skip somebody asked for from one nobody did.
+
+    public void PlayTracks(IReadOnlyList<TrackInfo> tracks, int startIndex = 0, string source = "app")
     {
         if (tracks.Count == 0 || Blocked()) return;
         lock (_gate)
         {
+            Note($"Play {tracks.Count} track(s) from #{startIndex + 1}", source);
             Queue.Replace(tracks, startIndex);
             StartCurrent(TimeSpan.Zero);
         }
     }
 
-    public void PlayItem(Ulid itemId)
+    public void PlayItem(Ulid itemId, string source = "app")
     {
         if (Blocked()) return;
         lock (_gate)
         {
+            Note("Play queue item", source);
             if (Queue.SetCurrent(itemId)) StartCurrent(TimeSpan.Zero);
         }
     }
 
-    public void PlayPause()
+    public void PlayPause(string source = "app")
     {
         if (Blocked()) return;
+        Note(_engine.State == PlaybackState.Playing ? "Pause" : "Play", source);
         switch (_engine.State)
         {
             case PlaybackState.Playing: _engine.Pause(); break;
@@ -112,22 +118,25 @@ public sealed class PlayerService : IDisposable
         }
     }
 
-    public void Play()
+    public void Play(string source = "app")
     {
-        if (_engine.State != PlaybackState.Playing) PlayPause();
+        if (_engine.State != PlaybackState.Playing) PlayPause(source);
     }
 
-    public void Pause()
+    public void Pause(string source = "app")
     {
         if (Blocked()) return;
-        if (_engine.State == PlaybackState.Playing) _engine.Pause();
+        if (_engine.State != PlaybackState.Playing) return;
+        Note("Pause", source);
+        _engine.Pause();
     }
 
-    public void Next()
+    public void Next(string source = "app")
     {
         if (Blocked()) return;
         lock (_gate)
         {
+            Note("Next", source);
             var next = Queue.PeekNext();
             if (next is null || (Queue.Repeat == RepeatMode.One && Queue.Items.Count > 1))
                 next = Queue.CurrentIndex + 1 < Queue.Items.Count ? Queue.Items[Queue.CurrentIndex + 1] : null;
@@ -138,11 +147,12 @@ public sealed class PlayerService : IDisposable
     }
 
     /// <summary>Restarts the track when more than 3 s in, otherwise goes to the previous one.</summary>
-    public void Previous()
+    public void Previous(string source = "app")
     {
         if (Blocked()) return;
         lock (_gate)
         {
+            Note("Previous", source);
             if (_engine.State != PlaybackState.Stopped && _engine.Position > TimeSpan.FromSeconds(3))
             {
                 _engine.Seek(TimeSpan.Zero);
@@ -156,9 +166,10 @@ public sealed class PlayerService : IDisposable
         }
     }
 
-    public void Seek(TimeSpan position)
+    public void Seek(TimeSpan position, string source = "app")
     {
         if (Blocked()) return;
+        Note($"Seek to {position:m\\:ss\\.f}", source);
         if (_engine.State == PlaybackState.Stopped)
         {
             lock (_gate) if (Queue.Current is { } c) _resume = (c, position);
@@ -170,7 +181,18 @@ public sealed class PlayerService : IDisposable
         Seeked?.Invoke(position);
     }
 
-    public void Stop() { if (!Blocked()) _engine.Stop(); }
+    public void Stop(string source = "app")
+    {
+        if (Blocked()) return;
+        Note("Stop", source);
+        _engine.Stop();
+    }
+
+    private void Note(string what, string source) => Log.Info(Area, $"{what} by {source}, {Where()}");
+
+    /// <summary>The audible track and position, for logs.</summary>
+    private string Where() =>
+        _engine.Current is { } t ? $"{Path.GetFileName(t.Path)} at {_engine.Position:m\\:ss\\.f}" : "nothing playing";
 
     // ------------------------------------------------------------------ queue editing
 
@@ -190,6 +212,7 @@ public sealed class PlayerService : IDisposable
             Queue.Remove(itemId);
             if (wasCurrent && _engine.State != PlaybackState.Stopped)
             {
+                Note("Removed the current track", "app");
                 if (Queue.Current is not null) StartCurrent(TimeSpan.Zero);
                 else _engine.Stop();
             }
@@ -324,6 +347,7 @@ public sealed class PlayerService : IDisposable
         switch (e)
         {
             case TrackStarted ts when ts.Track.Token is Ulid id:
+                Log.Info(Area, $"Started {ts.Track.Path} ({ts.Duration:m\\:ss}, gain {ts.Track.Gain:0.###}{(IsFollowing ? ", vibe" : "")})");
                 lock (_gate)
                 {
                     // Gapless transitions are decided by the engine; follow it.
@@ -338,15 +362,18 @@ public sealed class PlayerService : IDisposable
                 break;
 
             case TrackEnded te:
+                Log.Info(Area, $"{(te.Completed ? "Finished" : "Left")} {Path.GetFileName(te.Track.Path)}");
                 FinishListen(te.Completed);
                 break;
 
             case StateChanged sc:
+                Log.Info(Area, $"{sc.State}, {Where()}");
                 _listen?.SetPlaying(sc.State == PlaybackState.Playing);
                 _dirty = true;
                 break;
 
             case TrackFailed tf when tf.Track.Token is Ulid id:
+                Log.Warn(Area, $"Failed {tf.Track.Path}: {tf.Reason}");
                 Error?.Invoke($"Cannot play {Path.GetFileName(tf.Track.Path)}: {tf.Reason}");
                 lock (_gate)
                 {
@@ -363,6 +390,7 @@ public sealed class PlayerService : IDisposable
                 break;
 
             case PlaybackFinished:
+                Log.Info(Area, "End of the queue");
                 break;
         }
         Changed?.Invoke();
@@ -485,6 +513,7 @@ public sealed class PlayerService : IDisposable
     /// <summary>Puts our own queue and position aside and hands playback to <paramref name="source"/>.</summary>
     public void EnterFollowMode(IFollowSource source)
     {
+        Log.Info(Area, "Following a vibe");
         SaveState(force: true);
         lock (_gate)
         {
@@ -509,6 +538,7 @@ public sealed class PlayerService : IDisposable
         lock (_gate)
         {
             if (_follow is null || _own is not { } own) return;
+            Log.Info(Area, "Left the vibe");
             _follow = null;
             _own = null;
             _engine.Stop();
@@ -540,16 +570,17 @@ public sealed class PlayerService : IDisposable
         lock (_gate)
         {
             if (_follow is null || !Queue.SetCurrent(itemId) || Queue.Current is not { } item) return;
+            Note($"Play {Path.GetFileName(item.Track.Path)}", "vibe");
             _engine.Play(Handle(item), startAt);
             var next = Queue.PeekNext();
             _engine.SetNext(next is null ? null : Handle(next, item));
         }
     }
 
-    public void FollowSeek(Func<TimeSpan> position) { if (IsFollowing) _engine.SeekTo(position); }
-    public void FollowPause() { if (IsFollowing) _engine.Pause(); }
-    public void FollowResume() { if (IsFollowing) _engine.Resume(); }
-    public void FollowStop() { if (IsFollowing) _engine.Stop(); }
+    public void FollowSeek(Func<TimeSpan> position) { if (IsFollowing) { Note($"Seek to {position():m\\:ss\\.f}", "vibe"); _engine.SeekTo(position); } }
+    public void FollowPause() { if (IsFollowing) { Note("Pause", "vibe"); _engine.Pause(); } }
+    public void FollowResume() { if (IsFollowing) { Note("Resume", "vibe"); _engine.Resume(); } }
+    public void FollowStop() { if (IsFollowing) { Note("Stop", "vibe"); _engine.Stop(); } }
 
     public void FollowCrossfade(TimeSpan crossfade)
     {

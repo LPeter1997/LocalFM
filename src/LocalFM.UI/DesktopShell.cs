@@ -116,11 +116,11 @@ public sealed class DesktopShell : IDisposable
         {
             _nowPlayingItem = new NativeMenuItem("Nothing playing") { IsEnabled = false };
             _playPauseItem = new NativeMenuItem("Play");
-            _playPauseItem.Click += (_, _) => _vm.NowPlaying.PlayPauseCommand.Execute(null);
+            _playPauseItem.Click += (_, _) => _vm.NowPlaying.PlayPauseCommand.Execute("tray");
             var next = new NativeMenuItem("Next");
-            next.Click += (_, _) => _vm.NowPlaying.NextCommand.Execute(null);
+            next.Click += (_, _) => _vm.NowPlaying.NextCommand.Execute("tray");
             var prev = new NativeMenuItem("Previous");
-            prev.Click += (_, _) => _vm.NowPlaying.PreviousCommand.Execute(null);
+            prev.Click += (_, _) => _vm.NowPlaying.PreviousCommand.Execute("tray");
             var show = new NativeMenuItem("Show LocalFM");
             show.Click += (_, _) => ShowMain();
             var mini = new NativeMenuItem("Miniplayer");

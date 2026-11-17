@@ -46,10 +46,20 @@ locally; [docs/release.md](docs/release.md) has the whole flow, CI and how to ma
 
 ## Environment
 
-- `LOCALFM_HOME` — data folder (default: `~/.local/share/LocalFM`): `library.db`, `images/`
+- `LOCALFM_HOME` — data folder (default: `~/.local/share/LocalFM`): `library.db`, `images/`, `logs/`
+- `LOCALFM_LOG=debug|info|warning|error` — how much goes into the session log (default `info`)
 - `LOCALFM_OUTPUT=null` — silent real-time output (headless runs)
 - `LOCALFM_UPDATE_SOURCE=<folder or URL>` — read updates from vpk output instead of GitHub (docs/release.md)
 - `LOCALFM_SNAPSHOT=out.png` (+ `LOCALFM_SNAPSHOT_PAGE=albums|album|artists|tracks|playlists|queue|sources`, `LOCALFM_SNAPSHOT_PLAY=1`) — render the window to PNG and exit
+
+## Session logs
+
+Every run writes `<data folder>/logs/localfm-<date>-<time>-<pid>.log` (the newest 10 are kept; on Windows the data
+folder is `%LOCALAPPDATA%\LocalFM`, on macOS `~/Library/Application Support/LocalFM`). It starts with the version, OS,
+audio device and sound settings, then records every play, pause, seek and skip with who asked (`app`, `key Space`,
+`seek bar`, `tray`, `MPRIS :1.42`, `vibe`, …; `busctl --user status :1.42` names an MPRIS client's process), and
+anything that could be heard as a dropout: underruns, audio gaps where the system ran the audio thread late,
+engine-thread stalls, and the device stopping or moving. Logging only queues the line; a background thread writes it.
 
 ## Licence
 

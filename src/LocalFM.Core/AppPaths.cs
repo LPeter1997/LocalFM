@@ -14,6 +14,8 @@ public sealed class AppPaths
     public string Database => Path.Combine(Root, "library.db");
     public string ImagesDir => Path.Combine(Root, "images");
     public string ThumbnailsDir => Path.Combine(Root, "thumbs");
+    /// <summary>Session logs, one file per run (see <see cref="LogFile"/>).</summary>
+    public string LogsDir => Path.Combine(Root, "logs");
     /// <summary>Files streamed from someone else's vibe while listening; wiped on leave and at startup.</summary>
     public string VibeCacheDir => Path.Combine(Root, "cache", "vibe");
 

@@ -64,6 +64,22 @@ public sealed unsafe class AudioOutput : IDisposable
     }
     public long Underruns => NativeMethods.OutputUnderruns(Handle);
 
+    /// <summary>Totals of what the device went through (see lfm_output_stats); reading resets the worst gap.</summary>
+    public OutputStats ReadStats()
+    {
+        NativeMethods.OutputGetStats(Handle, out var s);
+        return s;
+    }
+
+    /// <summary>Backend, device name, rates and buffering, in one line.</summary>
+    public string Describe()
+    {
+        byte* buf = stackalloc byte[512];
+        buf[0] = 0;
+        NativeMethods.OutputDescribe(Handle, buf, 512);
+        return System.Text.Encoding.UTF8.GetString(System.Runtime.InteropServices.MemoryMarshal.CreateReadOnlySpanFromNullTerminated(buf));
+    }
+
     public int Write(ReadOnlySpan<float> interleaved)
     {
         fixed (float* p = interleaved) return NativeMethods.OutputWrite(Handle, p, interleaved.Length / 2);

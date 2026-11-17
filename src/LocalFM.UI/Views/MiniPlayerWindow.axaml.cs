@@ -27,9 +27,9 @@ public partial class MiniPlayerWindow : Window
             if (DataContext is not NowPlayingViewModel vm) return;
             switch (e.Key)
             {
-                case Key.Space or Key.MediaPlayPause: vm.PlayPauseCommand.Execute(null); break;
-                case Key.MediaNextTrack: vm.NextCommand.Execute(null); break;
-                case Key.MediaPreviousTrack: vm.PreviousCommand.Execute(null); break;
+                case Key.Space or Key.MediaPlayPause: vm.PlayPauseCommand.Execute($"miniplayer key {e.Key}"); break;
+                case Key.MediaNextTrack: vm.NextCommand.Execute("miniplayer media key"); break;
+                case Key.MediaPreviousTrack: vm.PreviousCommand.Execute("miniplayer media key"); break;
                 default: return;
             }
             e.Handled = true;

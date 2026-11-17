@@ -33,6 +33,18 @@ public unsafe struct ProbeInfo
     public fixed byte Container[32];
 }
 
+/// <summary>Mirrors lfm_output_stats.</summary>
+[StructLayout(LayoutKind.Sequential)]
+public struct OutputStats
+{
+    public long Underruns;
+    public long LateCallbacks;
+    public long WorstGapNs;
+    public long Stopped;
+    public long Rerouted;
+    public long Interruptions;
+}
+
 public enum EqBandType
 {
     Peak = 0,
@@ -81,6 +93,10 @@ public static unsafe partial class NativeMethods
     public static partial long OutputReadIndex(nint output);
     [LibraryImport(Lib, EntryPoint = "lfm_output_underruns")]
     public static partial long OutputUnderruns(nint output);
+    [LibraryImport(Lib, EntryPoint = "lfm_output_get_stats")]
+    public static partial void OutputGetStats(nint output, out OutputStats stats);
+    [LibraryImport(Lib, EntryPoint = "lfm_output_describe")]
+    public static partial void OutputDescribe(nint output, byte* buf, int size);
     [LibraryImport(Lib, EntryPoint = "lfm_output_set_volume")]
     public static partial void OutputSetVolume(nint output, float linear);
     [LibraryImport(Lib, EntryPoint = "lfm_output_set_paused")]

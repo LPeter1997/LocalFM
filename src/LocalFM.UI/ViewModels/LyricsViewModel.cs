@@ -151,7 +151,7 @@ public sealed partial class LyricsViewModel : ObservableObject
 
     public void SeekTo(LyricLineViewModel line)
     {
-        if (line.Line.Time is { } t && !_host.Player.IsFollowing) _host.Player.Seek(t);
+        if (line.Line.Time is { } t && !_host.Player.IsFollowing) _host.Player.Seek(t, "lyrics line");
     }
 
     private void Follow()

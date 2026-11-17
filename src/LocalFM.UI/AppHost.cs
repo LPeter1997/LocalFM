@@ -17,6 +17,7 @@ public sealed class AppHost : IDisposable
     public AppHost()
     {
         Paths = AppPaths.Default();
+        LogFile = StartLog(Paths);
         Db = new Database(Paths.Database);
         Images = new ImageStore(Paths.ImagesDir);
         Queries = new LibraryQueries(Db, Images);
@@ -43,11 +44,43 @@ public sealed class AppHost : IDisposable
         Player = new PlayerService(Engine, History, Queries);
         Sound = SoundSettings.Load(History);
         Player.ApplySound(Sound);
+        Log.Info("Session", $"Audio: {Engine.OutputDescription}");
+        Log.Info("Session", $"Sound: EQ {(Sound.EqEnabled ? $"on ({Sound.Preset}, preamp {Sound.EffectivePreampDb:+0.#;-0.#;0} dB)" : "off")}, " +
+                            $"crossfade {Sound.CrossfadeSeconds:0.#} s, gapless albums {(Sound.GaplessAlbums ? "on" : "off")}, ReplayGain {Sound.ReplayGain}");
         Vibe = new VibeService(Player, Paths,
             async (track, ct) => (await Metadata.GetLyricsAsync(track, allowFetch: true, ct).ConfigureAwait(false))?.Data);
     }
 
     public VibeService Vibe { get; }
+
+    /// <summary>This run's log file, or null when it could not be created (then logs go to stderr only).</summary>
+    public LogFile? LogFile { get; }
+
+    private static LogFile? StartLog(AppPaths paths)
+    {
+        if (Environment.GetEnvironmentVariable("LOCALFM_LOG") is { } level && Enum.TryParse<LogLevel>(level, ignoreCase: true, out var min))
+            Log.MinimumLevel = min;
+        LogFile? file = null;
+        try
+        {
+            file = LogFile.Open(paths.LogsDir);
+            Log.Sink = file.Write;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            Log.Warn("Session", $"No log file in {paths.LogsDir}", ex);
+        }
+        AppDomain.CurrentDomain.UnhandledException += (_, e) =>
+        {
+            Log.Error("Session", "Crashed", e.ExceptionObject as Exception);
+            file?.Flush(TimeSpan.FromSeconds(2)); // the process is going down: get the reason on disk
+        };
+        TaskScheduler.UnobservedTaskException += (_, e) => Log.Warn("Session", "Unobserved task error", e.Exception);
+        Log.Info("Session", $"LocalFM {AppInfo.Version} started (pid {Environment.ProcessId}), " +
+                            $"{System.Runtime.InteropServices.RuntimeInformation.OSDescription} " +
+                            $"{System.Runtime.InteropServices.RuntimeInformation.OSArchitecture}, .NET {Environment.Version}, data {paths.Root}");
+        return file;
+    }
 
     public SoundSettings Sound { get; }
 
@@ -78,7 +111,7 @@ public sealed class AppHost : IDisposable
         {
             _ = History.SetAsync(ViewModels.UpdaterViewModel.ResumeKey, "");
             Log.Info("Host", "Updated: playing on where the music was");
-            Player.Play();
+            Player.Play("update restart");
         }
         if (vibe is not null) _ = StartVibeAsync(vibe);
         _ = Task.Run(async () =>
@@ -126,6 +159,12 @@ public sealed class AppHost : IDisposable
         Player.Dispose();
         Engine.Dispose();
         Db.Dispose();
+        Log.Info("Session", "Closed");
+        if (LogFile is { } log)
+        {
+            Log.Sink = (level, area, msg, ex) => Console.Error.WriteLine(LogFile.Format(DateTime.Now, level, area, msg, ex));
+            log.Dispose();
+        }
     }
 }
 

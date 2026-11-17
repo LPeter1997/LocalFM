@@ -342,7 +342,7 @@ public sealed partial class MainViewModel : ObservableObject
         {
             var player = main.Host.Player;
             bool playing = IsPlaying;
-            player.Pause();
+            player.Pause("update restart");
             player.SaveState(force: true);
             // The writer runs in order: once this is stored, so is the state above.
             await main.Host.History.SetAsync(UpdaterViewModel.ResumeKey, playing ? "1" : "");

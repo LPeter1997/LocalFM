@@ -65,6 +65,21 @@ LFM_API int32_t lfm_output_truncate(lfm_output* o, int64_t write_index);
 /* Consumer position in write-index space (includes flushed frames). */
 LFM_API int64_t lfm_output_read_index(lfm_output* o);
 LFM_API int64_t lfm_output_underruns(lfm_output* o);
+
+/* What the device has been through, for diagnostics (all counters are totals since open). */
+typedef struct lfm_output_stats {
+    int64_t underruns;          /* the device found the ring empty while playing */
+    int64_t late_callbacks;     /* the device asked for audio well after everything we gave it had played out:
+                                 * the system did not run the audio thread in time (CPU load, suspend), a gap */
+    int64_t worst_gap_ns;       /* the longest such gap since the previous get_stats */
+    int64_t stopped;            /* the device stopped (also our own close) */
+    int64_t rerouted;           /* the system moved the stream to another device */
+    int64_t interruptions;      /* the system took the device away (calls, other apps on mobile) */
+} lfm_output_stats;
+LFM_API void lfm_output_get_stats(lfm_output* o, lfm_output_stats* stats);
+
+/* One line about the device in use (backend, name, rates, period), for the session log. */
+LFM_API void lfm_output_describe(lfm_output* o, char* buf, int32_t size);
 /* The read index as of the last device callback, how many frames that callback took from the ring
  * (`advance`), how many it asked for (`period`, also when the ring was empty) and how long ago it ran
  * (`age_ns`). The taken frames play out over about one period, so idx - advance + min(advance, age * rate)

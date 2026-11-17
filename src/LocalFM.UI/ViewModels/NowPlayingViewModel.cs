@@ -72,17 +72,18 @@ public sealed partial class NowPlayingViewModel : ObservableObject
         OnPropertyChanged(nameof(RepeatOne));
     }
 
-    public void CommitSeek(double seconds)
+    public void CommitSeek(double seconds, string source = "seek bar")
     {
-        _player.Seek(TimeSpan.FromSeconds(seconds));
+        _player.Seek(TimeSpan.FromSeconds(seconds), source);
         if (_player.IsFollowing) return; // the host's to do
         Position = seconds;
         PositionText = Converters.Time(TimeSpan.FromSeconds(seconds));
     }
 
-    [RelayCommand] private void PlayPause() => _player.PlayPause();
-    [RelayCommand] private void Next() => _player.Next();
-    [RelayCommand] private void Previous() => _player.Previous();
+    // The parameter says who asked, for the session log: buttons pass none, keys and the tray name themselves.
+    [RelayCommand] private void PlayPause(string? source) => _player.PlayPause(source ?? "app");
+    [RelayCommand] private void Next(string? source) => _player.Next(source ?? "app");
+    [RelayCommand] private void Previous(string? source) => _player.Previous(source ?? "app");
 
     [RelayCommand]
     private void ToggleShuffle()
@@ -103,10 +104,10 @@ public sealed partial class NowPlayingViewModel : ObservableObject
         Repeat = _player.Repeat;
     }
 
-    public void SeekBy(double seconds)
+    public void SeekBy(double seconds, string source = "app")
     {
         if (!HasTrack) return;
-        CommitSeek(Math.Clamp(Position + seconds, 0, Duration));
+        CommitSeek(Math.Clamp(Position + seconds, 0, Duration), source);
     }
 
     private void Refresh()

@@ -172,17 +172,17 @@ public partial class MainWindow : Window
         }
         switch (e.Key)
         {
-            case Key.Space: vm.NowPlaying.PlayPauseCommand.Execute(null); break;
-            case Key.MediaPlayPause: vm.NowPlaying.PlayPauseCommand.Execute(null); break;
-            case Key.MediaNextTrack: vm.NowPlaying.NextCommand.Execute(null); break;
-            case Key.MediaPreviousTrack: vm.NowPlaying.PreviousCommand.Execute(null); break;
+            case Key.Space: vm.NowPlaying.PlayPauseCommand.Execute("key Space"); break;
+            case Key.MediaPlayPause: vm.NowPlaying.PlayPauseCommand.Execute("media key"); break;
+            case Key.MediaNextTrack: vm.NowPlaying.NextCommand.Execute("media key"); break;
+            case Key.MediaPreviousTrack: vm.NowPlaying.PreviousCommand.Execute("media key"); break;
             case Key.Up when ctrl: vm.NowPlaying.NudgeVolume(5); break;
             case Key.Down when ctrl: vm.NowPlaying.NudgeVolume(-5); break;
             case Key.VolumeMute: vm.NowPlaying.ToggleMuteCommand.Execute(null); break;
-            case Key.Right when ctrl: vm.NowPlaying.NextCommand.Execute(null); break;
-            case Key.Left when ctrl: vm.NowPlaying.PreviousCommand.Execute(null); break;
-            case Key.Right: vm.NowPlaying.SeekBy(5); break;
-            case Key.Left: vm.NowPlaying.SeekBy(-5); break;
+            case Key.Right when ctrl: vm.NowPlaying.NextCommand.Execute("key Ctrl+Right"); break;
+            case Key.Left when ctrl: vm.NowPlaying.PreviousCommand.Execute("key Ctrl+Left"); break;
+            case Key.Right: vm.NowPlaying.SeekBy(5, "key Right"); break;
+            case Key.Left: vm.NowPlaying.SeekBy(-5, "key Left"); break;
             case Key.L: vm.ToggleLyricsCommand.Execute(null); break;
             case Key.V: vm.ToggleNowPlayingCommand.Execute(null); break;
             case Key.Escape when vm.Vibe.IsOpen: vm.Vibe.IsOpen = false; break;

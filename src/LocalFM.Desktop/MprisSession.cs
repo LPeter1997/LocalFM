@@ -237,25 +237,27 @@ public sealed class MprisSession : IPathMethodHandler, IDisposable
         }
         var request = context.Request;
         string iface = request.InterfaceAsString ?? "", member = request.MemberAsString ?? "";
+        // Which client asked ("busctl --user status <name>" names its process), for the session log.
+        string by = $"MPRIS {request.SenderAsString ?? "?"}";
 
         switch (iface, member)
         {
             case (RootIface, "Raise"): _raise(); ReplyEmpty(context); return;
             case (RootIface, "Quit"): ReplyEmpty(context); _quit(); return;
 
-            case (PlayerIface, "Play"): _player.Play(); break;
-            case (PlayerIface, "Pause"): _player.Pause(); break;
-            case (PlayerIface, "PlayPause"): _player.PlayPause(); break;
-            case (PlayerIface, "Stop"): _player.Stop(); break;
-            case (PlayerIface, "Next"): _player.Next(); break;
-            case (PlayerIface, "Previous"): _player.Previous(); break;
+            case (PlayerIface, "Play"): _player.Play(by); break;
+            case (PlayerIface, "Pause"): _player.Pause(by); break;
+            case (PlayerIface, "PlayPause"): _player.PlayPause(by); break;
+            case (PlayerIface, "Stop"): _player.Stop(by); break;
+            case (PlayerIface, "Next"): _player.Next(by); break;
+            case (PlayerIface, "Previous"): _player.Previous(by); break;
             case (PlayerIface, "Seek"):
             {
                 var r = request.GetBodyReader();
                 long offset = r.ReadInt64();
                 var target = _player.Position + TimeSpan.FromTicks(offset * 10);
-                if (_player.Duration is { } d && target >= d) _player.Next();
-                else _player.Seek(target < TimeSpan.Zero ? TimeSpan.Zero : target);
+                if (_player.Duration is { } d && target >= d) _player.Next(by);
+                else _player.Seek(target < TimeSpan.Zero ? TimeSpan.Zero : target, by);
                 break;
             }
             case (PlayerIface, "SetPosition"):
@@ -266,7 +268,7 @@ public sealed class MprisSession : IPathMethodHandler, IDisposable
                 // Ignored unless it is about the current track and within it (spec).
                 if (_player.Current is { } item && trackId == TrackId(item) && pos >= 0
                     && (_player.Duration is not { } d || pos <= Micros(d)))
-                    _player.Seek(TimeSpan.FromTicks(pos * 10));
+                    _player.Seek(TimeSpan.FromTicks(pos * 10), by);
                 break;
             }
             case (PlayerIface, "OpenUri"):
@@ -302,7 +304,7 @@ public sealed class MprisSession : IPathMethodHandler, IDisposable
                 var r = request.GetBodyReader();
                 string i = r.ReadString(), prop = r.ReadString();
                 var value = r.ReadVariantValue();
-                if (i == PlayerIface) SetProperty(prop, value);
+                if (i == PlayerIface) SetProperty(prop, value, by);
                 break;
             }
             default:
@@ -312,11 +314,15 @@ public sealed class MprisSession : IPathMethodHandler, IDisposable
         ReplyEmpty(context);
     }
 
-    private void SetProperty(string prop, VariantValue value)
+    private void SetProperty(string prop, VariantValue value, string by)
     {
         switch (prop)
         {
-            case "Volume": _player.Volume = (float)Math.Clamp(value.GetDouble(), 0, 1); break;
+            case "Volume":
+                float volume = (float)Math.Clamp(value.GetDouble(), 0, 1);
+                Log.Info("Mpris", $"Volume {_player.Volume:0.##} -> {volume:0.##} by {by}");
+                _player.Volume = volume;
+                break;
             case "Shuffle": _player.SetShuffle(value.GetBool()); break;
             case "LoopStatus":
                 _player.Repeat = value.GetString() switch { "Track" => RepeatMode.One, "Playlist" => RepeatMode.All, _ => RepeatMode.Off };

@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Diagnostics;
 using System.Threading.Channels;
 using LocalFM.Core;
 using LocalFM.Native;
@@ -62,6 +63,10 @@ public sealed class PlaybackEngine : IDisposable
     private long _fadeLen, _fadePos;
     private int _playGen, _nextGen;
 
+    // health checks (engine thread)
+    private OutputStats _stats;
+    private long _nextHealthCheck, _lastLoopEnd;
+
     private sealed class Source(TrackHandle track, Decoder decoder)
     {
         public TrackHandle Track { get; } = track;
@@ -95,6 +100,9 @@ public sealed class PlaybackEngine : IDisposable
     public TrackHandle? Current => _active?.Source?.Track;
     public TimeSpan? Duration => _active?.Source?.Duration;
     public long Underruns => _out.Underruns;
+
+    /// <summary>The output in use (backend, device, rates, buffering), for logs.</summary>
+    public string OutputDescription => _out.Describe();
 
     /// <summary>Frames queued in the ring that the device has not consumed yet.</summary>
     public long BufferedFrames => _out.WriteIndex - _out.ReadIndex;
@@ -198,22 +206,61 @@ public sealed class PlaybackEngine : IDisposable
 
     private void Run()
     {
+        _stats = _out.ReadStats();
         while (_running)
         {
+            long start = Stopwatch.GetTimestamp();
             try
             {
                 while (_commands.TryDequeue(out var cmd)) cmd();
                 Fill();
                 Advance();
+                CheckHealth(start);
             }
             catch (Exception ex)
             {
                 // The engine must survive anything a single track can throw at it.
                 Log.Error(Area, "Engine loop error", ex);
             }
+            _lastLoopEnd = Stopwatch.GetTimestamp();
             _wake.WaitOne(5);
         }
     }
+
+    /// <summary>Logs what could be heard as a skip or a dropout, with where it happened. Cheap: it reads a few
+    /// counters a few times a second, and the log only queues the line.</summary>
+    private void CheckHealth(long loopStart)
+    {
+        long now = Stopwatch.GetTimestamp();
+        // The loop waits 5 ms between rounds; much longer means the thread was not run, or a round took long.
+        if (_lastLoopEnd != 0 && _state == PlaybackState.Playing)
+        {
+            double idleMs = Stopwatch.GetElapsedTime(_lastLoopEnd, loopStart).TotalMilliseconds;
+            double workMs = Stopwatch.GetElapsedTime(loopStart, now).TotalMilliseconds;
+            if (idleMs > 250 || workMs > 250)
+                Log.Warn(Area, $"Engine thread late: {(idleMs > 250 ? $"not run for {idleMs:F0} ms" : $"one round took {workMs:F0} ms")}, " +
+                               $"{1000.0 * BufferedFrames / SampleRate:F0} ms buffered, {Where()}");
+        }
+        if (now < _nextHealthCheck) return;
+        _nextHealthCheck = now + Stopwatch.Frequency / 4;
+
+        var s = _out.ReadStats();
+        var old = _stats;
+        _stats = s;
+        // Running dry at the end of the queue, or before anything played, is expected.
+        if (s.Underruns > old.Underruns && _state == PlaybackState.Playing && !_endWritten)
+            Log.Warn(Area, $"Underrun: the device found nothing to play ({s.Underruns - old.Underruns}x), {Where()}");
+        if (s.LateCallbacks > old.LateCallbacks && _state == PlaybackState.Playing) // silence has no gaps to hear
+            Log.Warn(Area, $"Audio gap: the system ran the audio thread late ({s.LateCallbacks - old.LateCallbacks}x, " +
+                           $"up to {s.WorstGapNs / 1e6:F0} ms without sound), {Where()}");
+        if (s.Stopped > old.Stopped) Log.Warn(Area, $"The audio device stopped, {Where()}");
+        if (s.Rerouted > old.Rerouted) Log.Info(Area, $"Audio moved to another device: {_out.Describe()}");
+        if (s.Interruptions > old.Interruptions) Log.Warn(Area, $"The system interrupted audio, {Where()}");
+    }
+
+    /// <summary>"file at m:ss.f" for the audible track, for logs.</summary>
+    private string Where() =>
+        _active?.Source is { } src ? $"{Path.GetFileName(src.Track.Path)} at {Position:m\\:ss\\.f}" : "nothing playing";
 
     private void Fill()
     {
