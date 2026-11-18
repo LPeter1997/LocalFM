@@ -36,3 +36,13 @@ shot narrow-lyrics LOCALFM_SNAPSHOT_PAGE=albums LOCALFM_SNAPSHOT_PLAY=1 LOCALFM_
 # Long pages scrolled down.
 shot stats-scrolled LOCALFM_SNAPSHOT_PAGE=stats LOCALFM_SNAPSHOT_SCROLL=600
 shot sound-scrolled LOCALFM_SNAPSHOT_PAGE=sound LOCALFM_SNAPSHOT_SCROLL=600
+# Phone-sized (the compact layout Android uses; snapshot-android.sh shoots the real thing).
+phone=(LOCALFM_SNAPSHOT_WIDTH=412 LOCALFM_SNAPSHOT_HEIGHT=860)
+for p in albums artists tracks playlists queue stats sound sources album more; do
+  shot "phone-$p" LOCALFM_SNAPSHOT_PAGE=$p "${phone[@]}"
+done
+shot phone-playing LOCALFM_SNAPSHOT_PAGE=albums LOCALFM_SNAPSHOT_PLAY=1 "${phone[@]}"
+shot phone-np      LOCALFM_SNAPSHOT_PAGE=albums LOCALFM_SNAPSHOT_PLAY=1 LOCALFM_SNAPSHOT_NOWPLAYING=Spectrum LOCALFM_SNAPSHOT_WAIT=3000 "${phone[@]}"
+shot phone-lyrics  LOCALFM_SNAPSHOT_PAGE=albums LOCALFM_SNAPSHOT_PLAY=1 LOCALFM_SNAPSHOT_LYRICS=1 LOCALFM_SNAPSHOT_WAIT=4000 "${phone[@]}"
+shot phone-vibe    LOCALFM_SNAPSHOT_PAGE=albums LOCALFM_SNAPSHOT_VIBE=1 "${phone[@]}"
+shot phone-artist  "LOCALFM_SNAPSHOT_PAGE=artist:Example Band" "${phone[@]}"

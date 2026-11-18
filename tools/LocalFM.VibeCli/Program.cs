@@ -46,13 +46,14 @@ if (args[0] == "host")
 else
 {
     if (!Invite.TryDecode(rest[0], out var invite)) { Console.Error.WriteLine("Not a vibe invite."); return 1; }
+    await vibe.JoinAsync(invite, "VibeCli");
+    Console.WriteLine($"Listening to {vibe.HostName}");
+    // After joining: while connecting, Changed fires with no role yet, which is not the end.
     vibe.Changed += () =>
     {
         if (vibe.Role == VibeRole.None) { Console.WriteLine($"\nEnded: {vibe.EndedReason}"); stop.TrySetResult(); }
         else if (vibe.Reconnecting) Console.WriteLine("\nReconnecting…");
     };
-    await vibe.JoinAsync(invite, "VibeCli");
-    Console.WriteLine($"Listening to {vibe.HostName}");
 }
 
 while (!stop.Task.IsCompleted)

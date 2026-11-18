@@ -29,6 +29,8 @@ if(WIN32)
   set(LFM_RID "win-${_arch}")
 elseif(APPLE)
   set(LFM_RID "osx-${_arch}")
+elseif(ANDROID)
+  set(LFM_RID "android-${_arch}")
 else()
   set(LFM_RID "linux-${_arch}")
 endif()
@@ -49,7 +51,7 @@ foreach(_entry IN LISTS _ff_libs)
     find_library(FF_${_name}
       NAMES ${_name} lib${_name}.so.${_major} lib${_name}.${_major}.dylib
       PATHS "${FFMPEG_ROOT}/lib" "${FFMPEG_ROOT}/bin"
-      NO_DEFAULT_PATH REQUIRED)
+      NO_DEFAULT_PATH NO_CMAKE_FIND_ROOT_PATH REQUIRED)
   else()
     find_library(FF_${_name}
       NAMES ${_name} lib${_name}.so.${_major} lib${_name}.${_major}.dylib
@@ -65,7 +67,11 @@ else()
   target_compile_definitions(localfm_native PRIVATE _GNU_SOURCE)
 endif()
 
-if(UNIX AND NOT APPLE)
+if(ANDROID)
+  # Bionic has threads in libc; miniaudio loads AAudio/OpenSL ES itself. 16 KB pages for Android 15+ devices.
+  target_link_libraries(localfm_native PRIVATE m dl log)
+  target_link_options(localfm_native PRIVATE "-Wl,-z,max-page-size=16384")
+elseif(UNIX AND NOT APPLE)
   target_link_libraries(localfm_native PRIVATE pthread m dl)
 elseif(APPLE)
   # miniaudio uses CoreAudio through the runtime linker; these frameworks make that explicit.
@@ -76,7 +82,8 @@ endif()
 # Only that: no build-machine paths (CMake would add the link folders).
 if(APPLE)
   set_target_properties(localfm_native PROPERTIES BUILD_WITH_INSTALL_RPATH ON INSTALL_RPATH "@loader_path" INSTALL_NAME_DIR "@rpath")
-elseif(UNIX)
+elseif(UNIX AND NOT ANDROID)
+  # (Android's loader finds an APK's libraries by name: no rpath.)
   set_target_properties(localfm_native PROPERTIES BUILD_WITH_INSTALL_RPATH ON INSTALL_RPATH "$ORIGIN")
 endif()
 

@@ -26,13 +26,19 @@ jobs:
         uses: actions/cache@v6
         with:
           path: ${{ runner.temp }}/ffmpeg-${{ matrix.rid }}.tar.gz
-          key: ffmpeg-${{ matrix.rid }}-${{ hashFiles('native/ffmpeg/build.sh') }}
+          # Android builds also depend on the NDK version.
+          key: ffmpeg-${{ matrix.rid }}-${{ hashFiles('native/ffmpeg/build.sh') }}${{ startsWith(matrix.rid, 'android-') && format('-{0}', hashFiles('.github/actions/ndk/action.yml')) || '' }}
+      - if: steps.cache.outputs.cache-hit != 'true' && startsWith(matrix.rid, 'android-')
+        uses: ./.github/actions/ndk
 
       - name: Build (Linux, macOS)
         if: steps.cache.outputs.cache-hit != 'true' && runner.os != 'Windows'
         shell: bash
         run: |
-          if [ "$RUNNER_OS" = Linux ]; then sudo apt-get update && sudo apt-get install -y nasm; else brew install nasm; fi
+          case "$RID" in
+            android-*) ;; # NDK clang; no x86 assembly for the emulator build
+            *) if [ "$RUNNER_OS" = Linux ]; then sudo apt-get update && sudo apt-get install -y nasm; else brew install nasm; fi ;;
+          esac
           native/ffmpeg/build.sh "$RID" "$RUNNER_TEMP/ffmpeg"
           tar -C "$RUNNER_TEMP/ffmpeg" -czf "$RUNNER_TEMP/ffmpeg-$RID.tar.gz" .
 
