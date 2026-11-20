@@ -54,6 +54,7 @@ public partial class MiniPlayerWindow : Window
                 case Key.Space or Key.MediaPlayPause: vm.PlayPauseCommand.Execute($"miniplayer key {e.Key}"); break;
                 case Key.MediaNextTrack: vm.NextCommand.Execute("miniplayer media key"); break;
                 case Key.MediaPreviousTrack: vm.PreviousCommand.Execute("miniplayer media key"); break;
+                case Key.L when _lyrics is { } lyrics: lyrics.MiniLyrics = !lyrics.MiniLyrics; break;
                 default: return;
             }
             e.Handled = true;
@@ -71,6 +72,36 @@ public partial class MiniPlayerWindow : Window
         };
         Backdrop.Active = IsVisible;
         PropertyChanged += (_, e) => { if (e.Property == IsVisibleProperty) Backdrop.Active = IsVisible; };
+    }
+
+    /// <summary>
+    /// The line being sung, next to the title (switched with the lyrics button or L). While it shows, the title and
+    /// artist keep to what they need (up to a limit) and the line takes the rest of the row.
+    /// </summary>
+    public void AttachLyrics(LyricsViewModel lyrics)
+    {
+        _lyrics = lyrics;
+        LyricLine.DataContext = LyricsButton.DataContext = lyrics;
+        lyrics.MiniVisible = IsVisible;
+        PropertyChanged += (_, e) => { if (e.Property == IsVisibleProperty) lyrics.MiniVisible = IsVisible; };
+        // A new miniplayer is made each time, so let go of the shared view model when this one closes.
+        void OnLyricsChanged(object? s, System.ComponentModel.PropertyChangedEventArgs e)
+        {
+            if (e.PropertyName == nameof(LyricsViewModel.MiniLineShown)) LayOutTop();
+        }
+        lyrics.PropertyChanged += OnLyricsChanged;
+        Closed += (_, _) => { lyrics.PropertyChanged -= OnLyricsChanged; lyrics.MiniVisible = false; };
+        LayOutTop();
+    }
+
+    private LyricsViewModel? _lyrics;
+
+    private void LayOutTop()
+    {
+        bool line = _lyrics?.MiniLineShown == true;
+        Top.ColumnDefinitions[0].Width = line ? GridLength.Auto : GridLength.Star;
+        Top.ColumnDefinitions[1].Width = line ? GridLength.Star : new GridLength(0);
+        Info.MaxWidth = line ? 140 : double.PositiveInfinity;
     }
 
     private double SeekSeconds(NowPlayingViewModel vm, PointerEventArgs e)

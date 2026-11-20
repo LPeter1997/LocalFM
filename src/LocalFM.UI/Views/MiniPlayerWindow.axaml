@@ -25,14 +25,33 @@
         <c:CoverImage Path="{Binding CoverPath}" DecodeWidth="176" />
       </Panel>
     </Border>
-    <Grid Grid.Column="1" Margin="12,0,0,0" RowDefinitions="Auto,Auto,*" ColumnDefinitions="*,Auto">
-      <TextBlock Text="{Binding Title}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
-      <TextBlock Grid.Row="1" Text="{Binding Artist}" Classes="muted small" TextTrimming="CharacterEllipsis" />
-      <Button Grid.Column="1" Grid.RowSpan="2" Classes="flat" x:Name="ExpandButton" ToolTip.Tip="Back to the full window"
-              VerticalAlignment="Top" Margin="6,-4,-4,0">
+    <Grid Grid.Column="1" Margin="12,0,0,0" RowDefinitions="Auto,*" ColumnDefinitions="*,Auto,Auto">
+      <!-- Title and artist; with lyrics on, they keep to the left and the line being sung takes the rest
+           (the column widths are switched in code) -->
+      <Grid x:Name="Top" ColumnDefinitions="*,*">
+        <StackPanel x:Name="Info">
+          <TextBlock Text="{Binding Title}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+          <TextBlock Text="{Binding Artist}" Classes="muted small" TextTrimming="CharacterEllipsis" />
+        </StackPanel>
+        <c:LyricTicker x:Name="LyricLine" Grid.Column="1" x:DataType="vm:LyricsViewModel" DataContext="{x:Null}" Margin="16,0,0,0" VerticalAlignment="Center"
+                       IsVisible="{Binding MiniLineShown}" Live="{Binding MiniVisible}"
+                       Start="{Binding CurrentLine.Line.Time, FallbackValue={x:Null}}" End="{Binding CurrentLine.End, FallbackValue={x:Null}}">
+          <c:KaraokeText DataContext="{Binding CurrentLine}" x:DataType="vm:LyricLineViewModel"
+                         Text="{Binding Text, FallbackValue=''}" FontSize="14" FontWeight="SemiBold" Foreground="{StaticResource Text}"
+                         Words="{Binding Words}" Clock="{Binding Clock}" Live="{Binding #LyricLine.Live}"
+                         UnsungBrush="{StaticResource Muted}" />
+        </c:LyricTicker>
+      </Grid>
+      <Button Grid.Column="1" Classes="flat" x:Name="LyricsButton" x:DataType="vm:LyricsViewModel" DataContext="{x:Null}"
+              Classes.on="{Binding MiniLyrics}" Command="{Binding ToggleMiniLyricsCommand}"
+              ToolTip.Tip="Show the line being sung (L)" VerticalAlignment="Top" Margin="6,-4,0,0">
+        <c:Icon Classes="icon" Data="{StaticResource IcoLyrics}" />
+      </Button>
+      <Button Grid.Column="2" Classes="flat" x:Name="ExpandButton" ToolTip.Tip="Back to the full window"
+              VerticalAlignment="Top" Margin="0,-4,-4,0">
         <c:Icon Classes="icon" Data="{StaticResource IcoExpand}" />
       </Button>
-      <Grid Grid.Row="2" Grid.ColumnSpan="2" ColumnDefinitions="Auto,*" VerticalAlignment="Bottom">
+      <Grid Grid.Row="1" Grid.ColumnSpan="3" ColumnDefinitions="Auto,*" VerticalAlignment="Bottom">
       <StackPanel Orientation="Horizontal" Spacing="8">
         <Button Classes="flat" Command="{Binding PreviousCommand}" ToolTip.Tip="Previous">
           <c:Icon Classes="icon fill" Data="{StaticResource IcoPrev}" />
