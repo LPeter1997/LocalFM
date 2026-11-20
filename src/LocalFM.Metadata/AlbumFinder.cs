@@ -83,6 +83,8 @@ public sealed class AlbumFinder(MusicBrainz mb, Database db)
         string title = Cleanup.CleanTitle(song.Title, song.Artist, remasterNotes: true)?.Text ?? song.Title;
         string? artist = song.Artist is null ? null : Cleanup.CleanArtist(song.Artist)?.Text ?? song.Artist;
         var tries = new List<(string Title, string? Artist)> { (title, artist) };
+        // "Slash, Myles Kennedy, The Conspirators" matches no MusicBrainz credit as a phrase; "Slash" does.
+        if (Cleanup.LeadArtist(artist) is { } lead) tries.Add((title, lead));
         if (Cleanup.SplitArtistTitle(song.Title, song.Artist, null) is { } split) tries.Add((split.Title, split.Artist));
         if (artist is { Length: > 0 }) tries.Add((artist, title));
 
