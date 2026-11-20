@@ -6,7 +6,9 @@ namespace LocalFM.UI.Controls;
 
 /// <summary>
 /// One lyric line in a fixed width: a <see cref="KaraokeText"/> child that is too long slides sideways so the
-/// part being sung stays in view (following the word timings, or the line's own start/end when there are none).
+/// part being sung stays in view. With word timings it hops word to word (a quick eased jump when each word starts,
+/// then still while it is sung) so the text isn't moving under the eye; without them it glides along the line's own
+/// start/end.
 /// The clipped edges fade out. Animates on the frame clock only while <see cref="Live"/>.
 /// </summary>
 public sealed class LyricTicker : Decorator
@@ -18,9 +20,12 @@ public sealed class LyricTicker : Decorator
     /// <summary>Where the sung part sits in the box once the line has to slide (0 = left edge, 1 = right edge).</summary>
     private const double Anchor = 0.4;
     private const double Fade = 28;
+    /// <summary>Time constant of the eased hop/glide toward the target, in seconds (~3x this to settle).</summary>
+    private const double Ease = 0.055;
 
     private bool _attached, _running;
     private double _offset;
+    private TimeSpan? _lastFrame;
     private string? _text;
     private (bool Left, bool Right) _fades;
 
@@ -68,20 +73,25 @@ public sealed class LyricTicker : Decorator
         bool want = _attached && Live && Child is KaraokeText;
         if (want == _running) return;
         _running = want;
+        _lastFrame = null;
         if (want) OnFrame(TimeSpan.Zero);
     }
 
-    private void OnFrame(TimeSpan _)
+    private void OnFrame(TimeSpan time)
     {
         if (!_running || Child is not KaraokeText text) return;
         double target = Target(text);
-        // A new line starts at its beginning; within a line, glide.
+        // Frame-rate independent easing; the first frame (or one after a long stall) uses a nominal 60 fps step.
+        double dt = _lastFrame is { } last && time > last ? Math.Min((time - last).TotalSeconds, 0.1) : 1 / 60.0;
+        _lastFrame = time;
+        // A new line starts at its beginning; within a line, ease toward the target.
         if (text.Text != _text) { _text = text.Text; _offset = target; InvalidateArrange(); }
         else if (Math.Abs(target - _offset) > 0.25)
         {
-            _offset += (target - _offset) * 0.12;
+            _offset += (target - _offset) * (1 - Math.Exp(-dt / Ease));
             InvalidateArrange();
         }
+        else if (_offset != target) { _offset = target; InvalidateArrange(); }
         UpdateFades(text);
         TopLevel.GetTopLevel(this)?.RequestAnimationFrame(OnFrame);
     }
@@ -103,9 +113,8 @@ public sealed class LyricTicker : Decorator
             int end = Math.Min(w.CharStart + w.CharLength, text.Text.Length);
             double x0 = layout.HitTestTextPosition(Math.Min(w.CharStart, text.Text.Length)).X;
             double x1 = layout.HitTestTextPosition(end).X;
-            double span = (w.End - w.Start).TotalSeconds;
-            double f = span > 0 ? Math.Clamp((now - w.Start).TotalSeconds / span, 0, 1) : 1;
-            x = text.Padding.Left + x0 + (x1 - x0) * f;
+            // The whole word, not the sweep through it: the target only moves when a new word starts.
+            x = text.Padding.Left + (x0 + x1) / 2;
         }
         else if (Start is { } s && End is { } e && e > s)
             x = Math.Clamp((now - s) / (e - s), 0, 1) * text.DesiredSize.Width;
