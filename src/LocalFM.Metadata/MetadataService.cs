@@ -181,6 +181,26 @@ public sealed class MetadataService
         return mbid is null ? null : await ApplyReleaseAsync(releaseId, mbid, fetchCover: false, ct).ConfigureAwait(false);
     }
 
+    /// <summary>
+    /// Switches an album to another edition of it when that edition fits more of its songs than the one it is
+    /// matched to now (bonus tracks of a special edition). Returns the apply result, or null when it stays as it is.
+    /// </summary>
+    public async Task<ApplyResult?> SwitchEditionIfBetterAsync(Ulid releaseId, string mbid, int matchedNow, CancellationToken ct = default)
+    {
+        var data = await MusicBrainz.GetReleaseAsync(mbid, ct).ConfigureAwait(false);
+        if (data is null) return null;
+        var fileTitles = FileTagTitles(releaseId);
+        var result = await _db.Writer.Run((c, t) =>
+        {
+            var tx = new Tx(c, t);
+            return MetadataApplier.CountMatches(tx, releaseId, data, fileTitles) > matchedNow
+                ? _applier.ApplyRelease(tx, releaseId, data, null, null, null, fileTitles)
+                : null;
+        }).ConfigureAwait(false);
+        if (result is not null) Log.Info("Metadata", $"Switched {releaseId} to edition {data.Id}: {result}");
+        return result;
+    }
+
     /// <summary>The title each track's file carries in its own tags. The stored title may have drifted from it
     /// (an earlier wrong match); the tag is a second chance to recognise the song.</summary>
     private Dictionary<Ulid, string> FileTagTitles(Ulid releaseId)

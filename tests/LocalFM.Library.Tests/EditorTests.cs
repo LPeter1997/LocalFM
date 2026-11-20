@@ -15,6 +15,16 @@ public class EditorTests
         Assert.Equal(expected, Cleanup.CleanArtist(input)?.Text);
 
     [Theory]
+    [InlineData("Slash, Myles Kennedy, The Conspirators", "Slash")]
+    [InlineData("Slash featuring Myles Kennedy and the Conspirators", "Slash")]
+    [InlineData("Daft Punk feat. Pharrell Williams", "Daft Punk")]
+    [InlineData("Simon & Garfunkel", "Simon")]
+    [InlineData("Radiohead", null)]
+    [InlineData(null, null)]
+    public void Finds_the_lead_artist_of_a_joined_credit(string? input, string? expected) =>
+        Assert.Equal(expected, Cleanup.LeadArtist(input));
+
+    [Theory]
     [InlineData("Blackout (Remastered 2001)", "Scorpions", "Blackout")]
     [InlineData("Scorpions - Blackout (Official Video)", "Scorpions - Topic", "Blackout")]
     [InlineData("Scorpions-+Blackout+(Remastered+2001)", "Scorpions", "Blackout")]

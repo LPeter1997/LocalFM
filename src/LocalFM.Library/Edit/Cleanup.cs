@@ -27,6 +27,17 @@ public static partial class Cleanup
     }
 
     /// <summary>
+    /// The first artist of a joined credit ("Slash, Myles Kennedy, The Conspirators", "A feat. B", "A & B"), or null
+    /// when there is only one. Online searches for the whole joined text find nothing; the lead artist usually does.
+    /// </summary>
+    public static string? LeadArtist(string? artist)
+    {
+        if (artist is null) return null;
+        string lead = ArtistJoin().Split(artist.Trim(), 2)[0].Trim();
+        return lead.Length > 0 && lead.Length < artist.Trim().Length ? lead : null;
+    }
+
+    /// <summary>
     /// A song title reduced to what identifies the song: video tags and remaster notes removed, normalized, and
     /// without a leading "The" ("House Of The Rising Sun [4K HD]" and "The House of the Rising Sun" are one song).
     /// </summary>
@@ -172,6 +183,9 @@ public static partial class Cleanup
 
     [GeneratedRegex(@"(?<=\p{L})VEVO$")]
     private static partial Regex VevoSuffix();
+
+    [GeneratedRegex(@"\s*[,;/]\s*|\s+(?:feat\.?|featuring|ft\.?|vs\.?|with|and|x|&)\s+", RegexOptions.IgnoreCase)]
+    private static partial Regex ArtistJoin();
 
     [GeneratedRegex(@"\s*[\(\[]\s*(?:official\s+)?(?:music\s+|lyrics?\s+|audio\s+|hd\s+|hq\s+|4k\s+)?(?:video|audio|visuali[sz]er|lyrics?|clip|videoclip)(?:\s+(?:hd|hq|4k))?\s*[\)\]]|\s*[\(\[]\s*(?:hd|hq|uhd|full\s+hd|4k|8k|\d{3,4}p|\d{2}\s?fps|high\s+quality|explicit|remastered\s+in\s+4k)(?:[\s,/+|-]+(?:hd|hq|uhd|full\s+hd|4k|8k|\d{3,4}p|\d{2}\s?fps|high\s+quality|explicit))*\s*[\)\]]",
         RegexOptions.IgnoreCase)]

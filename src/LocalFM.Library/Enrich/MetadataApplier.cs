@@ -29,12 +29,7 @@ public sealed class MetadataApplier(ImageStore images)
         long now = Sql.Now();
 
         // Match first, write after: a release none of our tracks fit is rejected untouched.
-        List<LocalTrack> LocalTracks(Ulid release) => tx.Query("""
-            SELECT t.id, m.id, m.position, t.position, t.title, t.recording_id,
-                   COALESCE((SELECT MAX(f.duration_ms) FROM audio_file f WHERE f.track_id = t.id), t.length_ms)
-            FROM track t JOIN medium m ON m.id = t.medium_id
-            WHERE m.release_id = $1 ORDER BY m.position, t.position
-            """, r => new LocalTrack(r.Id(0), r.Id(1), r.GetInt32(2), r.GetInt32(3), r.GetString(4), r.Id(5), r.Long(6)), release);
+        List<LocalTrack> LocalTracks(Ulid release) => LoadLocalTracks(tx, release);
         var local = LocalTracks(releaseId);
         var remote = d.Media.SelectMany(m => m.Tracks.Select(t => (Medium: m, Track: t))).ToList();
         var assigned = MatchTracks(local, remote, fileTitles, d.Credit);
@@ -145,6 +140,20 @@ public sealed class MetadataApplier(ImageStore images)
             UnmatchedTrackIds = local.Where(l => !matchedIds.Contains(l.Id)).Select(l => l.Id).ToList(),
         };
     }
+
+    /// <summary>How many of the album's tracks a release would match, without writing anything.</summary>
+    public static int CountMatches(Tx tx, Ulid releaseId, ReleaseData d, IReadOnlyDictionary<Ulid, string>? fileTitles = null)
+    {
+        var remote = d.Media.SelectMany(m => m.Tracks.Select(t => (Medium: m, Track: t))).ToList();
+        return MatchTracks(LoadLocalTracks(tx, releaseId), remote, fileTitles, d.Credit).Count(a => a is not null);
+    }
+
+    private static List<LocalTrack> LoadLocalTracks(Tx tx, Ulid release) => tx.Query("""
+        SELECT t.id, m.id, m.position, t.position, t.title, t.recording_id,
+               COALESCE((SELECT MAX(f.duration_ms) FROM audio_file f WHERE f.track_id = t.id), t.length_ms)
+        FROM track t JOIN medium m ON m.id = t.medium_id
+        WHERE m.release_id = $1 ORDER BY m.position, t.position
+        """, r => new LocalTrack(r.Id(0), r.Id(1), r.GetInt32(2), r.GetInt32(3), r.GetString(4), r.Id(5), r.Long(6)), release);
 
     private sealed record LocalTrack(Ulid Id, Ulid MediumId, int Disc, int Position, string Title, Ulid RecordingId, long? LengthMs);
 

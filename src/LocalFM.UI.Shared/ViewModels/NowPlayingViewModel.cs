@@ -72,6 +72,13 @@ public sealed partial class NowPlayingViewModel : ObservableObject
         OnPropertyChanged(nameof(RepeatOne));
     }
 
+    /// <summary>While dragging a seek bar: show where the seek would land without seeking yet.</summary>
+    public void PreviewSeek(double seconds)
+    {
+        Position = Math.Clamp(seconds, 0, Duration);
+        PositionText = Converters.Time(TimeSpan.FromSeconds(Position));
+    }
+
     public void CommitSeek(double seconds, string source = "seek bar")
     {
         _player.Seek(TimeSpan.FromSeconds(seconds), source);

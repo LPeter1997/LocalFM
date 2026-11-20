@@ -15,6 +15,8 @@ public sealed partial class LyricLineViewModel(LyricLine line, int index, Func<T
     public string Text => Line.Text.Length == 0 ? "♪" : Line.Text;
     /// <summary>Playback position the word highlight follows (shared by all lines).</summary>
     public Func<TimeSpan> Clock { get; } = clock;
+    /// <summary>When the next line starts (the end of this one, for synced lyrics).</summary>
+    public TimeSpan? End { get; init; }
     /// <summary>When each word is sung; empty when the line is only highlighted as a whole.</summary>
     [ObservableProperty] private IReadOnlyList<WordTiming> _words = [];
     [ObservableProperty] private bool _isCurrent;
@@ -33,11 +35,19 @@ public sealed partial class LyricsViewModel : ObservableObject
     /// <summary>A tiny lead makes the highlight feel in time with the voice.</summary>
     private static readonly TimeSpan Lead = TimeSpan.FromMilliseconds(150);
 
+    private const string MiniLyricsKey = "ui.miniLyrics";
+
     public LyricsViewModel(AppHost host)
     {
         _host = host;
+        _miniLyrics = host.History.Get(MiniLyricsKey) != "0";
         _timer = new DispatcherTimer(TimeSpan.FromMilliseconds(100), DispatcherPriority.Background, (_, _) => Follow());
         _timer.Start();
+        Lines.CollectionChanged += (_, _) =>
+        {
+            if (Lines.Count == 0) CurrentLine = null;
+            OnPropertyChanged(nameof(MiniLineShown));
+        };
         host.Player.Changed += () => Dispatcher.UIThread.Post(OnTrackMaybeChanged);
         OnTrackMaybeChanged();
     }
@@ -49,13 +59,39 @@ public sealed partial class LyricsViewModel : ObservableObject
     [ObservableProperty] private bool _synced;
     [ObservableProperty] private string? _status;
     [ObservableProperty] private string? _source;
+    /// <summary>The line being sung (synced lyrics only); null before the first line.</summary>
+    [ObservableProperty] private LyricLineViewModel? _currentLine;
+
+    /// <summary>The miniplayer shows the line being sung (the person's choice, remembered).</summary>
+    [ObservableProperty] private bool _miniLyrics;
+    /// <summary>Set while the miniplayer is on screen.</summary>
+    [ObservableProperty] private bool _miniVisible;
+    /// <summary>The miniplayer has a line to show: switched on, and this track has synced lyrics.</summary>
+    public bool MiniLineShown => MiniLyrics && Synced && Lines.Count > 0;
 
     /// <summary>Raised when the highlighted line changes (the view scrolls it into view).</summary>
     public event Action<int>? CurrentLineChanged;
 
-    partial void OnIsOpenChanged(bool value)
+    /// <summary>Someone is looking at the lyrics: the panel, or the miniplayer's line.</summary>
+    private bool Watched => IsOpen || (MiniVisible && MiniLyrics);
+
+    partial void OnIsOpenChanged(bool value) => LoadIfWatched();
+    partial void OnMiniVisibleChanged(bool value) => LoadIfWatched();
+    partial void OnSyncedChanged(bool value) => OnPropertyChanged(nameof(MiniLineShown));
+
+    partial void OnMiniLyricsChanged(bool value)
     {
-        if (value && Lines.Count == 0 && _host.Player.Current?.Track is { } t) _ = Load(t, allowFetch: true);
+        _ = _host.History.SetAsync(MiniLyricsKey, value ? "1" : "0");
+        OnPropertyChanged(nameof(MiniLineShown));
+        LoadIfWatched();
+    }
+
+    [RelayCommand]
+    private void ToggleMiniLyrics() => MiniLyrics = !MiniLyrics;
+
+    private void LoadIfWatched()
+    {
+        if (Watched && Lines.Count == 0 && _host.Player.Current?.Track is { } t) _ = Load(t, allowFetch: true);
     }
 
     private void OnTrackMaybeChanged()
@@ -70,7 +106,7 @@ public sealed partial class LyricsViewModel : ObservableObject
         Source = null;
         if (track is null) return;
         // Fetch in the background when the track starts (cached; LRCLIB is asked once per track).
-        _ = Load(track, allowFetch: IsOpen || _host.Metadata.AutoFetchLyrics);
+        _ = Load(track, allowFetch: Watched || _host.Metadata.AutoFetchLyrics);
     }
 
     [RelayCommand]
@@ -133,9 +169,12 @@ public sealed partial class LyricsViewModel : ObservableObject
         _current = -1;
         Status = null;
         _view = view;
-        int i = 0;
         Func<TimeSpan> clock = () => _host.Player.Position + Lead;
-        foreach (var l in view.Lines) Lines.Add(new LyricLineViewModel(l, i++, clock));
+        for (int i = 0; i < view.Lines.Count; i++)
+        {
+            var end = i + 1 < view.Lines.Count ? view.Lines[i + 1].Time : null;
+            Lines.Add(new LyricLineViewModel(view.Lines[i], i, clock) { End = end });
+        }
         Synced = view.Synced;
         Retime();
         Source = view.Data.Provider switch { "lrclib" => "Lyrics from LRCLIB", "tags" => "Lyrics from file tags", var p => $"Lyrics from {p}" };
@@ -156,7 +195,7 @@ public sealed partial class LyricsViewModel : ObservableObject
 
     private void Follow()
     {
-        if (!IsOpen || !Synced || Lines.Count == 0) return;
+        if (!Watched || !Synced || Lines.Count == 0) return;
         var pos = _host.Player.Position + Lead;
         int idx = -1;
         for (int i = 0; i < Lines.Count; i++)
@@ -171,6 +210,7 @@ public sealed partial class LyricsViewModel : ObservableObject
             Lines[i].IsCurrent = i == idx;
             Lines[i].IsPast = i < idx;
         }
+        CurrentLine = idx >= 0 ? Lines[idx] : null;
         CurrentLineChanged?.Invoke(idx);
     }
 }

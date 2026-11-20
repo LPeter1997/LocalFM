@@ -17,6 +17,30 @@ public partial class MiniPlayerWindow : Window
         WindowChrome.MakeBorderless(this);
         WindowChrome.Outline(this, Root);
         WindowChrome.TitleBar(this, Root, doubleClick: () => Expand?.Invoke());
+        // The progress line seeks: press/drag previews the spot, release seeks there.
+        // Handling the press also keeps the window-drag from starting.
+        SeekArea.PointerPressed += (_, e) =>
+        {
+            if (DataContext is not NowPlayingViewModel vm || !vm.HasOwnTrack) return;
+            if (!e.GetCurrentPoint(SeekArea).Properties.IsLeftButtonPressed) return;
+            vm.IsSeeking = true;
+            e.Pointer.Capture(SeekArea);
+            vm.PreviewSeek(SeekSeconds(vm, e));
+            e.Handled = true;
+        };
+        SeekArea.PointerMoved += (_, e) =>
+        {
+            if (DataContext is NowPlayingViewModel { IsSeeking: true } vm && e.Pointer.Captured == SeekArea)
+                vm.PreviewSeek(SeekSeconds(vm, e));
+        };
+        SeekArea.PointerReleased += (_, e) =>
+        {
+            if (DataContext is NowPlayingViewModel { IsSeeking: true } vm) vm.PreviewSeek(SeekSeconds(vm, e));
+            CommitSeek();
+            e.Pointer.Capture(null);
+            e.Handled = true;
+        };
+        SeekArea.PointerCaptureLost += (_, _) => CommitSeek();
         // Scroll anywhere on the miniplayer to change the volume.
         PointerWheelChanged += (_, e) =>
         {
@@ -30,6 +54,7 @@ public partial class MiniPlayerWindow : Window
                 case Key.Space or Key.MediaPlayPause: vm.PlayPauseCommand.Execute($"miniplayer key {e.Key}"); break;
                 case Key.MediaNextTrack: vm.NextCommand.Execute("miniplayer media key"); break;
                 case Key.MediaPreviousTrack: vm.PreviousCommand.Execute("miniplayer media key"); break;
+                case Key.L when _lyrics is { } lyrics: lyrics.MiniLyrics = !lyrics.MiniLyrics; break;
                 default: return;
             }
             e.Handled = true;
@@ -47,6 +72,49 @@ public partial class MiniPlayerWindow : Window
         };
         Backdrop.Active = IsVisible;
         PropertyChanged += (_, e) => { if (e.Property == IsVisibleProperty) Backdrop.Active = IsVisible; };
+    }
+
+    /// <summary>
+    /// The line being sung, next to the title (switched with the lyrics button or L). While it shows, the title and
+    /// artist keep to what they need (up to a limit) and the line takes the rest of the row.
+    /// </summary>
+    public void AttachLyrics(LyricsViewModel lyrics)
+    {
+        _lyrics = lyrics;
+        LyricLine.DataContext = LyricsButton.DataContext = lyrics;
+        lyrics.MiniVisible = IsVisible;
+        PropertyChanged += (_, e) => { if (e.Property == IsVisibleProperty) lyrics.MiniVisible = IsVisible; };
+        // A new miniplayer is made each time, so let go of the shared view model when this one closes.
+        void OnLyricsChanged(object? s, System.ComponentModel.PropertyChangedEventArgs e)
+        {
+            if (e.PropertyName == nameof(LyricsViewModel.MiniLineShown)) LayOutTop();
+        }
+        lyrics.PropertyChanged += OnLyricsChanged;
+        Closed += (_, _) => { lyrics.PropertyChanged -= OnLyricsChanged; lyrics.MiniVisible = false; };
+        LayOutTop();
+    }
+
+    private LyricsViewModel? _lyrics;
+
+    private void LayOutTop()
+    {
+        bool line = _lyrics?.MiniLineShown == true;
+        Top.ColumnDefinitions[0].Width = line ? GridLength.Auto : GridLength.Star;
+        Top.ColumnDefinitions[1].Width = line ? GridLength.Star : new GridLength(0);
+        Info.MaxWidth = line ? 140 : double.PositiveInfinity;
+    }
+
+    private double SeekSeconds(NowPlayingViewModel vm, PointerEventArgs e)
+    {
+        var w = SeekArea.Bounds.Width;
+        return w <= 0 ? 0 : Math.Clamp(e.GetPosition(SeekArea).X / w, 0, 1) * vm.Duration;
+    }
+
+    private void CommitSeek()
+    {
+        if (DataContext is not NowPlayingViewModel { IsSeeking: true } vm) return;
+        vm.IsSeeking = false;
+        vm.CommitSeek(vm.Position, "miniplayer seek bar");
     }
 
     /// <summary>Raised when the person wants the full window back.</summary>

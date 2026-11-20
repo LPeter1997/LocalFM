@@ -388,7 +388,8 @@ public sealed partial class TidyViewModel(MainViewModel main) : PageViewModel(ma
         }
         UpdateTabs();
         _ = Host.Player.RefreshMetadataAsync();
-        Main.Notify(moved > 0 ? $"Moved {Converters.Count(moved, "song")}" : "Done");
+        // A fix that moved nothing says why; the row may well come back on the next check.
+        Main.Notify(moved > 0 ? $"Moved {Converters.Count(moved, "song")}" : problems.FirstOrDefault() ?? "Done");
         AlbumStatus = problems.Count > 0 ? string.Join(" ", problems.Distinct()) : Checking ? AlbumStatus : null;
         // Merges and moves can settle other suggestions (or reveal new ones): refresh the offline part.
         if (!Checking)

@@ -31,7 +31,14 @@ public sealed class AlbumOrganizer(MetadataService svc, Database db)
             if (LocalAlbumFor(g) is { } local)
             {
                 moved += await db.Writer.Run((c, t) => MetadataEditor.MoveTracks(new Tx(c, t), songs, local, Source, lockIt: false)).ConfigureAwait(false);
-                await svc.ReapplyMatchAsync(local, ct).ConfigureAwait(false);
+                var r = await svc.ReapplyMatchAsync(local, ct).ConfigureAwait(false);
+                // The songs are on another edition of this album (bonus tracks): use that edition if it fits more songs.
+                if (r is { Applied: true } && r.UnmatchedTrackIds.Any(songs.Contains))
+                {
+                    var better = await svc.SwitchEditionIfBetterAsync(local, g.ReleaseMbid, r.TracksMatched, ct).ConfigureAwait(false);
+                    if ((better?.UnmatchedTrackIds ?? r.UnmatchedTrackIds).Any(songs.Contains))
+                        problems.Add($"MusicBrainz lists {(songs.Count == 1 ? "this song" : "these songs")} on “{g.Title}”, but not on the edition in your library.");
+                }
                 albums.Add(local);
                 continue;
             }

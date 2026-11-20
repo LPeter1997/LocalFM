@@ -6,6 +6,12 @@
         x:DataType="vm:NowPlayingViewModel"
         Title="LocalFM" Width="460" Height="124" CanResize="False" Topmost="True"
         WindowStartupLocation="CenterScreen" Background="{StaticResource Bg}">
+  <Window.Styles>
+    <!-- Thicker on hover (a render transform, so the layout doesn't move); only when there is something to seek -->
+    <Style Selector="Panel.miniseek.live:pointerover > ProgressBar">
+      <Setter Property="RenderTransform" Value="scaleY(1.67)" />
+    </Style>
+  </Window.Styles>
   <!-- No system title bar: drag anywhere to move, double-click (or the expand button) for the full window -->
   <Border x:Name="Root" Background="{StaticResource Bg}" Padding="12">
   <Panel>
@@ -19,14 +25,33 @@
         <c:CoverImage Path="{Binding CoverPath}" DecodeWidth="176" />
       </Panel>
     </Border>
-    <Grid Grid.Column="1" Margin="12,0,0,0" RowDefinitions="Auto,Auto,*" ColumnDefinitions="*,Auto">
-      <TextBlock Text="{Binding Title}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
-      <TextBlock Grid.Row="1" Text="{Binding Artist}" Classes="muted small" TextTrimming="CharacterEllipsis" />
-      <Button Grid.Column="1" Grid.RowSpan="2" Classes="flat" x:Name="ExpandButton" ToolTip.Tip="Back to the full window"
-              VerticalAlignment="Top" Margin="6,-4,-4,0">
+    <Grid Grid.Column="1" Margin="12,0,0,0" RowDefinitions="Auto,*" ColumnDefinitions="*,Auto,Auto">
+      <!-- Title and artist; with lyrics on, they keep to the left and the line being sung takes the rest
+           (the column widths are switched in code) -->
+      <Grid x:Name="Top" ColumnDefinitions="*,*">
+        <StackPanel x:Name="Info">
+          <TextBlock Text="{Binding Title}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+          <TextBlock Text="{Binding Artist}" Classes="muted small" TextTrimming="CharacterEllipsis" />
+        </StackPanel>
+        <c:LyricTicker x:Name="LyricLine" Grid.Column="1" x:DataType="vm:LyricsViewModel" DataContext="{x:Null}" Margin="16,0,0,0" VerticalAlignment="Center"
+                       IsVisible="{Binding MiniLineShown}" Live="{Binding MiniVisible}"
+                       Start="{Binding CurrentLine.Line.Time, FallbackValue={x:Null}}" End="{Binding CurrentLine.End, FallbackValue={x:Null}}">
+          <c:KaraokeText DataContext="{Binding CurrentLine}" x:DataType="vm:LyricLineViewModel"
+                         Text="{Binding Text, FallbackValue=''}" FontSize="14" FontWeight="SemiBold" Foreground="{StaticResource Text}"
+                         Words="{Binding Words}" Clock="{Binding Clock}" Live="{Binding #LyricLine.Live}"
+                         UnsungBrush="{StaticResource Muted}" />
+        </c:LyricTicker>
+      </Grid>
+      <Button Grid.Column="1" Classes="flat" x:Name="LyricsButton" x:DataType="vm:LyricsViewModel" DataContext="{x:Null}"
+              Classes.on="{Binding MiniLyrics}" Command="{Binding ToggleMiniLyricsCommand}"
+              ToolTip.Tip="Show the line being sung (L)" VerticalAlignment="Top" Margin="6,-4,0,0">
+        <c:Icon Classes="icon" Data="{StaticResource IcoLyrics}" />
+      </Button>
+      <Button Grid.Column="2" Classes="flat" x:Name="ExpandButton" ToolTip.Tip="Back to the full window"
+              VerticalAlignment="Top" Margin="0,-4,-4,0">
         <c:Icon Classes="icon" Data="{StaticResource IcoExpand}" />
       </Button>
-      <Grid Grid.Row="2" Grid.ColumnSpan="2" ColumnDefinitions="Auto,*" VerticalAlignment="Bottom">
+      <Grid Grid.Row="1" Grid.ColumnSpan="3" ColumnDefinitions="Auto,*" VerticalAlignment="Bottom">
       <StackPanel Orientation="Horizontal" Spacing="8">
         <Button Classes="flat" Command="{Binding PreviousCommand}" ToolTip.Tip="Previous">
           <c:Icon Classes="icon fill" Data="{StaticResource IcoPrev}" />
@@ -56,9 +81,14 @@
       </Grid>
       </Grid>
     </Grid>
-    <ProgressBar Grid.Row="1" Grid.Column="1" Margin="12,6,0,0" Height="3" MinHeight="3" Minimum="0"
-                 Maximum="{Binding Duration}" Value="{Binding Position}" Foreground="{StaticResource Accent}"
-                 Background="{StaticResource Surface3}" />
+    <!-- Seek bar: a thin line with a taller transparent hit area (it hangs into the padding, so the layout stays put).
+         Press or drag to scrub; the seek happens on release. -->
+    <Panel Grid.Row="1" Grid.Column="1" Classes="miniseek" Classes.live="{Binding HasOwnTrack}" Margin="12,6,0,0">
+      <ProgressBar Height="3" MinHeight="3" Minimum="0" RenderTransformOrigin="50%,50%"
+                   Maximum="{Binding Duration}" Value="{Binding Position}" Foreground="{StaticResource Accent}"
+                   Background="{StaticResource Surface3}" />
+      <Border x:Name="SeekArea" Background="Transparent" Margin="0,-6,0,-7" Cursor="Hand" IsEnabled="{Binding HasOwnTrack}" />
+    </Panel>
   </Grid>
   </Panel>
   </Border>

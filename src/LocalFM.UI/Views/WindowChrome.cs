@@ -17,6 +17,38 @@ public static class WindowChrome
     {
         w.ExtendClientAreaToDecorationsHint = true;
         w.WindowDecorations = WindowDecorations.BorderOnly;
+        KeepSizeAcrossMonitors(w);
+    }
+
+    /// <summary>
+    /// Dragging a window onto a monitor with different scaling (e.g. a 125% laptop to a 100% monitor) must keep its
+    /// size in DIPs. During a drag, Windows announces the new DPI (WM_GETDPISCALEDSIZE), resizes the window to the
+    /// new pixel size (WM_SIZE) and only then switches the DPI (WM_DPICHANGED). Avalonia (12.1) reads that WM_SIZE
+    /// with the old scaling and keeps it, so the window shrinks or grows by the scaling ratio while its content is
+    /// laid out for the old size and gets cut off. Skipping WM_SIZE between the announcement and the switch leaves the
+    /// size in DIPs untouched; the DPI change then fits the window to it.
+    /// </summary>
+    private static void KeepSizeAcrossMonitors(Window w)
+    {
+        if (!OperatingSystem.IsWindows()) return;
+        bool dpiChanging = false;
+        Win32Properties.AddWndProcHookCallback(w, (nint _, uint msg, nint wParam, nint _, ref bool handled) =>
+        {
+            const uint WM_SIZE = 0x0005, WM_EXITSIZEMOVE = 0x0232, WM_DPICHANGED = 0x02E0, WM_GETDPISCALEDSIZE = 0x02E4;
+            switch (msg)
+            {
+                case WM_GETDPISCALEDSIZE:
+                    dpiChanging = Math.Abs(wParam / 96.0 - w.RenderScaling) > 0.001;
+                    break;
+                case WM_DPICHANGED or WM_EXITSIZEMOVE:
+                    dpiChanging = false;
+                    break;
+                case WM_SIZE when dpiChanging && wParam == 0: // SIZE_RESTORED
+                    handled = true;
+                    break;
+            }
+            return 0;
+        });
     }
 
     /// <summary>
