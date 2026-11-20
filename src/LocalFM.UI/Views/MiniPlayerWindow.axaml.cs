@@ -17,6 +17,30 @@ public partial class MiniPlayerWindow : Window
         WindowChrome.MakeBorderless(this);
         WindowChrome.Outline(this, Root);
         WindowChrome.TitleBar(this, Root, doubleClick: () => Expand?.Invoke());
+        // The progress line seeks: press/drag previews the spot, release seeks there.
+        // Handling the press also keeps the window-drag from starting.
+        SeekArea.PointerPressed += (_, e) =>
+        {
+            if (DataContext is not NowPlayingViewModel vm || !vm.HasOwnTrack) return;
+            if (!e.GetCurrentPoint(SeekArea).Properties.IsLeftButtonPressed) return;
+            vm.IsSeeking = true;
+            e.Pointer.Capture(SeekArea);
+            vm.PreviewSeek(SeekSeconds(vm, e));
+            e.Handled = true;
+        };
+        SeekArea.PointerMoved += (_, e) =>
+        {
+            if (DataContext is NowPlayingViewModel { IsSeeking: true } vm && e.Pointer.Captured == SeekArea)
+                vm.PreviewSeek(SeekSeconds(vm, e));
+        };
+        SeekArea.PointerReleased += (_, e) =>
+        {
+            if (DataContext is NowPlayingViewModel { IsSeeking: true } vm) vm.PreviewSeek(SeekSeconds(vm, e));
+            CommitSeek();
+            e.Pointer.Capture(null);
+            e.Handled = true;
+        };
+        SeekArea.PointerCaptureLost += (_, _) => CommitSeek();
         // Scroll anywhere on the miniplayer to change the volume.
         PointerWheelChanged += (_, e) =>
         {
@@ -47,6 +71,19 @@ public partial class MiniPlayerWindow : Window
         };
         Backdrop.Active = IsVisible;
         PropertyChanged += (_, e) => { if (e.Property == IsVisibleProperty) Backdrop.Active = IsVisible; };
+    }
+
+    private double SeekSeconds(NowPlayingViewModel vm, PointerEventArgs e)
+    {
+        var w = SeekArea.Bounds.Width;
+        return w <= 0 ? 0 : Math.Clamp(e.GetPosition(SeekArea).X / w, 0, 1) * vm.Duration;
+    }
+
+    private void CommitSeek()
+    {
+        if (DataContext is not NowPlayingViewModel { IsSeeking: true } vm) return;
+        vm.IsSeeking = false;
+        vm.CommitSeek(vm.Position, "miniplayer seek bar");
     }
 
     /// <summary>Raised when the person wants the full window back.</summary>

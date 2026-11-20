@@ -6,6 +6,12 @@
         x:DataType="vm:NowPlayingViewModel"
         Title="LocalFM" Width="460" Height="124" CanResize="False" Topmost="True"
         WindowStartupLocation="CenterScreen" Background="{StaticResource Bg}">
+  <Window.Styles>
+    <!-- Thicker on hover (a render transform, so the layout doesn't move); only when there is something to seek -->
+    <Style Selector="Panel.miniseek.live:pointerover > ProgressBar">
+      <Setter Property="RenderTransform" Value="scaleY(1.67)" />
+    </Style>
+  </Window.Styles>
   <!-- No system title bar: drag anywhere to move, double-click (or the expand button) for the full window -->
   <Border x:Name="Root" Background="{StaticResource Bg}" Padding="12">
   <Panel>
@@ -56,9 +62,14 @@
       </Grid>
       </Grid>
     </Grid>
-    <ProgressBar Grid.Row="1" Grid.Column="1" Margin="12,6,0,0" Height="3" MinHeight="3" Minimum="0"
-                 Maximum="{Binding Duration}" Value="{Binding Position}" Foreground="{StaticResource Accent}"
-                 Background="{StaticResource Surface3}" />
+    <!-- Seek bar: a thin line with a taller transparent hit area (it hangs into the padding, so the layout stays put).
+         Press or drag to scrub; the seek happens on release. -->
+    <Panel Grid.Row="1" Grid.Column="1" Classes="miniseek" Classes.live="{Binding HasOwnTrack}" Margin="12,6,0,0">
+      <ProgressBar Height="3" MinHeight="3" Minimum="0" RenderTransformOrigin="50%,50%"
+                   Maximum="{Binding Duration}" Value="{Binding Position}" Foreground="{StaticResource Accent}"
+                   Background="{StaticResource Surface3}" />
+      <Border x:Name="SeekArea" Background="Transparent" Margin="0,-6,0,-7" Cursor="Hand" IsEnabled="{Binding HasOwnTrack}" />
+    </Panel>
   </Grid>
   </Panel>
   </Border>
