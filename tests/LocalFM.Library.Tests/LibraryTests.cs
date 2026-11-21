@@ -19,8 +19,8 @@ public class LibraryTests
     {
         using var lib = new TempLibrary();
         using var c = lib.Db.Open();
-        Assert.Equal(2L, c.Scalar<long>("PRAGMA user_version"));
-        foreach (var table in new[] { "artist", "artist_credit", "recording", "release_group", "release", "medium", "track", "audio_file", "playlist", "play_event", "field_provenance", "external_id", "import_job", "import_hint" })
+        Assert.Equal(3L, c.Scalar<long>("PRAGMA user_version"));
+        foreach (var table in new[] { "artist", "artist_credit", "recording", "release_group", "release", "medium", "track", "audio_file", "playlist", "play_event", "field_provenance", "external_id", "import_job", "import_hint", "source_exclude" })
             Assert.Equal(1L, c.Scalar<long>("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name=$1", table));
     }
 
@@ -64,6 +64,34 @@ public class LibraryTests
         Assert.NotNull(last);
         Assert.Equal(0, last!.Added);
         Assert.Equal(0, last.Updated);
+    }
+
+    [SkippableFact]
+    public async Task Excluded_folders_are_skipped_and_come_back_when_unexcluded()
+    {
+        Skip.IfNot(TempLibrary.HaveFfmpeg);
+        using var lib = new TempLibrary();
+        lib.MakeTrack("Album/01.flac", Tags("Song", "Artist", "Album", 1));
+        lib.MakeTrack("Fretbuzz/take1.flac", Tags("Take", "Me", "Takes", 1));
+        lib.MakeTrack("Fretbuzz/deep/take2.flac", Tags("Take 2", "Me", "Takes", 2));
+        await lib.ScanAsync();
+        Assert.Equal(3, Present(lib));
+
+        await Sources.ExcludeAsync(lib.Db, Path.Combine(lib.Music, "Fretbuzz"));
+        await lib.ScanAsync();
+        Assert.Equal(1, Present(lib));
+        Assert.True(lib.Scanner.IsExcluded(Path.Combine(lib.Music, "Fretbuzz", "deep", "x.flac")));
+        Assert.False(lib.Scanner.IsExcluded(Path.Combine(lib.Music, "FretbuzzNot", "x.flac")));
+
+        await Sources.UnexcludeAsync(lib.Db, Path.Combine(lib.Music, "Fretbuzz"));
+        await lib.ScanAsync();
+        Assert.Equal(3, Present(lib));
+
+        static long Present(TempLibrary lib)
+        {
+            using var c = lib.Db.Open();
+            return c.Scalar<long>("SELECT COUNT(*) FROM audio_file WHERE missing = 0");
+        }
     }
 
     [SkippableFact]

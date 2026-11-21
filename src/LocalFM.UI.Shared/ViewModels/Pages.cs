@@ -437,7 +437,37 @@ public sealed partial class SourcesViewModel(MainViewModel main) : PageViewModel
         set { Host.Metadata.EstimateWordTiming = value; OnPropertyChanged(); Main.Lyrics.Retime(); }
     }
 
-    public override Task RefreshAsync() => Load(() => Library.Sources.List(Host.Db), list => Replace(Sources, list));
+    /// <summary>Folders inside sources that are skipped.</summary>
+    public ObservableCollection<string> Excluded { get; } = new();
+
+    [ObservableProperty] private bool _hasExcluded;
+
+    public override async Task RefreshAsync()
+    {
+        await Load(() => Library.Sources.List(Host.Db), list => Replace(Sources, list));
+        await Load(() => Library.Sources.Excluded(Host.Db), list => { Replace(Excluded, list); HasExcluded = list.Count > 0; });
+    }
+
+    [RelayCommand]
+    private async Task ExcludeFolder()
+    {
+        if (Main.PickFolder is null || await Main.PickFolder() is not { } path) return;
+        var sources = Library.Sources.Containing(Host.Db, Path.GetFullPath(path));
+        if (sources.Count == 0) { Main.Notify("That folder is not inside any of your sources."); return; }
+        string full = await Library.Sources.ExcludeAsync(Host.Db, path);
+        await RefreshAsync();
+        Main.Notify($"Excluded {Path.GetFileName(full)}. Its tracks leave the library after the rescan.");
+        _ = Task.Run(async () => { foreach (var s in sources) await Host.Scanner.ScanAsync(s); });
+    }
+
+    [RelayCommand]
+    private async Task Unexclude(string path)
+    {
+        await Library.Sources.UnexcludeAsync(Host.Db, path);
+        await RefreshAsync();
+        var sources = Library.Sources.Containing(Host.Db, path);
+        _ = Task.Run(async () => { foreach (var s in sources) await Host.Scanner.ScanAsync(s); });
+    }
 
     [RelayCommand]
     private async Task AddFolder()

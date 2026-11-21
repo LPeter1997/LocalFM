@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.IO.Enumeration;
 using System.Threading.Channels;
 using LocalFM.Core;
 using LocalFM.Native;
@@ -29,10 +30,21 @@ public sealed class Scanner
     private readonly Importer _importer;
     private readonly SemaphoreSlim _scanLock = new(1, 1);
 
+    private volatile string[] _excluded;
+
     public Scanner(Database db, ImageStore images)
     {
         _db = db;
         _importer = new Importer(images);
+        _excluded = [.. Sources.Excluded(db)];
+    }
+
+    /// <summary>True when the path is inside a folder the user excluded (as of the last scan).</summary>
+    public bool IsExcluded(string path)
+    {
+        foreach (var dir in _excluded)
+            if (Sources.IsUnder(path, dir)) return true;
+        return false;
     }
 
     public event Action<ScanProgress>? Progress;
@@ -67,6 +79,8 @@ public sealed class Scanner
                 .ToDictionary(x => x.Path, x => (x.Size, x.MTime));
         }
 
+        _excluded = [.. Sources.Excluded(_db)];
+
         // Metadata integrations left for files they delivered (see ImportHints).
         var hints = ImportHints.Under(_db, source.Path);
 
@@ -82,9 +96,15 @@ public sealed class Scanner
             try
             {
                 var opts = new EnumerationOptions { RecurseSubdirectories = true, IgnoreInaccessible = true, AttributesToSkip = FileAttributes.System };
-                foreach (var path in Directory.EnumerateFiles(source.Path, "*", opts))
+                // Excluded folders are pruned, not walked: they may hold lots of unrelated files.
+                var files = new FileSystemEnumerable<string>(source.Path, (ref FileSystemEntry e) => e.ToFullPath(), opts)
                 {
-                    if (!AudioExtensions.Contains(Path.GetExtension(path))) continue;
+                    ShouldIncludePredicate = (ref FileSystemEntry e) => !e.IsDirectory && AudioExtensions.Contains(Path.GetExtension(e.FileName).ToString()),
+                    ShouldRecursePredicate = (ref FileSystemEntry e) => !IsExcluded(e.ToFullPath()),
+                };
+                foreach (var path in files)
+                {
+                    if (IsExcluded(path)) continue; // the source itself lies inside an excluded folder
                     Interlocked.Increment(ref found);
                     seen[path] = 0;
                     var fi = new FileInfo(path);

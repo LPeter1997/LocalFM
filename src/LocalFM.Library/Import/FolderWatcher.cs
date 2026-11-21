@@ -38,12 +38,14 @@ public sealed class FolderWatcher : IDisposable
                 Log.Warn("Watch", $"Cannot watch '{source.Path}': {ex.Message}");
                 return;
             }
-            void Changed(object? s, FileSystemEventArgs e) => debounce.Change(_delay, Timeout.InfiniteTimeSpan);
+            void Poke() => debounce.Change(_delay, Timeout.InfiniteTimeSpan);
+            // Activity in excluded folders (another app's recordings, say) is no reason to rescan.
+            void Changed(object? s, FileSystemEventArgs e) { if (!_scanner.IsExcluded(e.FullPath)) Poke(); }
             w.Created += Changed;
             w.Changed += Changed;
             w.Deleted += Changed;
-            w.Renamed += (s, e) => Changed(s, e);
-            w.Error += (_, e) => { Log.Warn("Watch", $"Watcher overflow on '{source.Path}', rescanning"); Changed(null, null!); };
+            w.Renamed += (s, e) => { if (!_scanner.IsExcluded(e.FullPath) || !_scanner.IsExcluded(e.OldFullPath)) Poke(); };
+            w.Error += (_, e) => { Log.Warn("Watch", $"Watcher overflow on '{source.Path}', rescanning"); Poke(); };
             w.EnableRaisingEvents = true;
             _watchers[source.Id] = (w, debounce);
         }

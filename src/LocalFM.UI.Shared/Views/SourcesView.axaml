@@ -18,17 +18,19 @@
         <Button Classes="primary" Command="{Binding AllowMusicAccessCommand}" HorizontalAlignment="Left">Allow access</Button>
       </StackPanel>
     </Border>
-    <StackPanel Orientation="Horizontal" Spacing="8" IsVisible="{Binding !MusicAccessMissing}">
+    <WrapPanel ItemSpacing="8" LineSpacing="8" IsVisible="{Binding !MusicAccessMissing}">
       <Button Classes="primary" Command="{Binding AddFolderCommand}">Add folder…</Button>
+      <Button Classes="ghost" Command="{Binding ExcludeFolderCommand}"
+              ToolTip.Tip="Skip a folder inside a source, e.g. where another app saves recordings">Exclude folder…</Button>
       <Button Classes="ghost" Command="{Binding RescanAllCommand}">Rescan all</Button>
-    </StackPanel>
+    </WrapPanel>
     <ItemsControl ItemsSource="{Binding Sources}">
       <ItemsControl.ItemTemplate>
         <DataTemplate x:DataType="lib:Source">
           <Border Background="{StaticResource Surface}" CornerRadius="10" Padding="14,10" Margin="0,0,0,6">
             <Grid ColumnDefinitions="Auto,*,Auto">
               <c:Icon Classes="icon" Data="{StaticResource IcoFolder}" Stroke="{StaticResource Muted}" />
-              <TextBlock Grid.Column="1" Text="{Binding Path}" VerticalAlignment="Center" Margin="12,0" TextTrimming="CharacterEllipsis" />
+              <TextBlock Grid.Column="1" Text="{Binding Path}" VerticalAlignment="Center" Margin="12,0" TextTrimming="LeadingCharacterEllipsis" ToolTip.Tip="{Binding Path}" />
               <Button Grid.Column="2" Classes="flat" ToolTip.Tip="Remove source (its tracks are kept as missing)"
                       Command="{Binding $parent[UserControl].((vm:SourcesViewModel)DataContext).RemoveCommand}" CommandParameter="{Binding}">
                 <c:Icon Classes="icon" Data="{StaticResource IcoTrash}" Width="16" Height="16" />
@@ -38,6 +40,25 @@
         </DataTemplate>
       </ItemsControl.ItemTemplate>
     </ItemsControl>
+    <StackPanel Spacing="6" IsVisible="{Binding HasExcluded}">
+      <TextBlock Classes="muted small" Text="Excluded folders (skipped when scanning)" Margin="0,4,0,0" />
+      <ItemsControl ItemsSource="{Binding Excluded}">
+        <ItemsControl.ItemTemplate>
+          <DataTemplate x:DataType="x:String">
+            <Border Background="{StaticResource Surface}" CornerRadius="10" Padding="14,10" Margin="0,0,0,6">
+              <Grid ColumnDefinitions="Auto,*,Auto">
+                <c:Icon Classes="icon" Data="{StaticResource IcoFolder}" Stroke="{StaticResource Faint}" />
+                <TextBlock Grid.Column="1" Classes="muted" Text="{Binding}" VerticalAlignment="Center" Margin="12,0" TextTrimming="LeadingCharacterEllipsis" ToolTip.Tip="{Binding}" />
+                <Button Grid.Column="2" Classes="flat" ToolTip.Tip="Stop excluding (its music is scanned again)"
+                        Command="{Binding $parent[UserControl].((vm:SourcesViewModel)DataContext).UnexcludeCommand}" CommandParameter="{Binding}">
+                  <c:Icon Classes="icon" Data="{StaticResource IcoClose}" Width="14" Height="14" />
+                </Button>
+              </Grid>
+            </Border>
+          </DataTemplate>
+        </ItemsControl.ItemTemplate>
+      </ItemsControl>
+    </StackPanel>
     <TextBlock Classes="h2" Text="Online metadata" Margin="0,14,0,0" />
     <TextBlock Classes="muted" TextWrapping="Wrap">
       LocalFM works fully offline. When allowed, it asks free services (MusicBrainz, Cover Art Archive, iTunes, LRCLIB,

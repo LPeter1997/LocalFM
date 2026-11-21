@@ -15,7 +15,7 @@ public static class Sources
 
     public static Task<Source> AddFolderAsync(Database db, string path)
     {
-        string full = System.IO.Path.GetFullPath(path).TrimEnd(System.IO.Path.DirectorySeparatorChar);
+        string full = FullPath(path);
         return db.Writer.Run((c, t) =>
         {
             var tx = new Tx(c, t);
@@ -36,4 +36,48 @@ public static class Sources
         tx.Exec("UPDATE audio_file SET missing = 1 WHERE source_id = $1", id);
         tx.Exec("DELETE FROM source WHERE id = $1", id);
     });
+
+    // ------------------------------------------------------------------ excluded folders
+
+    /// <summary>Folders the scanner skips, with everything below them.</summary>
+    public static List<string> Excluded(Database db)
+    {
+        using var c = db.Open();
+        return c.Query("SELECT path FROM source_exclude ORDER BY path", r => r.GetString(0));
+    }
+
+    public static Task<string> ExcludeAsync(Database db, string path)
+    {
+        string full = FullPath(path);
+        return db.Writer.Run((c, t) =>
+        {
+            new Tx(c, t).Exec("INSERT OR IGNORE INTO source_exclude(path, added_at) VALUES ($1,$2)", full, Sql.Now());
+            return full;
+        });
+    }
+
+    public static Task UnexcludeAsync(Database db, string path) =>
+        db.Writer.Run((c, t) => new Tx(c, t).Exec("DELETE FROM source_exclude WHERE path = $1", path));
+
+    /// <summary>The sources a folder lies in (or is), i.e. the ones to rescan when it is (un)excluded.</summary>
+    public static List<Source> Containing(Database db, string path) =>
+        List(db).Where(s => IsUnder(path, s.Path)).ToList();
+
+    /// <summary>True when <paramref name="path"/> is <paramref name="dir"/> or lies below it.</summary>
+    public static bool IsUnder(string path, string dir)
+    {
+        if (!path.StartsWith(dir, PathComparison)) return false;
+        return path.Length == dir.Length || path[dir.Length] == System.IO.Path.DirectorySeparatorChar
+            || path[dir.Length] == System.IO.Path.AltDirectorySeparatorChar || dir.EndsWith(System.IO.Path.DirectorySeparatorChar);
+    }
+
+    public static StringComparison PathComparison { get; } =
+        OperatingSystem.IsWindows() || OperatingSystem.IsMacOS() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
+
+    private static string FullPath(string path)
+    {
+        string full = System.IO.Path.GetFullPath(path);
+        // Keep a filesystem root ("/" or "C:\") intact.
+        return full.Length > System.IO.Path.GetPathRoot(full)!.Length ? full.TrimEnd(System.IO.Path.DirectorySeparatorChar) : full;
+    }
 }
