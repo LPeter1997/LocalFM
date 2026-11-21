@@ -52,11 +52,10 @@ public static class ListeningStats
             WHERE e.recording_id IS NOT NULL AND e.started_at >= $1 AND e.started_at < $2)
         """;
 
-    private const string Cover = """
-        (SELECT i.rel_path FROM entity_image ei JOIN image i ON i.id = ei.image_id
-         WHERE ei.entity_type = 'release' AND ei.entity_id = {0} AND ei.role = 'front'
-         ORDER BY CASE ei.source WHEN 'user' THEN 0 WHEN 'folder' THEN 1 WHEN 'embedded' THEN 2 ELSE 3 END LIMIT 1)
-        """;
+    private const string Cover =
+        "(SELECT i.rel_path FROM entity_image ei JOIN image i ON i.id = ei.image_id " +
+        "WHERE ei.entity_type = 'release' AND ei.entity_id = {0} AND ei.role = 'front' " +
+        "ORDER BY " + ImageStore.FrontCoverOrder + " LIMIT 1)";
 
     private static string CoverOf(string releaseExpr) => string.Format(Cover, releaseExpr);
 

@@ -19,7 +19,7 @@ public class LibraryTests
     {
         using var lib = new TempLibrary();
         using var c = lib.Db.Open();
-        Assert.Equal(3L, c.Scalar<long>("PRAGMA user_version"));
+        Assert.Equal(4L, c.Scalar<long>("PRAGMA user_version"));
         foreach (var table in new[] { "artist", "artist_credit", "recording", "release_group", "release", "medium", "track", "audio_file", "playlist", "play_event", "field_provenance", "external_id", "import_job", "import_hint", "source_exclude" })
             Assert.Equal(1L, c.Scalar<long>("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name=$1", table));
     }

@@ -77,6 +77,38 @@ public class MetadataTests
     }
 
     [SkippableFact]
+    public async Task Applied_cover_replaces_the_last_one_and_beats_a_video_thumbnail()
+    {
+        Skip.IfNot(TempLibrary.HaveFfmpeg);
+        using var lib = new TempLibrary();
+        // One file carries embedded art, as video downloads do (a thumbnail).
+        lib.MakeTrack("okc/01.flac", new() { ["title"] = "Airbag", ["artist"] = "Radiohead", ["album"] = "OK Computer", ["track"] = "1" },
+            seconds: 0.3, coverPng: lib.MakePng());
+        await lib.ScanAsync();
+        var album = lib.Queries.Albums().Single();
+        var (svc, _) = Service(lib);
+        var okc = (await svc.MusicBrainz.GetReleaseAsync("6a09041b-0f79-3278-88d9-0552dd28d37f"))!;
+        await SetFileLengths(lib, album.ReleaseId, [OkcLengths[0]]);
+
+        byte[] Png(string color)
+        {
+            string path = Path.Combine(lib.Root, color + ".png");
+            TempLibrary.Ffmpeg($"-f lavfi -i \"color=c={color}:s=32x32:d=1\" -frames:v 1 \"{path}\"");
+            return File.ReadAllBytes(path);
+        }
+        byte[] first = Png("blue"), second = Png("green");
+        var applier = new MetadataApplier(lib.Images);
+        await lib.Db.Writer.Run((c, t) => applier.ApplyRelease(new Tx(c, t), album.ReleaseId, okc, first, "image/png", "coverartarchive"));
+        Assert.Equal(first, File.ReadAllBytes(lib.Queries.Album(album.ReleaseId)!.CoverPath!));
+        await lib.Db.Writer.Run((c, t) => applier.ApplyRelease(new Tx(c, t), album.ReleaseId, okc, second, "image/png", "coverartarchive"));
+        Assert.Equal(second, File.ReadAllBytes(lib.Queries.Album(album.ReleaseId)!.CoverPath!));
+
+        using var db = lib.Db.Open();
+        Assert.Equal(1L, db.Scalar<long>("SELECT COUNT(*) FROM entity_image WHERE entity_id = $1 AND role = 'front' AND source = 'coverartarchive'", album.ReleaseId));
+        Assert.Equal(1L, db.Scalar<long>("SELECT COUNT(*) FROM entity_image WHERE entity_id = $1 AND role = 'front' AND source = 'embedded'", album.ReleaseId));
+    }
+
+    [SkippableFact]
     public async Task Release_where_no_track_fits_is_rejected_untouched()
     {
         Skip.IfNot(TempLibrary.HaveFfmpeg);

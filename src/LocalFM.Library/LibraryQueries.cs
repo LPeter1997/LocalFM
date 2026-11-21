@@ -42,10 +42,10 @@ public sealed record TrackInfo(
 /// <summary>Read-only views over the knowledge base. Safe to call from any thread.</summary>
 public sealed class LibraryQueries(Database db, ImageStore images)
 {
-    private const string CoverSql = """
+    private const string CoverSql = $"""
         (SELECT i.rel_path FROM entity_image ei JOIN image i ON i.id = ei.image_id
          WHERE ei.entity_type = 'release' AND ei.entity_id = rel.id AND ei.role = 'front'
-         ORDER BY CASE ei.source WHEN 'user' THEN 0 WHEN 'folder' THEN 1 WHEN 'embedded' THEN 2 WHEN 'coverartarchive' THEN 3 ELSE 4 END LIMIT 1)
+         ORDER BY {ImageStore.FrontCoverOrder} LIMIT 1)
         """;
 
     // The best available file of a track: present on disk, highest quality first.

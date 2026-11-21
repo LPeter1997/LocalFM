@@ -128,6 +128,9 @@ public sealed class MetadataApplier(ImageStore images)
         if (cover is { Length: > 0 })
         {
             var img = images.Store(tx, cover, coverMime ?? "image/jpeg");
+            // The applied release's cover replaces covers fetched for earlier applies (they may be another edition's).
+            tx.Exec($"DELETE FROM entity_image WHERE entity_type = 'release' AND entity_id = $1 AND role = 'front' AND source NOT IN {ImageStore.LocalCoverSources}",
+                releaseId);
             tx.Exec("INSERT OR IGNORE INTO entity_image(entity_type, entity_id, image_id, role, source) VALUES ('release',$1,$2,'front',$3)",
                 releaseId, img, coverSource ?? src);
             coverStored = true;
