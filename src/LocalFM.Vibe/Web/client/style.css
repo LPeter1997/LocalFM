@@ -46,7 +46,7 @@ svg.icon.filled { fill: currentColor; stroke: none; }
 /* ------------------------------------------------------------ layout */
 #app { position: absolute; top: 0; left: 0; right: 0; bottom: 0; display: flex; flex-wrap: wrap; }
 #nav {
-  width: 16rem; height: calc(100% - 6.5rem); padding: 2.5rem 1rem 1.5rem 2rem; display: flex; flex-direction: column;
+  position: relative; z-index: 1; width: 16rem; height: calc(100% - 6.5rem); padding: 2.5rem 1rem 1.5rem 2rem; display: flex; flex-direction: column;
 }
 #app.nobar #nav { height: 100%; }
 .brand { display: flex; align-items: center; font-weight: 700; font-size: 1.4rem; margin: 0 0 2rem 0.75rem; }
@@ -58,7 +58,7 @@ svg.icon.filled { fill: currentColor; stroke: none; }
 .navfoot { margin-top: auto; padding: 0 0.9rem; color: var(--faint); font-size: 0.9rem; }
 #main {
   flex: 1; min-width: 0; height: calc(100% - 6.5rem); overflow-y: auto; overflow-x: hidden;
-  padding: 2.5rem 3rem 2rem 1.5rem; scroll-behavior: smooth;
+  padding: 2.5rem 3rem 2rem 1.5rem;
 }
 #app.nobar #main { height: 100%; }
 #main::-webkit-scrollbar { width: 0; }
@@ -79,7 +79,9 @@ h2 { font-size: 1.5rem; margin: 2rem 0 1rem 0; font-weight: 600; }
 }
 .round.big { width: 4rem; height: 4rem; background: var(--text); color: var(--bg); }
 .round.big svg { width: 1.8rem; height: 1.8rem; }
-.round.on { color: var(--accent); }
+.round.side { width: 2.8rem; height: 2.8rem; color: var(--muted); }
+.round.side svg { width: 1.3rem; height: 1.3rem; }
+.round.on, .round.side.on { color: var(--accent); }
 .round.big:focus { box-shadow: 0 0 0 0.2rem var(--bg), 0 0 0 0.4rem var(--text); }
 
 /* ------------------------------------------------------------ tiles */
@@ -131,7 +133,7 @@ h2 { font-size: 1.5rem; margin: 2rem 0 1rem 0; font-weight: 600; }
 /* ------------------------------------------------------------ player bar */
 #bar {
   position: absolute; left: 0; right: 0; bottom: 0; height: 6.5rem; display: flex; align-items: center;
-  padding: 0 3rem 0 2rem; background: var(--surface); border-top: 1px solid var(--line);
+  padding: 0 3rem 0 2rem; background: var(--surface); border-top: 1px solid var(--line); z-index: 2;
 }
 .barnow { display: flex; align-items: center; width: 24rem; padding: 0.4rem; min-width: 0; }
 .bartext { margin-left: 1rem; min-width: 0; }
@@ -142,27 +144,27 @@ h2 { font-size: 1.5rem; margin: 2rem 0 1rem 0; font-weight: 600; }
 .barprogress { flex: 1; display: flex; align-items: center; }
 .time { font-size: 0.9rem; width: 3.5rem; text-align: center; font-variant-numeric: tabular-nums; }
 .track { flex: 1; height: 0.3rem; background: var(--surface3); border-radius: 1rem; margin: 0 0.8rem; overflow: hidden; }
-.track .fill { height: 100%; width: 0; background: var(--text); border-radius: 1rem; }
+.track .fill { height: 100%; width: 100%; background: var(--text); transform: scaleX(0); transform-origin: left center; }
 
 /* ------------------------------------------------------------ now playing */
 .np { position: relative; display: flex; height: 100%; }
+/* A 12×12 canvas scaled to the screen: the smoothing is the blur (no CSS filter, which is slow on TVs). */
 .npbg {
-  position: fixed; top: -10%; left: -10%; width: 120%; height: 120%; background-size: cover; background-position: center;
-  filter: blur(80px) saturate(1.3); opacity: 0.28; pointer-events: none; z-index: -1;
+  position: fixed; top: -10%; left: -10%; width: 120%; height: 120%; opacity: 0; pointer-events: none; z-index: 0;
+  transition: opacity 0.6s;
 }
+.npbg.on { opacity: 0.2; }
+#app.np .barnow { visibility: hidden; }
+.npleft, .npright { position: relative; z-index: 1; }
+.npnone { position: absolute; top: 40%; left: 0; color: var(--faint); font-size: 1.3rem; }
 .npleft { width: 42%; display: flex; flex-direction: column; justify-content: center; padding-right: 3rem; }
 .npleft .cover { width: 100%; max-width: 30rem; padding-top: 0; height: 0; padding-bottom: 100%; box-shadow: 0 1.5rem 4rem rgba(0, 0, 0, 0.6); }
 .npcoverbox { width: 100%; max-width: 30rem; }
 .nptitle { font-size: 2.2rem; font-weight: 700; margin-top: 2rem; }
 .npartist { color: var(--muted); font-size: 1.3rem; margin-top: 0.4rem; }
-.npprogress { display: flex; align-items: center; margin-top: 1.6rem; max-width: 30rem; }
-.npprogress .time:first-child { text-align: left; width: 3rem; }
-.npprogress .time:last-child { text-align: right; width: 3rem; }
-.npcontrols { display: flex; align-items: center; margin-top: 1.2rem; max-width: 30rem; justify-content: center; }
-.npcontrols .round { margin: 0 0.6rem; }
 .npright { flex: 1; min-width: 0; position: relative; overflow: hidden; }
-.lyrics { position: absolute; top: 0; left: 0; right: 0; transition: transform 0.4s ease; padding: 0 1rem; }
-.lyrics .l { font-size: 2rem; font-weight: 700; color: var(--faint); margin: 0 0 1.3rem 0; line-height: 1.3; transition: color 0.3s; }
+.lyrics { position: absolute; top: 0; left: 0; right: 0; transition: transform 0.3s ease-out; padding: 0 1rem; will-change: transform; }
+.lyrics .l { font-size: 2rem; font-weight: 700; color: var(--faint); margin: 0 0 1.3rem 0; line-height: 1.3; transition: color 0.15s; }
 .lyrics .l.past { color: var(--muted); }
 .lyrics .l.now { color: var(--text); }
 .lyrics.plain .l { font-size: 1.5rem; color: var(--muted); font-weight: 600; margin-bottom: 0.8rem; }
@@ -205,7 +207,7 @@ h2 { font-size: 1.5rem; margin: 2rem 0 1rem 0; font-weight: 600; }
   .barnow { width: auto; flex: 1; }
   .barprogress { display: none; }
   .barcontrols { margin: 0; }
-  #barprev { display: none; }
+  #barprev, .round.side { display: none; }
   .hero { flex-direction: column; align-items: flex-start; }
   .hero .cover { width: 10rem; padding-top: 10rem; margin-bottom: 1.5rem; }
   .np { flex-direction: column; }

@@ -185,7 +185,20 @@
     },
 
     /** A library request; resolves with the reply. Waits for the connection if needed. */
+    /** Answers are kept for a few minutes, so going back or revisiting a page is instant. */
     ask: function (op, fields) {
+      var key = op + '|' + JSON.stringify(fields || {});
+      var hit = this.cache[key];
+      if (hit && Date.now() - hit.at < 5 * 60 * 1000) return hit.promise;
+      var self = this;
+      var promise = this.send(op, fields);
+      this.cache[key] = { at: Date.now(), promise: promise };
+      promise.catch(function () { delete self.cache[key]; });
+      return promise;
+    },
+    cache: {},
+
+    send: function (op, fields) {
       var self = this;
       return new Promise(function (resolve, reject) {
         var send = function () {
@@ -303,28 +316,33 @@
 
     get current() { return this.index >= 0 ? this.queue[this.index] : null; },
 
-    /** Plays the list from item i (a shuffled copy when shuffling). */
+    original: [],
+
+    /** Plays the list from item i (the rest shuffled when shuffling). */
     playList: function (tracks, i) {
       if (!tracks.length) return;
-      var list = tracks.slice();
-      var start = i || 0;
-      if (this.shuffle) {
-        var first = list.splice(start, 1)[0];
-        for (var k = list.length - 1; k > 0; k--) {
-          var j = Math.floor(Math.random() * (k + 1));
-          var t = list[k]; list[k] = list[j]; list[j] = t;
-        }
-        list.unshift(first);
-        start = 0;
-      }
-      this.queue = list;
-      this.load(start, true, 0);
+      this.original = tracks.slice();
+      this.queue = this.shuffle ? shuffled(tracks, i || 0) : tracks.slice();
+      this.load(this.shuffle ? 0 : (i || 0), true, 0);
     },
 
     shuffleAll: function (tracks) {
       this.shuffle = true;
       this.playList(tracks, Math.floor(Math.random() * tracks.length));
     },
+
+    /** Shuffle on: what comes after the current track is shuffled. Off: back to the list's own order. */
+    setShuffle: function (on) {
+      this.shuffle = on;
+      var cur = this.current;
+      if (cur) {
+        if (on) { this.queue = shuffled(this.original.length ? this.original : this.queue, Math.max(0, indexOf(this.original.length ? this.original : this.queue, cur))); this.index = 0; }
+        else if (this.original.length) { this.queue = this.original.slice(); this.index = Math.max(0, indexOf(this.queue, cur)); }
+      }
+      this.changed();
+      this.save();
+    },
+    setRepeat: function (on) { this.repeat = on; this.changed(); this.save(); },
 
     load: function (i, play, positionMs) {
       if (i < 0 || i >= this.queue.length) return;
@@ -341,6 +359,9 @@
         });
       }
       if (play) audio.play().catch(function () { /* autoplay blocked until a key press */ });
+      // Look up the next track's lyrics ahead (an online lookup can take seconds), so they are there when it starts.
+      var after = this.queue[i + 1];
+      if (after) setTimeout(function () { conn.ask('lyrics', { id: after.id }).catch(function () {}); }, 5000);
       this.changed();
       this.save();
     },
@@ -368,7 +389,8 @@
       var q = this.queue.slice(Math.max(0, this.index - 50), this.index + 200);
       store('lfm.queue:' + base, JSON.stringify({
         queue: q, index: this.index - Math.max(0, this.index - 50), pos: Math.round(audio.currentTime * 1000) || 0,
-        shuffle: this.shuffle, repeat: this.repeat
+        shuffle: this.shuffle, repeat: this.repeat,
+        original: this.original.length <= 400 ? this.original : []
       }));
     },
     restore: function () {
@@ -379,10 +401,27 @@
         this.queue = s.queue || [];
         this.shuffle = !!s.shuffle;
         this.repeat = !!s.repeat;
+        this.original = s.original || [];
         if (this.queue.length) this.load(Math.min(s.index || 0, this.queue.length - 1), false, s.pos);
       } catch (e) { /* old state */ }
     }
   };
+
+  /** The list with item i first and the rest in random order. */
+  function shuffled(tracks, i) {
+    var list = tracks.slice();
+    var first = list.splice(i, 1)[0];
+    for (var k = list.length - 1; k > 0; k--) {
+      var j = Math.floor(Math.random() * (k + 1));
+      var t = list[k]; list[k] = list[j]; list[j] = t;
+    }
+    if (first) list.unshift(first);
+    return list;
+  }
+  function indexOf(list, track) {
+    for (var i = 0; i < list.length; i++) if (list[i].id === track.id) return i;
+    return -1;
+  }
 
   var types = {
     mp3: 'audio/mpeg',
@@ -680,25 +719,15 @@
       if (!t) return el('div', null, el('h1', null, 'Now playing'), el('div.empty', null, 'Nothing is playing. Pick an album or a song.'));
       var c = el('div.cover');
       lazyCover(c, t.cover, 'album');
-      var bg = el('div.npbg');
-      if (t.cover) bg.style.backgroundImage = 'url("' + imgUrl(t.cover) + '")';
-      var playBtn = el('button.f.round.big', { id: 'npplay', onclick: function () { player.toggle(); } }, icon(audio.paused ? 'play' : 'pause'));
       var right = el('div.npright', { id: 'npright' });
-      this.box = el('div.np', null, bg,
+      this.box = el('div.np', null, backdrop(t.cover),
         el('div.npleft', null,
           el('div.npcoverbox', null, c),
           el('div.nptitle.ellipsis', null, t.title),
-          el('div.npartist.ellipsis', null, [t.artist, t.album].filter(Boolean).join(' · ')),
-          el('div.npprogress', null, el('span.time', { id: 'nppos' }, '0:00'), el('div.track', null, el('div.fill', { id: 'npfill' })), el('span.time', { id: 'npdur' }, time(t.durationMs))),
-          el('div.npcontrols', null,
-            el('button.f.round' + (player.shuffle ? '.on' : ''), { title: 'Shuffle', onclick: function (e) { player.shuffle = !player.shuffle; e.currentTarget.classList.toggle('on', player.shuffle); } }, icon('shuffle')),
-            el('button.f.round', { title: 'Previous', onclick: function () { player.prev(); } }, icon('prev')),
-            playBtn,
-            el('button.f.round', { title: 'Next', onclick: function () { player.next(); } }, icon('next')),
-            el('button.f.round' + (player.repeat ? '.on' : ''), { title: 'Repeat', onclick: function (e) { player.repeat = !player.repeat; e.currentTarget.classList.toggle('on', player.repeat); } }, icon('repeat')))),
+          el('div.npartist.ellipsis', null, [t.artist, t.album].filter(Boolean).join(' · '))),
         right);
       this.showLyrics(t);
-      setTimeout(function () { playBtn.focus(); }, 30);
+      setTimeout(function () { $('barplay').focus(); }, 30);
       return this.box;
     },
 
@@ -726,7 +755,7 @@
       var rest = player.queue.slice(player.index + 1, player.index + 30);
       right.innerHTML = '';
       right.className = 'npright scroll';
-      if (!rest.length) return;
+      if (!rest.length) { right.appendChild(el('div.npnone', null, 'No lyrics for this song')); return; }
       var rows = trackRows(rest, { covers: true, album: true });
       // Rows here jump within the queue instead of replacing it.
       var buttons = rows.querySelectorAll('.row');
@@ -741,8 +770,8 @@
     },
 
     tick: function () {
-      if (!this.lines || !this.synced || !this.box) return;
-      var ms = audio.currentTime * 1000 + 150;
+      if (!this.lines || !this.synced || !this.box || !this.box.parentNode) return;
+      var ms = audio.currentTime * 1000 + 100;
       var at = -1;
       for (var i = 0; i < this.lines.length; i++) {
         var lm = this.lines[i].ms;
@@ -763,6 +792,20 @@
       box.style.transform = 'translateY(' + (-Math.max(0, y)) + 'px)';
     }
   };
+
+  /** The cover, blurred, behind now playing. Drawn tiny into a canvas and scaled up: the browser's smoothing
+   * does the blur for free, where a CSS blur filter over the whole screen makes every frame slow on a TV. */
+  function backdrop(cover) {
+    var canvas = el('canvas.npbg', { width: '12', height: '12' });
+    if (!cover) return canvas;
+    var img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = function () {
+      try { canvas.getContext('2d').drawImage(img, 0, 0, 12, 12); canvas.classList.add('on'); } catch (e) { /* tainted */ }
+    };
+    img.src = imgUrl(cover);
+    return canvas;
+  }
 
   // ------------------------------------------------------------------ navigation between views
 
@@ -795,6 +838,7 @@
         (v === 'playlists' && view.name === 'playlist');
       navs[i].classList.toggle('active', on);
     }
+    $('app').classList.toggle('np', view.name === 'nowplaying');
     main.appendChild(views[view.name](view.params));
     if (!view.restoring && view.name !== 'search' && view.name !== 'nowplaying') setTimeout(function () { focusFirst(main); }, 30);
     restoreFocus();
@@ -918,6 +962,8 @@
     var t = player.current;
     $('app').classList.toggle('nobar', !t);
     $('bar').classList.toggle('hidden', !t);
+    // Nothing playing: no Now playing page to go to.
+    document.querySelector('.navitem[data-view=nowplaying]').classList.toggle('hidden', !t);
     if (!t) return;
     $('bartitle').textContent = t.title;
     $('barartist').textContent = t.artist || '';
@@ -927,8 +973,8 @@
     lazyCover(c, t.cover, 'album');
     $('bardur').textContent = time(t.durationMs);
     setIcon($('barplay'), audio.paused ? 'play' : 'pause');
-    var np = $('npplay');
-    if (np) setIcon(np, audio.paused ? 'play' : 'pause');
+    $('barshuffle').classList.toggle('on', player.shuffle);
+    $('barrepeat').classList.toggle('on', player.repeat);
     markPlaying();
     if (view && view.name === 'nowplaying' && nowPlaying.lyricsFor !== t.id) go('nowplaying', null, true);
     if ('mediaSession' in navigator && window.MediaMetadata) {
@@ -942,24 +988,24 @@
   }
   player.onChange.push(updateBar);
 
+  // The timeline moves with a transform (no layout per update) and the time text changes once a second.
+  var barfill = $('barfill'), barpos = $('barpos'), shownPos = '';
   function progress() {
     var d = isFinite(audio.duration) && audio.duration > 0 ? audio.duration : (player.current ? player.current.durationMs / 1000 : 0);
     var p = d ? Math.min(1, audio.currentTime / d) : 0;
-    $('barfill').style.width = (p * 100) + '%';
-    $('barpos').textContent = time(audio.currentTime * 1000);
-    var f = $('npfill');
-    if (f) { f.style.width = (p * 100) + '%'; $('nppos').textContent = time(audio.currentTime * 1000); }
-    nowPlaying.tick();
+    barfill.style.transform = 'scaleX(' + p.toFixed(4) + ')';
+    var pos = time(audio.currentTime * 1000);
+    if (pos !== shownPos) { barpos.textContent = pos; shownPos = pos; }
   }
   audio.addEventListener('timeupdate', progress);
-  (function frame() {
-    if (!audio.paused && nowPlaying.lines) nowPlaying.tick();
-    requestAnimationFrame(frame);
-  })();
+  // Lyrics follow the song ten times a second (only while they are on screen): smooth enough, and cheap on a TV.
+  setInterval(function () { if (!audio.paused) nowPlaying.tick(); }, 100);
 
   $('barplay').addEventListener('click', function () { player.toggle(); });
   $('barnext').addEventListener('click', function () { player.next(); });
   $('barprev').addEventListener('click', function () { player.prev(); });
+  $('barshuffle').addEventListener('click', function () { player.setShuffle(!player.shuffle); });
+  $('barrepeat').addEventListener('click', function () { player.setRepeat(!player.repeat); });
   $('barnow').addEventListener('click', function () { go('nowplaying'); });
 
   // ------------------------------------------------------------------ start
