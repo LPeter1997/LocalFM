@@ -22,6 +22,9 @@ public sealed record PlatformCapabilities
     /// <summary>The separate always-on-top miniplayer window.</summary>
     public bool Miniplayer { get; init; } = true;
 
+    /// <summary>"Share my library on this network": TVs and browsers at home browse and play the library.</summary>
+    public bool ShareLibrary { get; init; } = true;
+
     /// <summary>Keyboard and mouse first: hover-revealed actions, shortcuts in tooltips.</summary>
     public bool Touch { get; init; }
 
@@ -29,7 +32,7 @@ public sealed record PlatformCapabilities
 
     public static PlatformCapabilities Phone { get; } = new()
     {
-        Import = false, Editing = false, ExportKnowledge = false, WatchFolders = false, Miniplayer = false, Touch = true,
+        Import = false, Editing = false, ExportKnowledge = false, WatchFolders = false, Miniplayer = false, Touch = true, ShareLibrary = false,
     };
 }
 

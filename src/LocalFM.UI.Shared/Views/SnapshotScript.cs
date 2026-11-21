@@ -102,6 +102,13 @@ public static class SnapshotScript
                 vm.Vibe.StopCommand.Execute(null);
             }
         }
+        // The library share on, a paired device and a PIN showing (Sources page).
+        if (setting("LOCALFM_SNAPSHOT_SHARE") == "1")
+        {
+            await vm.Host.Share.SetEnabledAsync(true);
+            if (vm.Host.Share.Devices.List.Count == 0) vm.Host.Share.Devices.Pair("Living room TV");
+            vm.Host.Share.NewPin();
+        }
         // Joins the vibe with this invite (Android has no command line for --vibe-join).
         if (setting("LOCALFM_SNAPSHOT_VIBE_JOIN") is { Length: > 0 } code)
         {

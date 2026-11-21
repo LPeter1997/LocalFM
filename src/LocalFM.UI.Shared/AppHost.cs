@@ -8,7 +8,9 @@ using LocalFM.Metadata;
 using LocalFM.Native;
 using LocalFM.Playback;
 using LocalFM.Vibe;
+using LocalFM.Vibe.Library;
 using LocalFM.Vibe.Net;
+using LocalFM.Vibe.Web;
 
 namespace LocalFM.UI;
 
@@ -51,9 +53,16 @@ public sealed class AppHost : IDisposable
                             $"crossfade {Sound.CrossfadeSeconds:0.#} s, gapless albums {(Sound.GaplessAlbums ? "on" : "off")}, ReplayGain {Sound.ReplayGain}");
         Vibe = new VibeService(Player, Paths,
             async (track, ct) => (await Metadata.GetLyricsAsync(track, allowFetch: true, ct).ConfigureAwait(false))?.Data);
+        Share = new LibraryShareService(
+            new LibraryApi(Db, Images, Queries, Playlists, new MediaResolver(Db, Images, Queries),
+                (track, ct) => Metadata.GetLyricsAsync(track, allowFetch: true, ct)),
+            History);
     }
 
     public VibeService Vibe { get; }
+
+    /// <summary>The library share for TVs and browsers (desktop only).</summary>
+    public LibraryShareService Share { get; }
 
     /// <summary>This run's log file, or null when it could not be created (then logs go to stderr only).</summary>
     public LogFile? LogFile { get; }
@@ -118,6 +127,7 @@ public sealed class AppHost : IDisposable
             Player.Play("update restart");
         }
         if (vibe is not null) _ = StartVibeAsync(vibe);
+        if (Capabilities.ShareLibrary) Share.Restore();
         _ = Task.Run(async () =>
         {
             try
@@ -174,6 +184,7 @@ public sealed class AppHost : IDisposable
     {
         _shutdown.Cancel();
         try { Vibe.DisposeAsync().AsTask().Wait(TimeSpan.FromSeconds(3)); } catch { }
+        try { Share.DisposeAsync().AsTask().Wait(TimeSpan.FromSeconds(2)); } catch { }
         Import.Dispose();
         Watcher.Dispose();
         Player.Dispose();

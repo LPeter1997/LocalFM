@@ -63,6 +63,7 @@
     <StreamGeometry x:Key="IcoWave">M3 12h2M7 8v8M11 4v16M15 7v10M19 10v4M21 12h0</StreamGeometry>
     <StreamGeometry x:Key="IcoVolumeMute">M4 9.5h3.5L12 6v12l-4.5-3.5H4zM16 9.5l5 5M21 9.5l-5 5</StreamGeometry>
     <StreamGeometry x:Key="IcoPalette">M12 3.5a8.5 8.5 0 1 0 0 17c1.1 0 1.8-.7 1.8-1.6 0-.5-.2-.9-.5-1.2-.3-.3-.5-.7-.5-1.2 0-.9.8-1.6 1.7-1.6h2.1A4.4 4.4 0 0 0 21 10.5C21 6.6 17 3.5 12 3.5zM7.5 12.5h.01M9 8.5h.01M13.5 7h.01M17 9.5h.01</StreamGeometry>
+    <StreamGeometry x:Key="IcoTv">M4 5h16a1.5 1.5 0 0 1 1.5 1.5v9a1.5 1.5 0 0 1-1.5 1.5H4a1.5 1.5 0 0 1-1.5-1.5v-9A1.5 1.5 0 0 1 4 5M8 20.5h8M12 17v3.5</StreamGeometry>
     <StreamGeometry x:Key="IcoNote">M9 18V6l10-2v12M9 18a3 3 0 1 1-6 0 3 3 0 1 1 6 0M19 16a3 3 0 1 1-6 0 3 3 0 1 1 6 0</StreamGeometry>
   </Application.Resources>
 

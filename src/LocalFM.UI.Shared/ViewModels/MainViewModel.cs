@@ -52,6 +52,7 @@ public sealed partial class MainViewModel : ObservableObject
         };
         Lyrics = new LyricsViewModel(host);
         Vibe = new VibeViewModel(this);
+        Share = new ShareViewModel(this);
         Updater = new UpdaterViewModel(new UpdaterHost(this), CreateUpdateService(), AppInfo.Version);
         // One side panel at a time: lyrics, the vibe, or What's new.
         Lyrics.PropertyChanged += (_, e) =>
@@ -208,6 +209,7 @@ public sealed partial class MainViewModel : ObservableObject
     }
     public LyricsViewModel Lyrics { get; }
     public VibeViewModel Vibe { get; }
+    public ShareViewModel Share { get; }
     public UpdaterViewModel Updater { get; }
     public AlbumsViewModel Albums { get; }
     public QueueViewModel Queue { get; }

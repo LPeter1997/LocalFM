@@ -68,6 +68,64 @@
     <CheckBox IsChecked="{Binding OnlineEnabled}">Use online services</CheckBox>
     <CheckBox IsChecked="{Binding AutoFetchLyrics}" IsEnabled="{Binding OnlineEnabled}">Look up lyrics automatically when a track starts</CheckBox>
     <CheckBox IsChecked="{Binding EstimateWordTiming}">Highlight lyrics word by word, estimating the timing for lyrics that are only synced by line</CheckBox>
+    <StackPanel Spacing="10" DataContext="{Binding Share}" x:DataType="vm:ShareViewModel" IsVisible="{Binding Available}">
+      <TextBlock Classes="h2" Text="TV and other devices" Margin="0,14,0,0" />
+      <TextBlock Classes="muted" TextWrapping="Wrap">
+        Play your library on a smart TV or in any web browser at home. They browse and play on their own, streaming
+        from this computer while LocalFM runs. Only devices on your home network that you paired can connect.
+      </TextBlock>
+      <CheckBox IsChecked="{Binding Enabled}">Share my library on this network</CheckBox>
+      <TextBlock Classes="small" Foreground="{StaticResource Accent}" Text="{Binding Error}" TextWrapping="Wrap"
+                 IsVisible="{Binding Error, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+      <StackPanel Spacing="10" IsVisible="{Binding Enabled}">
+        <Border Background="{StaticResource Surface}" CornerRadius="10" Padding="16,14">
+          <StackPanel Spacing="8">
+            <TextBlock Classes="muted small" Text="Open this address in the TV's web browser or the LocalFM TV app" />
+            <StackPanel Orientation="Horizontal" Spacing="10">
+              <SelectableTextBlock Text="{Binding Address, TargetNullValue='No home network found'}" FontSize="20" FontWeight="SemiBold" VerticalAlignment="Center" />
+              <Button Classes="ghost" Content="Copy" Command="{Binding CopyAddressCommand}" VerticalAlignment="Center"
+                      IsVisible="{Binding Address, Converter={x:Static ObjectConverters.IsNotNull}}" />
+            </StackPanel>
+            <TextBlock Classes="faint small" Text="{Binding OtherAddresses}" TextWrapping="Wrap"
+                       IsVisible="{Binding OtherAddresses, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+          </StackPanel>
+        </Border>
+        <StackPanel Orientation="Horizontal" Spacing="10" IsVisible="{Binding !Pairing}">
+          <Button Classes="ghost" Command="{Binding PairCommand}">Pair a device…</Button>
+        </StackPanel>
+        <Border Background="{StaticResource Surface}" CornerRadius="10" Padding="16,14" IsVisible="{Binding Pairing}">
+          <Grid ColumnDefinitions="*,Auto">
+            <StackPanel Spacing="4">
+              <TextBlock Classes="muted small" Text="Enter this PIN on the device (valid for 10 minutes, once)" />
+              <SelectableTextBlock Text="{Binding Pin}" FontSize="28" FontWeight="SemiBold" LetterSpacing="6" />
+            </StackPanel>
+            <Button Grid.Column="1" Classes="ghost" VerticalAlignment="Center" Command="{Binding StopPairingCommand}">Done</Button>
+          </Grid>
+        </Border>
+      </StackPanel>
+      <StackPanel Spacing="6" IsVisible="{Binding HasDevices}">
+        <TextBlock Classes="muted small" Text="Paired devices" Margin="0,4,0,0" />
+        <ItemsControl ItemsSource="{Binding Devices}">
+          <ItemsControl.ItemTemplate>
+            <DataTemplate x:DataType="vm:ShareDeviceRow">
+              <Border Background="{StaticResource Surface}" CornerRadius="10" Padding="14,10" Margin="0,0,0,6">
+                <Grid ColumnDefinitions="Auto,*,Auto">
+                  <c:Icon Classes="icon" Data="{StaticResource IcoTv}" Stroke="{StaticResource Muted}" />
+                  <StackPanel Grid.Column="1" Margin="12,0" VerticalAlignment="Center">
+                    <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis" />
+                    <TextBlock Classes="faint small" Text="{Binding Detail}" />
+                  </StackPanel>
+                  <Button Grid.Column="2" Classes="flat" ToolTip.Tip="Remove (it has to pair again to connect)"
+                          Command="{Binding $parent[ItemsControl].((vm:ShareViewModel)DataContext).RemoveCommand}" CommandParameter="{Binding}">
+                    <c:Icon Classes="icon" Data="{StaticResource IcoTrash}" Width="16" Height="16" />
+                  </Button>
+                </Grid>
+              </Border>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+      </StackPanel>
+    </StackPanel>
     <TextBlock Classes="h2" Text="Knowledge base file" Margin="0,14,0,0" />
     <TextBlock Classes="muted" TextWrapping="Wrap">
       Everything LocalFM knows about your music, in one file: corrected names, locks, album details, covers, artist

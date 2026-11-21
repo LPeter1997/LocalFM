@@ -393,6 +393,7 @@ public sealed partial class QueueViewModel(MainViewModel main) : PageViewModel(m
 public sealed partial class SourcesViewModel(MainViewModel main) : PageViewModel(main)
 {
     public UpdaterViewModel Updater => Main.Updater;
+    public ShareViewModel Share => Main.Share;
 
     public override string Title => "Sources";
     public ObservableCollection<Source> Sources { get; } = new();

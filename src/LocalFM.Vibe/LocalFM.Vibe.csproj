@@ -5,4 +5,8 @@
   <ItemGroup>
     <InternalsVisibleTo Include="LocalFM.Vibe.Tests" />
   </ItemGroup>
+  <ItemGroup>
+    <!-- The TV / browser client, served by Web/WebGateway. -->
+    <EmbeddedResource Include="Web\client\**\*" LogicalName="client/%(RecursiveDir)%(Filename)%(Extension)" />
+  </ItemGroup>
 </Project>

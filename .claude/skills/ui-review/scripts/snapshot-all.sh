@@ -28,6 +28,7 @@ for m in Spectrum Mirror Wave Off; do
 done
 shot lyrics       LOCALFM_SNAPSHOT_PAGE=albums LOCALFM_SNAPSHOT_PLAY=1 LOCALFM_SNAPSHOT_LYRICS=1 LOCALFM_SNAPSHOT_WAIT=4000
 shot mini         LOCALFM_SNAPSHOT_PAGE=mini LOCALFM_SNAPSHOT_PLAY=1
+shot sources-share LOCALFM_SNAPSHOT_PAGE=sources LOCALFM_SNAPSHOT_SHARE=1 LOCALFM_SNAPSHOT_SCROLL=500
 # Smallest allowed window (MinWidth 820 x MinHeight 520): truncation, wrapping, overlap.
 for p in albums queue sound stats; do
   shot "narrow-$p" LOCALFM_SNAPSHOT_PAGE=$p LOCALFM_SNAPSHOT_WIDTH=820 LOCALFM_SNAPSHOT_HEIGHT=520
