@@ -8,5 +8,6 @@
   <ItemGroup>
     <!-- The TV / browser client, served by Web/WebGateway. -->
     <EmbeddedResource Include="Web\client\**\*" LogicalName="client/%(RecursiveDir)%(Filename)%(Extension)" />
+    <EmbeddedResource Include="..\LocalFM.UI\Assets\icon.svg" LogicalName="client/icon.svg" />
   </ItemGroup>
 </Project>

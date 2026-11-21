@@ -1,0 +1,215 @@
+/* LocalFM for TVs and browsers. Plain CSS for old TV engines (Chromium 68 on webOS 5): no flex gap,
+   no aspect-ratio, no inset, no clamp(). Sizes are in rem; the root size follows the screen width. */
+:root {
+  --bg: #111114;
+  --surface: #18181c;
+  --surface2: #222228;
+  --surface3: #2c2c34;
+  --line: #2a2a31;
+  --text: #ececf1;
+  --muted: #9a9aa6;
+  --faint: #6a6a75;
+  --accent: #e0567a;
+  --accent-dim: rgba(224, 86, 122, 0.18);
+}
+html { font-size: 16px; }
+@media (max-width: 1500px) { html { font-size: 14px; } }
+@media (max-width: 1000px) { html { font-size: 13px; } }
+@media (min-width: 2500px) { html { font-size: 22px; } }
+
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text); overflow: hidden; }
+body {
+  font-family: "Inter", "LG Smart UI", "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  font-size: 1.125rem;
+  -webkit-font-smoothing: antialiased;
+}
+button {
+  font: inherit; color: inherit; background: none; border: 0; padding: 0; margin: 0; cursor: pointer; text-align: left;
+}
+input { font: inherit; color: var(--text); }
+.hidden { display: none !important; }
+.muted { color: var(--muted); }
+.faint { color: var(--faint); }
+.small { font-size: 0.9rem; }
+.ellipsis { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* Icons: 24×24 strokes, as in the desktop app. */
+svg.icon { width: 1.5rem; height: 1.5rem; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+svg.icon.filled { fill: currentColor; stroke: none; }
+
+/* Focus: what the remote is on. Big and unmistakable from the sofa. */
+.f { outline: none; border-radius: 0.75rem; transition: background-color 0.15s, box-shadow 0.15s, transform 0.15s; }
+.f:focus { box-shadow: 0 0 0 0.2rem var(--text); }
+.f.pill:focus, .f.round:focus { box-shadow: 0 0 0 0.2rem var(--text); }
+
+/* ------------------------------------------------------------ layout */
+#app { position: absolute; top: 0; left: 0; right: 0; bottom: 0; display: flex; flex-wrap: wrap; }
+#nav {
+  width: 16rem; height: calc(100% - 6.5rem); padding: 2.5rem 1rem 1.5rem 2rem; display: flex; flex-direction: column;
+}
+#app.nobar #nav { height: 100%; }
+.brand { display: flex; align-items: center; font-weight: 700; font-size: 1.4rem; margin: 0 0 2rem 0.75rem; }
+.brand img { width: 2.2rem; height: 2.2rem; margin-right: 0.8rem; }
+.navitem { display: flex; align-items: center; padding: 0.8rem 0.9rem; margin-bottom: 0.3rem; color: var(--muted); font-size: 1.15rem; }
+.navitem svg { margin-right: 1rem; }
+.navitem.active { background: var(--surface2); color: var(--text); }
+.navitem:focus { color: var(--text); }
+.navfoot { margin-top: auto; padding: 0 0.9rem; color: var(--faint); font-size: 0.9rem; }
+#main {
+  flex: 1; min-width: 0; height: calc(100% - 6.5rem); overflow-y: auto; overflow-x: hidden;
+  padding: 2.5rem 3rem 2rem 1.5rem; scroll-behavior: smooth;
+}
+#app.nobar #main { height: 100%; }
+#main::-webkit-scrollbar { width: 0; }
+
+h1 { font-size: 2.4rem; margin: 0 0 1.5rem 0; font-weight: 700; }
+h2 { font-size: 1.5rem; margin: 2rem 0 1rem 0; font-weight: 600; }
+
+/* ------------------------------------------------------------ buttons */
+.pill {
+  display: inline-flex; align-items: center; padding: 0.7rem 1.4rem; border-radius: 999px; background: var(--surface2);
+  font-weight: 600; margin-right: 0.8rem;
+}
+.pill svg { margin-right: 0.6rem; width: 1.3rem; height: 1.3rem; }
+.pill.primary { background: var(--accent); color: #fff; }
+.round {
+  width: 3.2rem; height: 3.2rem; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center;
+  color: var(--text);
+}
+.round.big { width: 4rem; height: 4rem; background: var(--text); color: var(--bg); }
+.round.big svg { width: 1.8rem; height: 1.8rem; }
+.round.on { color: var(--accent); }
+.round.big:focus { box-shadow: 0 0 0 0.2rem var(--bg), 0 0 0 0.4rem var(--text); }
+
+/* ------------------------------------------------------------ tiles */
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(12.5rem, 1fr)); grid-gap: 1.6rem 1.4rem; }
+.tile { display: block; padding: 0.6rem; margin: -0.6rem; min-width: 0; }
+.tile:focus { background: var(--surface2); box-shadow: none; transform: scale(1.04); }
+.tile .name { margin-top: 0.7rem; font-weight: 600; }
+.tile .sub { color: var(--muted); font-size: 0.95rem; margin-top: 0.2rem; }
+.cover {
+  position: relative; width: 100%; padding-top: 100%; border-radius: 0.6rem; overflow: hidden; background: var(--surface2);
+  background-size: cover; background-position: center;
+}
+.cover .ph { position: absolute; top: 50%; left: 50%; width: 30%; height: 30%; margin: -15% 0 0 -15%; color: var(--faint); }
+.cover .ph svg { width: 100%; height: 100%; }
+.cover.round-img { border-radius: 50%; }
+.cover.small { width: 3.8rem; height: 3.8rem; padding-top: 0; flex: none; border-radius: 0.4rem; }
+
+/* ------------------------------------------------------------ track lists */
+.rows { margin: 0 -0.8rem; }
+.row {
+  display: flex; align-items: center; width: 100%; padding: 0.75rem 0.8rem; border-radius: 0.6rem; min-height: 3.6rem;
+}
+.row:focus { background: var(--surface2); box-shadow: none; }
+.row .n { width: 2.6rem; color: var(--faint); text-align: right; margin-right: 1.2rem; flex: none; font-variant-numeric: tabular-nums; }
+.row .cover.small { margin-right: 1rem; width: 2.8rem; height: 2.8rem; }
+.row .main { flex: 1; min-width: 0; }
+.row .main .sub { color: var(--muted); font-size: 0.95rem; margin-top: 0.15rem; }
+.row .dur { color: var(--muted); margin-left: 1.5rem; font-variant-numeric: tabular-nums; flex: none; }
+.row.playing .title, .row.playing .n { color: var(--accent); }
+.disc { color: var(--muted); font-size: 0.95rem; margin: 1.2rem 0.8rem 0.4rem; }
+
+/* ------------------------------------------------------------ album / artist header */
+.hero { display: flex; align-items: flex-end; margin-bottom: 2rem; }
+.hero .cover { width: 16rem; padding-top: 16rem; flex: none; margin-right: 2.5rem; box-shadow: 0 1rem 3rem rgba(0, 0, 0, 0.5); }
+.hero .meta { min-width: 0; }
+.hero .kind { color: var(--muted); font-size: 0.95rem; text-transform: uppercase; letter-spacing: 0.1em; }
+.hero h1 { margin: 0.4rem 0 0.6rem 0; font-size: 3rem; }
+.hero .line { color: var(--muted); margin-bottom: 1.5rem; }
+.bio { color: var(--muted); max-width: 60rem; line-height: 1.55; margin-bottom: 1rem; white-space: pre-line; }
+.bio.clamped { max-height: 7.8em; overflow: hidden; }
+
+/* ------------------------------------------------------------ search */
+.searchbox {
+  width: 100%; max-width: 50rem; padding: 1rem 1.4rem; border-radius: 999px; border: 0.15rem solid var(--surface3);
+  background: var(--surface); font-size: 1.3rem; outline: none;
+}
+.searchbox:focus { border-color: var(--text); }
+
+/* ------------------------------------------------------------ player bar */
+#bar {
+  position: absolute; left: 0; right: 0; bottom: 0; height: 6.5rem; display: flex; align-items: center;
+  padding: 0 3rem 0 2rem; background: var(--surface); border-top: 1px solid var(--line);
+}
+.barnow { display: flex; align-items: center; width: 24rem; padding: 0.4rem; min-width: 0; }
+.bartext { margin-left: 1rem; min-width: 0; }
+.bartext .title { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bartext .muted { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 0.95rem; margin-top: 0.15rem; }
+.barcontrols { display: flex; align-items: center; margin: 0 2rem; }
+.barcontrols .round { margin: 0 0.4rem; }
+.barprogress { flex: 1; display: flex; align-items: center; }
+.time { font-size: 0.9rem; width: 3.5rem; text-align: center; font-variant-numeric: tabular-nums; }
+.track { flex: 1; height: 0.3rem; background: var(--surface3); border-radius: 1rem; margin: 0 0.8rem; overflow: hidden; }
+.track .fill { height: 100%; width: 0; background: var(--text); border-radius: 1rem; }
+
+/* ------------------------------------------------------------ now playing */
+.np { position: relative; display: flex; height: 100%; }
+.npbg {
+  position: fixed; top: -10%; left: -10%; width: 120%; height: 120%; background-size: cover; background-position: center;
+  filter: blur(80px) saturate(1.3); opacity: 0.28; pointer-events: none; z-index: -1;
+}
+.npleft { width: 42%; display: flex; flex-direction: column; justify-content: center; padding-right: 3rem; }
+.npleft .cover { width: 100%; max-width: 30rem; padding-top: 0; height: 0; padding-bottom: 100%; box-shadow: 0 1.5rem 4rem rgba(0, 0, 0, 0.6); }
+.npcoverbox { width: 100%; max-width: 30rem; }
+.nptitle { font-size: 2.2rem; font-weight: 700; margin-top: 2rem; }
+.npartist { color: var(--muted); font-size: 1.3rem; margin-top: 0.4rem; }
+.npprogress { display: flex; align-items: center; margin-top: 1.6rem; max-width: 30rem; }
+.npprogress .time:first-child { text-align: left; width: 3rem; }
+.npprogress .time:last-child { text-align: right; width: 3rem; }
+.npcontrols { display: flex; align-items: center; margin-top: 1.2rem; max-width: 30rem; justify-content: center; }
+.npcontrols .round { margin: 0 0.6rem; }
+.npright { flex: 1; min-width: 0; position: relative; overflow: hidden; }
+.lyrics { position: absolute; top: 0; left: 0; right: 0; transition: transform 0.4s ease; padding: 0 1rem; }
+.lyrics .l { font-size: 2rem; font-weight: 700; color: var(--faint); margin: 0 0 1.3rem 0; line-height: 1.3; transition: color 0.3s; }
+.lyrics .l.past { color: var(--muted); }
+.lyrics .l.now { color: var(--text); }
+.lyrics.plain .l { font-size: 1.5rem; color: var(--muted); font-weight: 600; margin-bottom: 0.8rem; }
+.npright.scroll { overflow-y: auto; }
+.npright.scroll::-webkit-scrollbar { width: 0; }
+.upnext h2 { margin-top: 0; }
+
+/* ------------------------------------------------------------ screens: connecting, pairing */
+#overlay {
+  position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: var(--bg); z-index: 10;
+  display: flex; align-items: center; justify-content: center;
+}
+.card { width: 40rem; max-width: 90%; }
+.card img { width: 4rem; height: 4rem; }
+.card h1 { margin: 1.5rem 0 1rem 0; }
+.card p { color: var(--muted); line-height: 1.55; }
+.card .field {
+  width: 100%; padding: 1rem 1.4rem; border-radius: 0.8rem; border: 0.15rem solid var(--surface3); background: var(--surface);
+  font-size: 1.6rem; margin: 1rem 0 1.5rem 0; outline: none;
+}
+.card .field.pin { letter-spacing: 0.5em; font-weight: 700; font-size: 2rem; }
+.card .field:focus { border-color: var(--text); }
+.card .err { color: var(--accent); min-height: 1.5em; margin-bottom: 1rem; }
+.empty { color: var(--muted); margin-top: 2rem; }
+.spinner {
+  width: 2.5rem; height: 2.5rem; border-radius: 50%; border: 0.25rem solid var(--surface3); border-top-color: var(--text);
+  animation: spin 0.9s linear infinite; margin-top: 2rem;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ------------------------------------------------------------ narrow screens (phones in a browser) */
+@media (max-width: 800px) {
+  #nav { width: 100%; height: auto; flex-direction: row; align-items: center; overflow-x: auto; padding: 0.8rem; }
+  .brand, .navfoot { display: none; }
+  .navitem { flex: none; margin: 0 0.3rem 0 0; }
+  .navitem span { display: none; }
+  .navitem svg { margin: 0; }
+  #main { height: calc(100% - 6.5rem - 4.6rem); padding: 1rem; flex-basis: 100%; }
+  #app.nobar #main { height: calc(100% - 4.6rem); }
+  .barnow { width: auto; flex: 1; }
+  .barprogress { display: none; }
+  .barcontrols { margin: 0; }
+  #barprev { display: none; }
+  .hero { flex-direction: column; align-items: flex-start; }
+  .hero .cover { width: 10rem; padding-top: 10rem; margin-bottom: 1.5rem; }
+  .np { flex-direction: column; }
+  .npleft { width: 100%; padding: 0; }
+  .npright { min-height: 20rem; margin-top: 2rem; }
+  .grid { grid-template-columns: repeat(auto-fill, minmax(9rem, 1fr)); }
+}
