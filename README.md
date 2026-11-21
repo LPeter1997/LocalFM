@@ -13,10 +13,11 @@ A local-first music player and music knowledge base: Native AOT .NET 10 + Avalon
 | `src/LocalFM.Library` | SQLite knowledge base (MusicBrainz-shaped schema in `Migrations/`), scanner, importer, watcher, queries |
 | `src/LocalFM.Metadata` | Provider contract (implementations are the next phase) |
 | `src/LocalFM.App` | Play queue, player service (history, ReplayGain, resume) |
-| `src/LocalFM.Vibe` | "Vibe together": host shares playback, listeners follow in sync (TLS, invite codes, remote file streaming) |
+| `src/LocalFM.Vibe` | "Vibe together": host shares playback, listeners follow in sync (TLS, invite codes, remote file streaming); the library share for TVs and browsers (`Library/`, `Web/`, docs/lg-tv.md) |
 | `src/LocalFM.UI.Shared` | The UI every app head shares: `App` (styles), `MainView` and the pages, view models, controls, `AppHost` (composition root) |
 | `src/LocalFM.UI` | Desktop app (`LocalFM` executable): window chrome, tray, miniplayer, MPRIS, Velopack; `--vibe-host` / `--vibe-join CODE` |
 | `src/LocalFM.Android` | Android app: the shared UI in its phone layout, background playback with a media notification, vibes (docs/android.md; needs the android workload, so not in `LocalFM.slnx`) |
+| `packaging/webos` | The TV client as an LG webOS app (`build.sh` → .ipk for Developer Mode; docs/lg-tv.md) |
 | `tools/LocalFM.VibeCli` | Headless vibe harness: `host [--null] a.flac b.mp3` prints an invite, `join [--null] [--debug] CODE` follows it |
 | `tools/LocalFM.EngineCli` | Headless engine harness: `dotnet run --project tools/LocalFM.EngineCli -- a.flac b.mp3` |
 

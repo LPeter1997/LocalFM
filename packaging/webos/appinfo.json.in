@@ -1,0 +1,15 @@
+{
+  "id": "org.localfm.tv",
+  "version": "@VERSION@",
+  "vendor": "LocalFM",
+  "type": "web",
+  "main": "index.html",
+  "title": "LocalFM",
+  "icon": "icon.png",
+  "largeIcon": "largeIcon.png",
+  "bgColor": "#111114",
+  "iconColor": "#E0567A",
+  "resolution": "1920x1080",
+  "disableBackHistoryAPI": true,
+  "requiredPermissions": []
+}
