@@ -142,6 +142,19 @@ public class ParsingTests
     }
 
     [Fact]
+    public void Featured_artists_named_in_the_title_are_not_the_artist()
+    {
+        const string json = """
+            {"id":"ORQfHolGsBQ","title":"Promise (feat. Chris Cornell)","track":"Promise (feat. Chris Cornell)",
+             "artists":["Slash","Chris Cornell"],"album":"Slash","release_year":2010}
+            """;
+        var c = Assert.Single(YtDlpProvider.ParsePreview(json, "u").Items);
+        Assert.Equal("Slash", c.Artist);
+        Assert.Equal("Promise (feat. Chris Cornell)", c.Title);
+        Assert.Equal(Path.Combine("root", "Slash", "Slash"), LibraryLayout.AlbumDir("root", c));
+    }
+
+    [Fact]
     public void Music_album_playlist_numbers_tracks()
     {
         const string json = """

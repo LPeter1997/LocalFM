@@ -37,6 +37,27 @@ public static partial class Cleanup
         return lead.Length > 0 && lead.Length < artist.Trim().Length ? lead : null;
     }
 
+    /// <summary>
+    /// The credit without the artists the title already features: "Slash, Chris Cornell" on "Promise (feat. Chris
+    /// Cornell)" is Slash's song, so it belongs on Slash's album. Null when nothing is featured or nothing would be left.
+    /// </summary>
+    public static string? WithoutFeatured(string? artist, string? title)
+    {
+        if (string.IsNullOrWhiteSpace(artist) || string.IsNullOrWhiteSpace(title)) return null;
+        if (FeaturedInTitle().Match(title) is not { Success: true } m) return null;
+        var featured = SplitArtists(m.Groups[1].Success ? m.Groups[1].Value : m.Groups[2].Value).Select(Normalize.Key).Where(k => k.Length > 0).ToHashSet();
+        if (featured.Count == 0) return null;
+        string s = artist.Trim();
+        foreach (var part in SplitArtists(s).Skip(1).ToList())
+        {
+            if (!featured.Contains(Normalize.Key(part))) continue;
+            s = Regex.Replace(s, @"\s*(?:[,;/&]|\b(?:feat\.?|featuring|ft\.?|with|and|x|vs\.?))\s*" + Regex.Escape(part) + @"(?=$|\s*[,;/&]|\s+(?:feat|featuring|ft|with|and|x|vs)\b)",
+                "", RegexOptions.IgnoreCase);
+        }
+        s = s.Trim().TrimEnd(',', ';', '&').Trim();
+        return s.Length > 0 && s != artist.Trim() ? s : null;
+    }
+
     /// <summary>Every name of a joined credit ("A feat. B & C" → A, B, C); a single artist gives itself.</summary>
     public static IEnumerable<string> SplitArtists(string artist) =>
         ArtistJoin().Split(artist.Trim()).Select(p => p.Trim()).Where(p => p.Length > 0);
@@ -213,4 +234,8 @@ public static partial class Cleanup
 
     [GeneratedRegex(@"\s+")]
     private static partial Regex Spaces();
+
+    /// <summary>"(feat. X & Y)", "[ft. X]" or a trailing " feat. X" in a title; group 1 is the names.</summary>
+    [GeneratedRegex(@"[\(\[]\s*(?:feat\.?|featuring|ft\.?|with)\s+([^\)\]]+)[\)\]]|\s(?:feat\.?|featuring|ft\.)\s+(.+)$", RegexOptions.IgnoreCase)]
+    private static partial Regex FeaturedInTitle();
 }

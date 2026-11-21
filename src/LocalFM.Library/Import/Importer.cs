@@ -126,6 +126,10 @@ public sealed class Importer(ImageStore images)
         var t = f.Tags;
         string title = Normalize.Text(t.Title) ?? System.IO.Path.GetFileNameWithoutExtension(f.Path);
         string? artistText = Normalize.Text(t.Artist) ?? Normalize.Text(t.AlbumArtist);
+        // "Slash, Chris Cornell" on "Promise (feat. Chris Cornell)" is one artist's song (and album), unless the tags
+        // list the artists one by one, in which case the credit is built from those.
+        if (t.Artists.Count <= 1 && t.MbArtistIds.Count <= 1 && Edit.Cleanup.WithoutFeatured(artistText, title) is { } lead)
+            artistText = lead;
         Ulid? trackCredit = artistText is null ? null : ResolveCredit(tx, artistText, t.Artists, t.MbArtistIds, now);
 
         string? albumArtistText = Normalize.Text(t.AlbumArtist) ?? (t.Compilation ? "Various Artists" : artistText);

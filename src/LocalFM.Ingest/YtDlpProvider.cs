@@ -159,6 +159,9 @@ public sealed partial class YtDlpProvider(IProcessRunner runner, Func<string?> c
         string? date = e.Str("release_date") is { Length: 8 } d && d.All(char.IsAsciiDigit) ? $"{d[..4]}-{d[4..6]}-{d[6..]}"
             : e.Long("release_year") is { } y ? y.ToString(CultureInfo.InvariantCulture) : null;
         double? seconds = e.Double("duration");
+        // YouTube Music lists featured artists next to the main one ("Slash, Chris Cornell") while the title already
+        // says "(feat. Chris Cornell)": the song, its album and its folder are Slash's.
+        artist = Cleanup.WithoutFeatured(artist, title) ?? artist;
 
         return new ImportCandidate(YtDlpProvider.ProviderId, url ?? input ?? "", title)
         {

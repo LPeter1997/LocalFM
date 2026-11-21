@@ -3,6 +3,7 @@ using LocalFM.Core;
 using LocalFM.Ingest;
 using LocalFM.Library;
 using LocalFM.Library.Import;
+using LocalFM.Library.Edit;
 using LocalFM.Metadata;
 using LocalFM.Native;
 using LocalFM.Playback;
@@ -126,6 +127,7 @@ public sealed class AppHost : IDisposable
                 if (Capabilities.WatchFolders)
                     foreach (var s in Sources.List(Db).Where(s => s.Enabled)) Watcher.Watch(s);
                 await Scanner.ScanAllAsync().ConfigureAwait(false);
+                await Db.Writer.Run((c, t) => FeaturedArtistRepair.Run(new Tx(c, t))).ConfigureAwait(false);
                 if (Capabilities.Import) Import.Start(); // after the startup scan, so resumed imports do not compete with it
             }
             catch (Exception ex) { Log.Error("Host", "Startup scan failed", ex); }
