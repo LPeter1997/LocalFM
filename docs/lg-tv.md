@@ -55,6 +55,9 @@ only works on some firmware and is not needed.
   Magic Remote pointer.
 - MP3 and AAC play directly, and FLAC/Vorbis/Opus where the TV supports them. Anything else (APE, WavPack, DSD, WMA,
   24-bit WAV, …) is decoded by LocalFM and sent as WAV, so it plays everywhere with seeking.
+- While music plays the TV app keeps the screen saver away (webOS asks running apps first); in a browser the page
+  holds a screen wake lock where the browser has one. Paused, the TV rests as usual. The TV's own *Auto Power Off*
+  (no remote input for hours, in its energy settings) is separate and still applies.
 - No gapless playback or crossfade between tracks, no EQ (one audio element in the browser), no editing.
 - The TV doesn't follow the computer's playback (that's a vibe). The library protocol is shared with vibes so that
   can come later.

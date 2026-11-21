@@ -459,6 +459,62 @@
   });
   audio.addEventListener('play', function () { player.changed(); });
   audio.addEventListener('pause', function () { player.changed(); player.save(); });
+
+  // ------------------------------------------------------------------ staying awake while music plays
+
+  /**
+   * A TV puts up its screen saver, and later turns itself off, when nobody presses a key while no video plays,
+   * which would cut an album short. On webOS (the packaged app) the TV asks running apps before the screen saver
+   * starts, and the answer is "not now" while music plays. Browsers with the Wake Lock API keep the screen on
+   * instead. Paused, the device may rest as usual.
+   */
+  var awake = {
+    lock: null,
+    asked: false,
+    start: function () {
+      var self = this;
+      if (typeof window.PalmServiceBridge === 'function') {
+        try {
+          // The subscription's bridge must stay referenced, or its answers stop.
+          this.bridge = new window.PalmServiceBridge();
+          this.bridge.onservicecallback = function (msg) {
+            var r;
+            try { r = JSON.parse(msg); } catch (e) { return; }
+            if (!r || r.timestamp === undefined) return;
+            var reply = new window.PalmServiceBridge();
+            self.reply = reply; // kept until the next request, so it is not collected mid-call
+            reply.call('luna://com.webos.service.tvpower/power/responseScreenSaverRequest',
+              JSON.stringify({ clientName: 'org.localfm.tv', ack: audio.paused, timestamp: r.timestamp }));
+          };
+          this.bridge.call('luna://com.webos.service.tvpower/power/registerScreenSaverRequest',
+            JSON.stringify({ subscribe: true, clientName: 'org.localfm.tv' }));
+          this.asked = true;
+        } catch (e) { /* not on a TV after all */ }
+      }
+      audio.addEventListener('play', function () { self.update(); });
+      audio.addEventListener('pause', function () { self.update(); });
+      audio.addEventListener('ended', function () { self.update(); });
+      // A wake lock ends when the page is hidden; take it again on return.
+      document.addEventListener('visibilitychange', function () { self.update(); });
+    },
+    update: function () {
+      if (this.asked || !navigator.wakeLock) return;
+      var self = this;
+      var want = !audio.paused && document.visibilityState === 'visible';
+      if (want && !this.lock) {
+        this.lock = 'pending';
+        navigator.wakeLock.request('screen').then(function (l) {
+          if (self.lock !== 'pending' || audio.paused) { l.release(); self.lock = null; return; }
+          self.lock = l;
+          l.addEventListener('release', function () { if (self.lock === l) self.lock = null; });
+        }).catch(function () { self.lock = null; });
+      } else if (!want && this.lock) {
+        if (this.lock !== 'pending') this.lock.release();
+        this.lock = null;
+      }
+    }
+  };
+  awake.start();
   setInterval(function () { if (!audio.paused) player.save(); }, 10000);
 
   // ------------------------------------------------------------------ views

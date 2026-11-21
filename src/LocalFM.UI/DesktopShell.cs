@@ -29,6 +29,7 @@ public sealed class DesktopShell : IDisposable
     private TrayIcon? _tray;
     private NativeMenuItem? _nowPlayingItem, _playPauseItem, _closeToTrayItem;
     private MprisSession? _mpris;
+    private SleepGuard? _sleep;
     private bool _quitting, _disposed;
 
     public DesktopShell(IClassicDesktopStyleApplicationLifetime desktop, AppHost host, MainViewModel vm, MainWindow main)
@@ -51,6 +52,8 @@ public sealed class DesktopShell : IDisposable
         {
             CreateTray(icon);
             if (OperatingSystem.IsLinux()) _ = StartMprisAsync();
+            // While music plays the computer does not fall asleep on its own.
+            _sleep = new SleepGuard(host.Player);
         }
     }
 
@@ -212,6 +215,8 @@ public sealed class DesktopShell : IDisposable
     public void Dispose()
     {
         Volatile.Write(ref _disposed, true);
+        _sleep?.Dispose();
+        _sleep = null;
         _mpris?.Dispose();
         _mpris = null;
         if (_tray is { } t)
