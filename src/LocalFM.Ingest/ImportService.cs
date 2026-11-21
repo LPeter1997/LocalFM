@@ -104,7 +104,10 @@ public sealed class ImportService : IDisposable
     {
         var provider = ProviderFor(input) ?? throw new ImportException("Paste a web link, or choose a zip, a folder or audio files.");
         var preview = await provider.ResolveAsync(input, ct).ConfigureAwait(false);
-        var items = preview.Items.Select(c => c with { AlreadyInLibrary = IsKnown(c) }).ToList();
+        var owned = preview.Items.Count > 0 ? Ownership.Load(_db) : null;
+        var items = preview.Items.Select(c => IsKnown(c)
+            ? c with { AlreadyInLibrary = true, Owned = new OwnedMatch(OwnedKind.Owned) }
+            : c with { Owned = owned!.Find(c.Artist ?? c.AlbumArtist, c.Title, c.Album, c.DurationMs) }).ToList();
         return preview with { Items = items };
     }
 

@@ -12,12 +12,33 @@ namespace LocalFM.UI.ViewModels;
 public sealed partial class CandidateViewModel(ImportCandidate c) : ObservableObject
 {
     public ImportCandidate Candidate { get; } = c;
-    [ObservableProperty] private bool _selected = !c.AlreadyInLibrary;
+    [ObservableProperty] private bool _selected = c.Owned?.Kind is not (OwnedKind.Owned or OwnedKind.Likely);
 
     public string Title => Candidate.TrackNumber is { } n && Candidate.Album is not null ? $"{n}. {Candidate.Title}" : Candidate.Title;
     public string Detail => string.Join(" · ", new[] { Candidate.Artist, Candidate.Album }.Where(s => !string.IsNullOrEmpty(s)));
     public string Duration => Candidate.DurationMs is { } ms ? Converters.Time(TimeSpan.FromMilliseconds(ms)) : "";
-    public bool Owned => Candidate.AlreadyInLibrary;
+    public OwnedKind OwnedKind => Candidate.Owned?.Kind ?? OwnedKind.None;
+    public bool Owned => OwnedKind != OwnedKind.None;
+
+    public string OwnedText => OwnedKind switch
+    {
+        OwnedKind.Owned => "In library",
+        OwnedKind.Likely => "Likely owned",
+        OwnedKind.OtherVersion => "Other version",
+        _ => "",
+    };
+
+    /// <summary>
+    /// What the library has, short enough for a phone row: "Owned on Love at First Sting" (same title) or
+    /// "Owned: Signal Bloom · Visual Test".
+    /// </summary>
+    public string? OwnedNote => Candidate.Owned is { Kind: OwnedKind.OtherVersion or OwnedKind.Likely } m && m.Title is not null
+        ? Normalize.Key(m.Title) == Normalize.Key(Candidate.Title)
+            ? m.Album is { Length: > 0 } a ? $"Owned on {a}" : null
+            : $"Owned: {m.Title}" + (m.Album is { Length: > 0 } b ? $" · {b}" : "")
+        : null;
+
+    public bool HasOwnedNote => OwnedKind == OwnedKind.OtherVersion && OwnedNote is not null;
     public string? License => Candidate.License;
     public bool HasLicense => Candidate.License is not null;
 }
@@ -193,8 +214,7 @@ public sealed partial class ImportViewModel : PageViewModel
             PreviewTitle = previews.Count == 1 ? previews[0].Title : $"{inputs.Count} items";
             PreviewNote = previews.Select(p => p.Note).FirstOrDefault(n => n is not null);
             HasPreview = Candidates.Count > 0;
-            int owned = items.Count(c => c.AlreadyInLibrary);
-            Message = owned > 0 ? $"{Converters.Count(owned, "track")} already in your library (unticked)." : null;
+            Message = OwnershipSummary(items);
             CountSelected();
         }
         catch (ImportException ex) { Message = ex.Message; }
@@ -204,6 +224,21 @@ public sealed partial class ImportViewModel : PageViewModel
             Message = $"Could not read that: {ex.Message}";
         }
         finally { Resolving = false; }
+    }
+
+    private static string? OwnershipSummary(IReadOnlyList<ImportCandidate> items)
+    {
+        int owned = items.Count(c => c.Owned?.Kind == OwnedKind.Owned);
+        int likely = items.Count(c => c.Owned?.Kind == OwnedKind.Likely);
+        int other = items.Count(c => c.Owned?.Kind == OwnedKind.OtherVersion);
+        var parts = new List<string>();
+        if (owned + likely > 0)
+            parts.Add(likely == 0 ? $"{Converters.Count(owned, "track")} already in your library (unticked)."
+                : owned == 0 ? $"{Converters.Count(likely, "track")} likely in your library already (unticked)."
+                : $"{Converters.Count(owned + likely, "track")} already or likely in your library (unticked).");
+        if (other > 0)
+            parts.Add(other == 1 ? "You have another version of 1 track." : $"You have other versions of {other} tracks.");
+        return parts.Count > 0 ? string.Join(" ", parts) : null;
     }
 
     private void CountSelected()

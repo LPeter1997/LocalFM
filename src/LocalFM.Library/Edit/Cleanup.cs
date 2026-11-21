@@ -37,6 +37,10 @@ public static partial class Cleanup
         return lead.Length > 0 && lead.Length < artist.Trim().Length ? lead : null;
     }
 
+    /// <summary>Every name of a joined credit ("A feat. B & C" → A, B, C); a single artist gives itself.</summary>
+    public static IEnumerable<string> SplitArtists(string artist) =>
+        ArtistJoin().Split(artist.Trim()).Select(p => p.Trim()).Where(p => p.Length > 0);
+
     /// <summary>
     /// A song title reduced to what identifies the song: video tags and remaster notes removed, normalized, and
     /// without a leading "The" ("House Of The Rising Sun [4K HD]" and "The House of the Rising Sun" are one song).

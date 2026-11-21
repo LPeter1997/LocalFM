@@ -17,7 +17,10 @@ public sealed record ImportCandidate(string ProviderId, string Input, string Tit
     public string? ThumbnailUrl { get; init; }
     /// <summary>Short licence label when the source states one ("CC BY").</summary>
     public string? License { get; init; }
+    /// <summary>Imported before from this very source (same video id): certain.</summary>
     public bool AlreadyInLibrary { get; init; }
+    /// <summary>What the library has of this song by artist and title (likely the same, or another version).</summary>
+    public LocalFM.Library.OwnedMatch? Owned { get; init; }
 
     /// <summary>Fills this candidate's gaps and refreshes known fields from richer data fetched later.</summary>
     public ImportCandidate Refine(ImportCandidate richer) => this with

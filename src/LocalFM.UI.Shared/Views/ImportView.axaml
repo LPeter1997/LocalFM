@@ -87,13 +87,15 @@
                 <StackPanel Grid.Column="1" VerticalAlignment="Center">
                   <TextBlock Text="{Binding Title}" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding Candidate.Input}" />
                   <TextBlock Text="{Binding Detail}" Classes="muted small" TextTrimming="CharacterEllipsis" />
+                  <TextBlock Text="{Binding OwnedNote}" Classes="faint small" TextTrimming="CharacterEllipsis"
+                             IsVisible="{Binding HasOwnedNote}" ToolTip.Tip="{Binding OwnedNote}" />
                 </StackPanel>
                 <Border Grid.Column="2" CornerRadius="5" Background="{StaticResource Surface3}" Padding="6,2" Margin="8,0,0,0"
                         VerticalAlignment="Center" IsVisible="{Binding HasLicense}">
                   <TextBlock Text="{Binding License}" Classes="small" />
                 </Border>
-                <TextBlock Grid.Column="3" Text="In library" Classes="faint small" Margin="8,0,0,0" VerticalAlignment="Center"
-                           IsVisible="{Binding Owned}" />
+                <TextBlock Grid.Column="3" Text="{Binding OwnedText}" Classes="faint small" Margin="8,0,0,0" VerticalAlignment="Center"
+                           IsVisible="{Binding Owned}" ToolTip.Tip="{Binding OwnedNote}" />
                 <TextBlock Grid.Column="4" Text="{Binding Duration}" Classes="faint small" HorizontalAlignment="Right" VerticalAlignment="Center" />
               </Grid>
             </Border>
