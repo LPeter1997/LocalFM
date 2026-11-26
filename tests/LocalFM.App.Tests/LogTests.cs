@@ -28,7 +28,10 @@ public class LogTests
                 log.Write(LogLevel.Info, "Player", "Pause by app, x.m4a at 1:20.0");
                 log.Write(LogLevel.Error, "Engine", "Engine loop error", new InvalidOperationException("boom\nsecond line"));
                 log.Flush(TimeSpan.FromSeconds(5));
-                var text = File.ReadAllText(path); // readable while the app still has it open
+                // Readable while the app still has it open; the reader has to share writing too, or Windows refuses.
+                string text;
+                using (var reader = new StreamReader(new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete)))
+                    text = reader.ReadToEnd();
                 Assert.Contains("INFO  Player: Pause by app, x.m4a at 1:20.0", text);
                 Assert.Contains("ERROR Engine: Engine loop error", text);
                 Assert.Contains("\n    System.InvalidOperationException: boom\n    second line", text);

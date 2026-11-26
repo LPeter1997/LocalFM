@@ -5,7 +5,8 @@
 
   <!-- localfm_native is built with CMake (native/CMakeLists.txt) into native/out/<rid>/, next to the FFmpeg it ships
        with (native/build.sh for packages and CI). Everything in that folder is copied beside the app. A Linux dev
-       build without a RID builds it automatically when missing, against the system's FFmpeg. -->
+       build without a RID builds it automatically when missing, against the system's FFmpeg; never on CI, where the
+       library comes from .github/actions/native (and the Android build has no system FFmpeg to build it with). -->
   <PropertyGroup>
     <NativeRid>$(RuntimeIdentifier)</NativeRid>
     <NativeRid Condition="'$(NativeRid)' == ''">$(NETCoreSdkPortableRuntimeIdentifier)</NativeRid>
@@ -14,7 +15,7 @@
   </PropertyGroup>
 
   <Target Name="BuildNativeIfMissing" BeforeTargets="AssignTargetPaths"
-          Condition="$([MSBuild]::IsOSPlatform('Linux')) And '$(NativeRid)' == '$(NETCoreSdkPortableRuntimeIdentifier)' And !Exists('$(NativeLinuxLib)')">
+          Condition="'$(CI)' != 'true' And $([MSBuild]::IsOSPlatform('Linux')) And '$(NativeRid)' == '$(NETCoreSdkPortableRuntimeIdentifier)' And !Exists('$(NativeLinuxLib)')">
     <Exec Command="&quot;$(RepoRoot)native/build-linux.sh&quot;" />
   </Target>
 
