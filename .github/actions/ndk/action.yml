@@ -11,5 +11,10 @@ runs:
         NDK_VERSION: 28.2.13676358
       run: |
         sdk=${ANDROID_HOME:-$ANDROID_SDK_ROOT}
-        yes | "$sdk/cmdline-tools/latest/bin/sdkmanager" --install "ndk;$NDK_VERSION" > /dev/null
+        # sdkmanager needs Java 17+, newer than some runners' default JDK.
+        export JAVA_HOME=${JAVA_HOME_21_X64:-${JAVA_HOME_17_X64:-$JAVA_HOME}}
+        sdkmanager="$sdk/cmdline-tools/latest/bin/sdkmanager"
+        # `yes` dies of SIGPIPE once sdkmanager stops reading, which pipefail would count as a failure.
+        (yes || true) | "$sdkmanager" --licenses > /dev/null
+        "$sdkmanager" --install "ndk;$NDK_VERSION" > ndk.log 2>&1 || { tail -50 ndk.log; exit 1; }
         echo "ANDROID_NDK_HOME=$sdk/ndk/$NDK_VERSION" >> "$GITHUB_ENV"
